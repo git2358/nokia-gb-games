@@ -1,0 +1,20 @@
+# Firmware and anything derived from it never enters this repository.
+*.fls
+*.bin
+*.rom
+roms/
+extracted/
+# Emulator run output and local scratch
+run_*/
+*.pgm
+*.tr
+error.log
+# Build output
+build/
+*.gba
+*.elf
+*.o
+*.sav
+.venv/
+__pycache__/
+.DS_Store

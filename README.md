@@ -4,7 +4,7 @@ A Game Boy Advance cartridge wrapper for the built-in games of the Nokia 3210
 (NSE-8/9 v6.00 firmware): Rotation, Snake and Memory.
 
 The reverse engineering that locates and maps the games lives in a fork of
-the upstream Nokia DCT3 MAME project, under its `games/` workspace:
+the upstream Nokia DCT3 MAME project, documented in `docs/games_applications.md`:
 <https://github.com/lukesau/nokia-dct3-re>. That fork owns the firmware
 analysis, the MAME-based tracing harness and the symbol names. This
 repository consumes the exported maps and builds the cartridge.
@@ -17,6 +17,6 @@ dump; the build reads it from an ignored location.
 
 ## Status
 
-Scaffold only. See the fork's `games/README.md` for the current analysis
+Scaffold only. See the fork's `docs/games_applications.md` for the current analysis
 state, including the located Snake core, the per-game settings records and
 the shared games framework.

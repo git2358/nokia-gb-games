@@ -11,6 +11,7 @@ run_*/
 error.log
 # Build output
 build/
+*.gb
 *.gba
 *.elf
 *.o

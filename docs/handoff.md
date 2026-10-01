@@ -84,9 +84,10 @@ Repository `~/git/nokia-dct3-re`, branch `games/re`:
 Asset addresses (v6.00 only): tiles `0x2d94bc` (7x7, 7 bytes each), card
 back `0x2d96c4`, cursor `0x2d96cc`, digits `0x2d96ec` (3x5), speed table
 `0x2d9738`, snake food `0x2d9744` (4x4), reaction sprites `0x2d995c`
-(10x10) and scenes `0x2d9764` (84x48). The raw `.fls` is byte-swapped in
-16-bit pairs relative to these addresses' byte order; see the fork's
-`roms/README.md`.
+(10x10) and scenes `0x2d9764` (84x48). These byte tables are in address
+order in the raw `.fls`; the `_swap16.bin` image the static tools and Ghidra
+use has each 16-bit pair swapped (see the fork's `roms/README.md`), so
+`tools/extract_assets.py` swaps it back.
 
 ## First work items
 

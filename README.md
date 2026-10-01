@@ -1,22 +1,28 @@
-# nokia-snake-gba
+# Nokia 3210 games for Game Boy and Game Boy Advance
 
-A Game Boy Advance cartridge wrapper for the built-in games of the Nokia 3210
-(NSE-8/9 v6.00 firmware): Rotation, Snake and Memory.
+Ports of the Nokia 3210 (NSE-8/9 v6.00) built-in games to two cartridges
+built from one portable C core:
 
-The reverse engineering that locates and maps the games lives in a fork of
-the upstream Nokia DCT3 MAME project, documented in `docs/games_applications.md`:
-<https://github.com/lukesau/nokia-dct3-re>. That fork owns the firmware
-analysis, the MAME-based tracing harness and the symbol names. This
-repository consumes the exported maps and builds the cartridge.
+- a Game Boy ROM (`.gb`), and
+- a Game Boy Advance ROM (`.gba`).
+
+Targets: Snake, Memory and Rotation as shipped, plus the two games the
+firmware carries but never offers: the six-cell reaction game in its plugin
+table and the Mastermind-style Logic.
+
+The games are re-implemented from a function-level map of the firmware, not
+copied from it. The map, the tracing tools and the evidence live in a fork of
+the upstream Nokia DCT3 MAME project:
+<https://github.com/lukesau/nokia-dct3-re>, branch `games/re`, document
+`docs/games_applications.md`.
 
 ## Firmware policy
 
 No Nokia firmware, no extracted code or data from it, and nothing derived
-from a firmware image is committed here. Bring your own legally obtained
-dump; the build reads it from an ignored location.
+from a firmware image is committed here. Graphics and strings are read from
+your own legally obtained dump at build time into an ignored directory.
 
 ## Status
 
-Scaffold only. See the fork's `docs/games_applications.md` for the current analysis
-state, including the located Snake core, the per-game settings records and
-the shared games framework.
+Planning. See [`docs/handoff.md`](docs/handoff.md) for the decisions taken,
+the reference material and the first work items.

@@ -16,6 +16,16 @@ the upstream Nokia DCT3 MAME project:
 <https://github.com/lukesau/nokia-dct3-re>, branch `games/re`, document
 `docs/games_applications.md`.
 
+## Why a re-implementation
+
+The original plan was to run the firmware's own game code directly on the
+GBA behind a thin wrapper, since the 3210 and the GBA share the same ARM7TDMI
+core. Endianness foiled it: the 3210 runs its ARM7TDMI big-endian and the
+game code depends on that (it packs bytes into words and pulls fields out by
+shifting, and reads 16-bit values from byte records), while the GBA is
+little-endian. Re-implementing the games in C was the way out, and it also
+made a Game Boy build possible.
+
 ## Firmware policy
 
 No Nokia firmware, no extracted code or data from it, and nothing derived

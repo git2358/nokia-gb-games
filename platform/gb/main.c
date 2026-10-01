@@ -53,18 +53,21 @@
 #define SAVE_SIGNATURE_1 '3'
 #define SAVE_CHECK(r) ((uint8_t)((r)[0] + (r)[1] + (r)[2] + 0x5a))
 
-#define TILE_COUNT (TILES_X * TILES_Y)
 /* Tiles copied to video RAM in one vertical blank with the LCD on. */
-#define TILES_PER_BLANK 2
+#define TILES_PER_BLANK 4
 /* With more changed tiles than this the LCD is switched off for the copy. */
 #define MAX_LIVE_TILES 16
 
 /* Frames since power-on, counted by the vertical-blank handler in crt0.s. */
 volatile uint8_t frame_count;
 
-static uint8_t tiles[TILE_COUNT * 16];  /* what the screen should show */
-static uint8_t shown[TILE_COUNT * 16];  /* what video RAM holds */
-static uint8_t changed[TILE_COUNT];
+/* Tile data waiting for the next vertical blank, and where it goes;
+   flush_tiles in crt0.s copies it. */
+uint8_t staged[TILES_PER_BLANK * 16];
+uint8_t *staged_at[TILES_PER_BLANK];
+uint8_t staged_count;
+
+void flush_tiles(void);
 
 void platform_beep(void)
 {
@@ -104,56 +107,37 @@ static void wait_vblank(void)
         ;
 }
 
-/* Converts lcd_fb to tile data: a set pixel is colour 3, a clear one 0.
-   A framebuffer row is 11 bytes, one per tile across, so each tile row is
-   one framebuffer byte written to both bit planes. */
-static void render_tiles(void)
+/* Converts one 8x8 cell of lcd_fb to tile data: a set pixel is colour 3, a
+   clear one 0. A framebuffer row is 11 bytes, one per tile across, so each
+   tile row is one framebuffer byte written to both bit planes. */
+static void render_tile(uint8_t tx, uint8_t ty, uint8_t *tile)
 {
-    uint8_t *tile = tiles;
-    const uint8_t *strip = lcd_fb, *src;
-    uint8_t tx, ty, row;
+    const uint8_t *src = lcd_fb + ty * (8 * LCD_STRIDE) + tx;
+    uint8_t row;
 
-    for (ty = 0; ty < TILES_Y; ty++, strip += 8 * LCD_STRIDE) {
-        for (tx = 0; tx < TILES_X; tx++) {
-            src = strip + tx;
-            for (row = 0; row < 8; row++, src += LCD_STRIDE) {
-                *tile++ = *src;
-                *tile++ = *src;
-            }
-        }
+    for (row = 8; row; row--, src += LCD_STRIDE) {
+        *tile++ = *src;
+        *tile++ = *src;
     }
 }
 
-/* Kept short: with the LCD on it must finish inside a vertical blank. */
-static void copy_tile(uint8_t index)
+static uint8_t *tile_address(uint8_t tx, uint8_t ty)
 {
-    uint8_t *dst = VRAM_TILES + 16 + index * 16; /* tile 0 stays blank */
-    const uint8_t *src = tiles + index * 16;
-    uint8_t n;
-
-    for (n = 16; n; n--)
-        *dst++ = *src++;
+    return VRAM_TILES + 16 + (uint16_t)(ty * TILES_X + tx) * 16; /* tile 0 stays blank */
 }
 
-/* Brings video RAM up to date with lcd_fb. Video RAM can only be written
-   while the LCD controller is not using it: a few changed tiles are copied
-   during vertical blanks, and a whole new screen with the LCD off. */
+/* Brings video RAM up to date with the cells of lcd_fb drawn to since the
+   last call. Video RAM can only be written while the LCD controller is not
+   using it: a few tiles are copied during vertical blanks, and a whole new
+   screen with the LCD off. */
 static void present(void)
 {
-    uint8_t i, n, count = 0;
+    uint8_t tx, ty, count = 0, n = 0;
+    uint16_t mask;
 
-    render_tiles();
-    for (i = 0; i < TILE_COUNT; i++) {
-        const uint8_t *a = tiles + i * 16, *b = shown + i * 16;
-
-        changed[i] = 0;
-        for (n = 16; n; n--)
-            if (*a++ != *b++) {
-                changed[i] = 1;
-                count++;
-                break;
-            }
-    }
+    for (ty = 0; ty < TILES_Y; ty++)
+        for (mask = lcd_dirty[ty]; mask; mask >>= 1)
+            count += mask & 1;
     if (!count && (LCDC & 0x80))
         return;
 
@@ -162,29 +146,32 @@ static void present(void)
             wait_vblank();
             LCDC = 0;
         }
-        for (i = 0; i < TILE_COUNT; i++)
-            if (changed[i])
-                copy_tile(i);
+        for (ty = 0; ty < TILES_Y; ty++)
+            for (tx = 0, mask = lcd_dirty[ty]; tx < TILES_X; tx++, mask >>= 1)
+                if (mask & 1)
+                    render_tile(tx, ty, tile_address(tx, ty));
         LCDC = LCDC_ON;
     } else {
-        n = 0;
-        for (i = 0; i < TILE_COUNT; i++) {
-            if (!changed[i])
-                continue;
-            if (n == 0) {
-                while (LY == 144)
-                    ;
-                wait_vblank();
+        for (ty = 0; ty < TILES_Y; ty++) {
+            for (tx = 0, mask = lcd_dirty[ty]; tx < TILES_X; tx++, mask >>= 1) {
+                if (!(mask & 1))
+                    continue;
+                render_tile(tx, ty, staged + n * 16);
+                staged_at[n] = tile_address(tx, ty);
+                if (++n == TILES_PER_BLANK) {
+                    staged_count = n;
+                    flush_tiles();
+                    n = 0;
+                }
             }
-            copy_tile(i);
-            if (++n == TILES_PER_BLANK)
-                n = 0;
+        }
+        if (n) {
+            staged_count = n;
+            flush_tiles();
         }
     }
-    for (i = 0; i < sizeof tiles / 16; i++)
-        if (changed[i])
-            for (n = 0; n < 16; n++)
-                shown[i * 16 + n] = tiles[i * 16 + n];
+    for (ty = 0; ty < TILES_Y; ty++)
+        lcd_dirty[ty] = 0;
 }
 
 /* Buttons currently held: A, B, Select, Start in bits 0-3, then Right,
@@ -245,15 +232,19 @@ void main(void)
     __asm__("ei");
 
     for (;;) {
-        uint8_t redraw = 0, frames;
+        uint8_t frames;
 
         /* One menu tick per frame, catching up on frames spent drawing. */
         while (frame_count == seen)
             ;
         frames = (uint8_t)(frame_count - seen);
         seen += frames;
-        while (frames--)
-            redraw |= menu_tick();
+        while (frames--) {
+            if (menu_tick()) {
+                menu_draw();
+                present();
+            }
+        }
 
         pad = read_pad();
         pressed = (uint8_t)(pad & ~last);
@@ -270,7 +261,7 @@ void main(void)
             press(MENU_KEY_LEFT);
         else if (pressed & PAD_RIGHT)
             press(MENU_KEY_RIGHT);
-        if (pressed || redraw) {
+        if (pressed) {
             menu_draw();
             present();
         }

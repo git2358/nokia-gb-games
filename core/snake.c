@@ -136,6 +136,7 @@ static void place_food(void)
 uint8_t snake_step(void)
 {
     snake.direction = snake.pending;
+    snake.moved = snake.tail_moved = 0;
     if (move_blocked()) {
         if (snake.hit)
             return 0;
@@ -143,8 +144,13 @@ uint8_t snake_step(void)
         return HIT_GRACE_TICKS;
     }
     snake.hit = 0;
-    if (!snake.grow)
+    snake.moved = 1;
+    if (!snake.grow) {
+        snake.old_tail_x = snake.tail_x;
+        snake.old_tail_y = snake.tail_y;
+        snake.tail_moved = 1;
         snake_advance_tail();
+    }
     snake_move_head();
     snake.grow = snake.head_x == snake.food_x && snake.head_y == snake.food_y;
     if (snake.grow) {
@@ -206,4 +212,29 @@ void snake_draw(void)
         lcd_fill_rect(x * 4 + 2 - (direction == SNAKE_RIGHT), y * 4 + 2 - (direction == SNAKE_DOWN),
                       direction & 1 ? 4 : 3, direction & 1 ? 3 : 4, 1);
     }
+}
+
+void snake_draw_step(void)
+{
+    if (!snake.moved)
+        return;
+    if (snake.tail_moved) {
+        /* Clear the old tail block and the pixel that joined it to the next
+           segment; that leaves the new tail as a plain 3x3 block. */
+        int8_t x = snake.old_tail_x < snake.tail_x ? snake.old_tail_x : snake.tail_x;
+        int8_t y = snake.old_tail_y < snake.tail_y ? snake.old_tail_y : snake.tail_y;
+        uint8_t along_x = snake.old_tail_x != snake.tail_x;
+        int px = x * 4 + 2, py = y * 4 + 2;
+
+        if (along_x && snake.old_tail_x > snake.tail_x)
+            px += 3; /* the new tail is to the left: keep its three columns */
+        if (!along_x && snake.old_tail_y > snake.tail_y)
+            py += 3;
+        lcd_fill_rect(px, py, along_x ? 4 : 3, along_x ? 3 : 4, 0);
+    }
+    lcd_fill_rect(snake.head_x * 4 + 2 - (snake.direction == SNAKE_RIGHT),
+                  snake.head_y * 4 + 2 - (snake.direction == SNAKE_DOWN),
+                  snake.direction & 1 ? 4 : 3, snake.direction & 1 ? 3 : 4, 1);
+    if (snake.grow)
+        lcd_blit_bitmap(snake.food_x * 4 + 2, snake.food_y * 4 + 2, 4, 4, snake_food_bitmap);
 }

@@ -2,7 +2,9 @@
 ;; handler that counts frames. makebin fills in the cartridge header.
 	.module crt0
 	.globl	_main
+	.globl	_flush_tiles
 	.globl	_frame_count
+	.globl	_staged, _staged_at, _staged_count
 	.globl	s__INITIALIZER, s__INITIALIZED, l__INITIALIZER
 
 	.area	_HEADER (ABS)
@@ -64,6 +66,43 @@ vblank:
 	pop	hl
 	pop	af
 	reti
+
+;; void flush_tiles(void): waits for the start of the next vertical blank,
+;; then copies staged_count 16-byte tiles from staged to the video RAM
+;; addresses in staged_at. About 180 cycles a tile; a vertical blank is 1140.
+_flush_tiles::
+1$:
+	ld	a, (#0xff44)
+	cp	a, #144
+	jr	z, 1$
+2$:
+	ld	a, (#0xff44)
+	cp	a, #144
+	jr	nz, 2$
+	ld	a, (#_staged_count)
+	or	a, a
+	ret	z
+	ld	c, a
+	ld	de, #_staged
+	ld	hl, #_staged_at
+3$:
+	push	hl
+	ld	a, (hl+)
+	ld	h, (hl)
+	ld	l, a
+	ld	b, #16
+4$:
+	ld	a, (de)
+	ld	(hl+), a
+	inc	de
+	dec	b
+	jr	nz, 4$
+	pop	hl
+	inc	hl
+	inc	hl
+	dec	c
+	jr	nz, 3$
+	ret
 
 	;; Order of the areas for the linker.
 	.area	_HOME

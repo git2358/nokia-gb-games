@@ -50,6 +50,9 @@ int main(int argc, char **argv)
 
         menu_init();
         for (key = argv[1] + 5; *key; key++) {
+            /* Draw after every key, as a platform does, so that drawing only
+               a move's changes is exercised. */
+            menu_draw();
             if (*key == 't')
                 menu_game_step();
             else

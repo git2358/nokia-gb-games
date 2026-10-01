@@ -4,12 +4,27 @@ uint8_t lcd_fb[LCD_STRIDE * LCD_HEIGHT];
 
 const uint8_t lcd_bit[8] = { 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01 };
 
+uint16_t lcd_dirty[LCD_HEIGHT / 8];
+
+void lcd_mark_dirty(uint8_t x, uint8_t y, uint8_t w, uint8_t h)
+{
+    uint8_t cell, last = (uint8_t)((x + w - 1) >> 3);
+    uint16_t mask = 0;
+
+    for (cell = x >> 3; cell <= last; cell++)
+        mask |= (uint16_t)1 << cell;
+    last = (uint8_t)((y + h - 1) >> 3);
+    for (cell = y >> 3; cell <= last; cell++)
+        lcd_dirty[cell] |= mask;
+}
+
 static void put_pixel(int x, int y, uint8_t color)
 {
     uint8_t *p;
 
     if (x < 0 || x >= LCD_WIDTH || y < 0 || y >= LCD_HEIGHT)
         return;
+    lcd_dirty[y >> 3] |= (uint16_t)1 << (x >> 3);
     p = lcd_fb + y * LCD_STRIDE + (x >> 3);
     if (color)
         *p |= lcd_bit[x & 7];
@@ -23,6 +38,8 @@ void lcd_clear(void)
 
     for (i = 0; i < sizeof lcd_fb; i++)
         lcd_fb[i] = 0;
+    for (i = 0; i < LCD_HEIGHT / 8; i++)
+        lcd_dirty[i] = 0xffff;
 }
 
 void lcd_fill_rect(int x, int y, int w, int h, uint8_t color)
@@ -46,6 +63,7 @@ void lcd_fill_rect(int x, int y, int w, int h, uint8_t color)
     if (w <= 0 || h <= 0)
         return;
 
+    lcd_mark_dirty((uint8_t)x, (uint8_t)y, (uint8_t)w, (uint8_t)h);
     first = (uint8_t)(x & 7);
     count = (uint8_t)w;
     for (row = lcd_fb + y * LCD_STRIDE + (x >> 3); h; h--, row += LCD_STRIDE) {

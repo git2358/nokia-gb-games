@@ -29,6 +29,8 @@ uint8_t font_text_width(const struct font *font, const char *text)
 
 int font_draw(const struct font *font, int x, int y, const char *text, uint8_t color)
 {
+    int start = x;
+
     while (*text && *text != '\n') {
         uint8_t i = glyph_index(*text++);
         const uint16_t *column = font->columns + font->offsets[i];
@@ -50,6 +52,13 @@ int font_draw(const struct font *font, int x, int y, const char *text, uint8_t c
                     *pixel &= (uint8_t)~mask;
             }
         }
+    }
+    /* Mark what was drawn, clipped as the columns above were. */
+    if (y >= 0 && y + font->height <= LCD_HEIGHT) {
+        int left = start < 0 ? 0 : start, right = x > LCD_WIDTH ? LCD_WIDTH : x;
+
+        if (right > left)
+            lcd_mark_dirty((uint8_t)left, (uint8_t)y, (uint8_t)(right - left), font->height);
     }
     return x;
 }

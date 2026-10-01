@@ -19,7 +19,9 @@ enum {
 
 void menu_init(void);
 void menu_key(uint8_t key);
-/* Advances timed pages; returns nonzero when the screen must be redrawn. */
+/* Advances timed pages and the running game. Returns nonzero when the
+   screen changed; call menu_draw before the next menu_tick, because a
+   game move is drawn as a change to the previous picture. */
 uint8_t menu_tick(void);
 void menu_draw(void);
 

@@ -15,6 +15,13 @@ extern uint8_t lcd_fb[LCD_STRIDE * LCD_HEIGHT];
 /* Bit of pixel x within its byte. */
 extern const uint8_t lcd_bit[8];
 
+/* Which 8x8 cells have been drawn to since the platform last cleared this:
+   bit x / 8 of entry y / 8. Lets a platform update only what changed. */
+extern uint16_t lcd_dirty[LCD_HEIGHT / 8];
+
+/* Marks the cells touched by a rectangle that lies inside the screen. */
+void lcd_mark_dirty(uint8_t x, uint8_t y, uint8_t w, uint8_t h);
+
 #define lcd_pixel(x, y) ((lcd_fb[(y) * LCD_STRIDE + ((x) >> 3)] & lcd_bit[(x) & 7]) != 0)
 
 void lcd_clear(void);

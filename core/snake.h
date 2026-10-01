@@ -31,6 +31,9 @@ struct snake {
     /* One bit per cell: byte x + SNAKE_COLS * (y / 8), bit y & 7. */
     uint8_t occupied[SNAKE_COLS * ((SNAKE_ROWS - 1) / 8 + 1)];
     int8_t food_x, food_y;
+    /* What the last step changed, for snake_draw_step. */
+    int8_t old_tail_x, old_tail_y;
+    uint8_t moved, tail_moved;
 };
 
 extern struct snake snake;
@@ -50,5 +53,9 @@ uint8_t snake_step(void);
 void snake_move_head(void);
 void snake_advance_tail(void);
 void snake_draw(void);
+
+/* Draws only what the last snake_step changed, on top of an earlier
+   snake_draw. The result is the same as clearing and drawing again. */
+void snake_draw_step(void);
 
 #endif

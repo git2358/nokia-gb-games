@@ -74,6 +74,7 @@ static uint8_t new_top_score;  /* the game just ended beat the top score */
 static uint16_t play_ticks;    /* phone ticks until Snake's next move */
 static uint16_t play_us;       /* time not yet turned into phone ticks */
 static uint16_t uptime;        /* menu_tick calls so far; seeds rand */
+static uint8_t board_drawn;    /* the LCD holds the running game's board */
 static struct game_settings settings; /* Snake's level and top score */
 static uint8_t level_choice;  /* level shown on the Level page */
 static uint16_t page_ticks;   /* ticks left on a timed page */
@@ -250,9 +251,16 @@ static void draw_note(const char *text, uint16_t number)
     }
 }
 
+/* The whole board, or only the last move's changes when the LCD already
+   holds the board. */
 static void draw_play(void)
 {
-    snake_draw();
+    if (board_drawn) {
+        snake_draw_step();
+    } else {
+        lcd_clear();
+        snake_draw();
+    }
 }
 
 /* Returns the start of the line after the one starting at `text`: as many
@@ -542,7 +550,10 @@ uint8_t menu_tick(void)
 
 void menu_draw(void)
 {
-    lcd_clear();
+    if (screen != SCREEN_PLAY) {
+        lcd_clear();
+        board_drawn = 0;
+    }
     switch (screen) {
     case SCREEN_MAIN:
         draw_main();
@@ -560,8 +571,11 @@ void menu_draw(void)
         draw_note(new_top_score ? text_game_over_top_score : text_game_over_score, snake.score);
         break;
     case SCREEN_PLAY:
-    case SCREEN_LAST_VIEW:
         draw_play();
+        board_drawn = 1;
+        break;
+    case SCREEN_LAST_VIEW:
+        snake_draw();
         break;
     case SCREEN_HELP:
         draw_help();

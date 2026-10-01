@@ -45,10 +45,11 @@ GBA_SRC := platform/gba/crt0.s platform/gba/main.c platform/gba/libc.c $(CORE_SR
 
 vpath %.c core platform/gb
 
-.PHONY: help assets test sheet frames check-golden gb gba check-gb shot-gb run-gb run-gba clean
+.PHONY: help assets test test-snake sheet frames check-golden gb gba check-gb shot-gb run-gb run-gba clean
 
 help:
 	@echo "make test      build and run the host checks (no firmware needed)"
+	@echo "make test-snake check Snake's incremental drawing against full redraws"
 	@echo "make assets    extract the game graphics from DUMP=$(DUMP) into $(ASSETS)/"
 	@echo "make sheet     draw the extracted assets to $(BUILD)/sheet_*.pgm"
 	@echo "make frames    write the host reference frames to $(BUILD)/frame_*.pgm"
@@ -73,6 +74,13 @@ $(BUILD)/test_core: tests/test_core.c core/lcd.c core/rand.c $(CORE_HDR)
 
 test: $(BUILD)/test_core
 	$(BUILD)/test_core
+
+# Needs the extracted assets, unlike `test`.
+$(BUILD)/test_snake: tests/test_snake.c core/lcd.c core/rand.c core/snake.c $(CORE_HDR) $(ASSETS)/game_assets.c
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ tests/test_snake.c core/lcd.c core/rand.c core/snake.c $(ASSETS)/game_assets.c
+
+test-snake: $(BUILD)/test_snake
+	$(BUILD)/test_snake
 
 $(BUILD)/asset_sheet: platform/host/asset_sheet.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSETS)/game_assets.c
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/asset_sheet.c platform/host/pgm.c $(CORE_SRC) $(ASSETS)/game_assets.c

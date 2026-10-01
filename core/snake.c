@@ -1,7 +1,12 @@
 #include "snake.h"
 
+#include "game.h"
 #include "game_assets.h"
 #include "lcd.h"
+#include "rand.h"
+
+/* Delay after a blocked move, giving one last chance to turn away. */
+#define HIT_GRACE_TICKS 20
 
 struct snake snake;
 
@@ -31,11 +36,20 @@ static int8_t step_y(uint8_t direction)
     return direction == SNAKE_UP ? -1 : direction == SNAKE_DOWN;
 }
 
-void snake_init(void)
+static uint8_t is_occupied(int8_t x, int8_t y)
+{
+    return (snake.occupied[x + SNAKE_COLS * (y / 8)] >> (y & 7)) & 1;
+}
+
+void snake_init(uint8_t level)
 {
     unsigned i;
 
-    snake.direction = SNAKE_RIGHT;
+    snake.level = level;
+    snake.score = 0;
+    snake.grow = 0;
+    snake.hit = 0;
+    snake.direction = snake.pending = SNAKE_RIGHT;
     snake.tail_index = 0;
     snake.head_index = 0;
     snake.head_x = snake.tail_x = 0;
@@ -53,7 +67,96 @@ void snake_init(void)
     snake.food_y = SNAKE_ROWS / 2;
 }
 
-/* The firmware also scores a filled board here; that comes with the tick. */
+void snake_key(char key)
+{
+    uint8_t vertical = !(snake.direction & 1);
+
+    switch (key) {
+    case '2':
+        if (snake.direction != SNAKE_DOWN)
+            snake.pending = SNAKE_UP;
+        break;
+    case '8':
+        if (snake.direction != SNAKE_UP)
+            snake.pending = SNAKE_DOWN;
+        break;
+    case '4':
+        if (snake.direction != SNAKE_RIGHT)
+            snake.pending = SNAKE_LEFT;
+        break;
+    case '6':
+        if (snake.direction != SNAKE_LEFT)
+            snake.pending = SNAKE_RIGHT;
+        break;
+    case '1':
+        snake.pending = vertical ? SNAKE_LEFT : SNAKE_UP;
+        break;
+    case '3':
+        snake.pending = vertical ? SNAKE_RIGHT : SNAKE_UP;
+        break;
+    case '7':
+        snake.pending = vertical ? SNAKE_LEFT : SNAKE_DOWN;
+        break;
+    case '9':
+        snake.pending = vertical ? SNAKE_RIGHT : SNAKE_DOWN;
+        break;
+    default:
+        break;
+    }
+}
+
+/* Whether the next head cell is blocked: a wall or the snake itself. The
+   tail's own cell is free when the tail is about to move out of it. */
+static uint8_t move_blocked(void)
+{
+    int8_t x = (int8_t)(snake.head_x + step_x(snake.direction));
+    int8_t y = (int8_t)(snake.head_y + step_y(snake.direction));
+
+    if (x < 0 || y < 0 || x >= SNAKE_COLS || y >= SNAKE_ROWS)
+        return 1;
+    if (x == snake.tail_x && y == snake.tail_y)
+        return snake.grow;
+    return is_occupied(x, y);
+}
+
+/* Up to 255 tries for a free cell, as the firmware does. */
+static void place_food(void)
+{
+    uint8_t tries = 255;
+    int8_t x, y;
+
+    do {
+        x = (int8_t)(game_rand() % SNAKE_COLS);
+        y = (int8_t)(game_rand() % SNAKE_ROWS);
+    } while (is_occupied(x, y) && --tries);
+    snake.food_x = x;
+    snake.food_y = y;
+}
+
+uint8_t snake_step(void)
+{
+    snake.direction = snake.pending;
+    if (move_blocked()) {
+        if (snake.hit)
+            return 0;
+        snake.hit = 1;
+        return HIT_GRACE_TICKS;
+    }
+    snake.hit = 0;
+    if (!snake.grow)
+        snake_advance_tail();
+    snake_move_head();
+    snake.grow = snake.head_x == snake.food_x && snake.head_y == snake.food_y;
+    if (snake.grow) {
+        platform_beep();
+        snake.score += snake.level + 1;
+        place_food();
+    }
+    /* speed is in units of 10 ms; a tick is 7.78125 ms (249/32). */
+    return (uint8_t)((uint16_t)game_speed_table[snake.level] * 320 / 249);
+}
+
+/* The firmware also scores a filled board here; that is not done yet. */
 void snake_move_head(void)
 {
     uint8_t shift = (uint8_t)((snake.head_index & 3) << 1);

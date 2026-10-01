@@ -9,6 +9,8 @@
 
 #define REG(addr) (*(volatile uint8_t *)(addr))
 #define P1 REG(0xff00)
+#define IF REG(0xff0f)
+#define IE REG(0xffff)
 #define LCDC REG(0xff40)
 #define SCY REG(0xff42)
 #define SCX REG(0xff43)
@@ -30,11 +32,14 @@
 #define PAD_A 0x01
 #define PAD_B 0x02
 #define PAD_START 0x08
+#define PAD_RIGHT 0x10
+#define PAD_LEFT 0x20
 #define PAD_UP 0x40
 #define PAD_DOWN 0x80
 
-/* Menu keys pressed at power-on, for scripted screenshots: u, d, s, b, and
-   r to start over as after a power cycle (settings are read back). */
+/* Keys pressed at power-on, for scripted screenshots: u, d, l, r, s select,
+   b back, t one move of the running game, and p to start over as after a
+   power cycle (settings are read back). */
 #ifndef START_KEYS
 #define START_KEYS ""
 #endif
@@ -48,7 +53,22 @@
 #define SAVE_SIGNATURE_1 '3'
 #define SAVE_CHECK(r) ((uint8_t)((r)[0] + (r)[1] + (r)[2] + 0x5a))
 
-static uint8_t tiles[TILES_X * TILES_Y * 16];
+#define TILE_COUNT (TILES_X * TILES_Y)
+/* Tiles copied to video RAM in one vertical blank with the LCD on. */
+#define TILES_PER_BLANK 2
+/* With more changed tiles than this the LCD is switched off for the copy. */
+#define MAX_LIVE_TILES 16
+
+/* Frames since power-on, counted by the vertical-blank handler in crt0.s. */
+volatile uint8_t frame_count;
+
+static uint8_t tiles[TILE_COUNT * 16];  /* what the screen should show */
+static uint8_t shown[TILE_COUNT * 16];  /* what video RAM holds */
+static uint8_t changed[TILE_COUNT];
+
+void platform_beep(void)
+{
+}
 
 void platform_settings_load(uint8_t game, struct game_settings *out)
 {
@@ -104,22 +124,67 @@ static void render_tiles(void)
     }
 }
 
-/* Copies the tile data to video RAM with the LCD off, so it is never
-   written while the LCD controller owns it. */
+/* Kept short: with the LCD on it must finish inside a vertical blank. */
+static void copy_tile(uint8_t index)
+{
+    uint8_t *dst = VRAM_TILES + 16 + index * 16; /* tile 0 stays blank */
+    const uint8_t *src = tiles + index * 16;
+    uint8_t n;
+
+    for (n = 16; n; n--)
+        *dst++ = *src++;
+}
+
+/* Brings video RAM up to date with lcd_fb. Video RAM can only be written
+   while the LCD controller is not using it: a few changed tiles are copied
+   during vertical blanks, and a whole new screen with the LCD off. */
 static void present(void)
 {
-    uint8_t *dst = VRAM_TILES + 16; /* tile 0 stays blank */
-    const uint8_t *src = tiles;
-    uint16_t n;
+    uint8_t i, n, count = 0;
 
     render_tiles();
-    if (LCDC & 0x80) {
-        wait_vblank();
-        LCDC = 0;
+    for (i = 0; i < TILE_COUNT; i++) {
+        const uint8_t *a = tiles + i * 16, *b = shown + i * 16;
+
+        changed[i] = 0;
+        for (n = 16; n; n--)
+            if (*a++ != *b++) {
+                changed[i] = 1;
+                count++;
+                break;
+            }
     }
-    for (n = sizeof tiles; n; n--)
-        *dst++ = *src++;
-    LCDC = LCDC_ON;
+    if (!count && (LCDC & 0x80))
+        return;
+
+    if (count > MAX_LIVE_TILES || !(LCDC & 0x80)) {
+        if (LCDC & 0x80) {
+            wait_vblank();
+            LCDC = 0;
+        }
+        for (i = 0; i < TILE_COUNT; i++)
+            if (changed[i])
+                copy_tile(i);
+        LCDC = LCDC_ON;
+    } else {
+        n = 0;
+        for (i = 0; i < TILE_COUNT; i++) {
+            if (!changed[i])
+                continue;
+            if (n == 0) {
+                while (LY == 144)
+                    ;
+                wait_vblank();
+            }
+            copy_tile(i);
+            if (++n == TILES_PER_BLANK)
+                n = 0;
+        }
+    }
+    for (i = 0; i < sizeof tiles / 16; i++)
+        if (changed[i])
+            for (n = 0; n < 16; n++)
+                shown[i * 16 + n] = tiles[i * 16 + n];
 }
 
 /* Buttons currently held: A, B, Select, Start in bits 0-3, then Right,
@@ -146,7 +211,7 @@ static void press(uint8_t key)
 void main(void)
 {
     uint16_t i;
-    uint8_t tx, ty, pad, last = 0, pressed;
+    uint8_t tx, ty, pad, last = 0, pressed, seen = 0;
     const char *key;
 
     wait_vblank();
@@ -163,20 +228,33 @@ void main(void)
     BGP = 0xe4;
 
     menu_init();
-    for (key = START_KEYS; *key; key++)
-        if (*key == 'r')
+    for (key = START_KEYS; *key; key++) {
+        if (*key == 'p')
             menu_init();
+        else if (*key == 't')
+            menu_game_step();
         else
-            press(*key == 'u' ? MENU_KEY_UP : *key == 'd' ? MENU_KEY_DOWN : *key == 's' ? MENU_KEY_SELECT : MENU_KEY_BACK);
+            press(*key == 'u' ? MENU_KEY_UP : *key == 'd' ? MENU_KEY_DOWN : *key == 'l' ? MENU_KEY_LEFT
+                  : *key == 'r' ? MENU_KEY_RIGHT : *key == 's' ? MENU_KEY_SELECT : MENU_KEY_BACK);
+    }
     menu_draw();
     present();
 
-    for (;;) {
-        uint8_t redraw;
+    IF = 0;
+    IE = 0x01; /* vertical blank */
+    __asm__("ei");
 
-        /* One pass per frame: line 144 starts the vertical blank. */
-        wait_vblank();
-        redraw = menu_tick();
+    for (;;) {
+        uint8_t redraw = 0, frames;
+
+        /* One menu tick per frame, catching up on frames spent drawing. */
+        while (frame_count == seen)
+            ;
+        frames = (uint8_t)(frame_count - seen);
+        seen += frames;
+        while (frames--)
+            redraw |= menu_tick();
+
         pad = read_pad();
         pressed = (uint8_t)(pad & ~last);
         last = pad;
@@ -188,11 +266,13 @@ void main(void)
             press(MENU_KEY_UP);
         else if (pressed & PAD_DOWN)
             press(MENU_KEY_DOWN);
+        else if (pressed & PAD_LEFT)
+            press(MENU_KEY_LEFT);
+        else if (pressed & PAD_RIGHT)
+            press(MENU_KEY_RIGHT);
         if (pressed || redraw) {
             menu_draw();
             present();
         }
-        while (LY == 144)
-            ;
     }
 }

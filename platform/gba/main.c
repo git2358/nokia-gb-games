@@ -33,6 +33,10 @@ void platform_settings_save(uint8_t game, const struct game_settings *in)
     (void)in;
 }
 
+void platform_beep(void)
+{
+}
+
 static void present(void)
 {
     int x, y;

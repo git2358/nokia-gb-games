@@ -4,6 +4,8 @@
 #include "game.h"
 #include "game_assets.h"
 #include "lcd.h"
+#include "rand.h"
+#include "snake.h"
 
 /* Screen geometry shared by the phone's menu pages. */
 #define CONTENT_WIDTH 78 /* left of the scrollbar */
@@ -25,7 +27,10 @@ enum {
     SCREEN_GAME,
     SCREEN_LEVEL,
     SCREEN_TOP_SCORE,
-    SCREEN_HELP
+    SCREEN_HELP,
+    SCREEN_PLAY,
+    SCREEN_GAME_OVER,
+    SCREEN_LAST_VIEW
 };
 
 #define LEVEL_COUNT 9
@@ -35,24 +40,40 @@ enum {
 #define HELP_LINE_HEIGHT 9
 #define HELP_LINES 3
 
-/* The Top score page closes by itself after this long. */
-#define TOP_SCORE_TICKS (5 * MENU_TICKS_PER_SECOND)
+/* The Top score and Game over pages close by themselves after this long. */
+#define NOTE_TICKS (5 * MENU_TICKS_PER_SECOND)
 
-/* A game's menu in item-number order. It opens on New game. */
+/* Microseconds per menu_tick call and per scheduler tick of the phone. */
+#define FRAME_US (1000000ul / MENU_TICKS_PER_SECOND)
+#define PHONE_TICK_US 7781
+
+/* A game's menu in item-number order. The second entry is there only when
+   a game is paused (Continue) or has just ended (Last view). */
 enum {
     ITEM_LEVEL,
+    ITEM_RESUME,
     ITEM_NEW_GAME,
     ITEM_TOP_SCORE,
-    ITEM_INSTRUCTIONS,
-    ITEM_COUNT
+    ITEM_INSTRUCTIONS
+};
+
+enum {
+    RESUME_NONE,
+    RESUME_CONTINUE,
+    RESUME_LAST_VIEW
 };
 
 #define GAME_COUNT 3
 
 static uint8_t screen;
 static uint8_t game;     /* selection in the list of games */
-static uint8_t item;     /* selection in a game's menu */
+static uint8_t item;     /* selection in a game's menu, counting visible items */
 static uint8_t item_top; /* first visible row of a game's menu */
+static uint8_t resume;   /* what the menu's second entry is */
+static uint8_t new_top_score;  /* the game just ended beat the top score */
+static uint16_t play_ticks;    /* phone ticks until Snake's next move */
+static uint16_t play_us;       /* time not yet turned into phone ticks */
+static uint16_t uptime;        /* menu_tick calls so far; seeds rand */
 static struct game_settings settings; /* Snake's level and top score */
 static uint8_t level_choice;  /* level shown on the Level page */
 static uint16_t page_ticks;   /* ticks left on a timed page */
@@ -70,11 +91,24 @@ static const char *game_name(uint8_t index)
     }
 }
 
-static const char *item_name(uint8_t index)
+static uint8_t item_count(void)
 {
-    switch (index) {
+    return resume ? 5 : 4;
+}
+
+/* The item at visible position `index`. */
+static uint8_t item_id(uint8_t index)
+{
+    return (uint8_t)(resume || index == 0 ? index : index + 1);
+}
+
+static const char *item_name(uint8_t id)
+{
+    switch (id) {
     case ITEM_LEVEL:
         return text_level;
+    case ITEM_RESUME:
+        return resume == RESUME_CONTINUE ? text_continue : text_last_view;
     case ITEM_NEW_GAME:
         return text_new_game;
     case ITEM_TOP_SCORE:
@@ -158,11 +192,11 @@ static void draw_game(void)
 
     draw_path(2);
     for (row = 0; row < VISIBLE_ROWS; row++) {
-        uint8_t index = (uint8_t)((item_top + row) % ITEM_COUNT);
+        uint8_t index = (uint8_t)((item_top + row) % item_count());
 
-        draw_row(row, item_name(index), index == item);
+        draw_row(row, item_name(item_id(index)), index == item);
     }
-    draw_scrollbar(thumb_for(item, ITEM_COUNT));
+    draw_scrollbar(thumb_for(item, item_count()));
     draw_softkey(text_select);
 }
 
@@ -198,11 +232,27 @@ static void draw_number(const struct font *font, int x, int y, uint16_t value)
     font_draw(font, x, y, digits + n, 1);
 }
 
-/* "Top score:" and the score on the next line, in the large font. */
-static void draw_top_score(void)
+/* A note in the large font, one line every 15 rows; %N is the number. */
+static void draw_note(const char *text, uint16_t number)
 {
-    font_draw(&font_large_bold, 0, 3, text_top_score_value, 1);
-    draw_number(&font_large_bold, 0, 18, settings.top_score);
+    uint8_t y = 3;
+
+    for (;;) {
+        if (text[0] == '%' && text[1] == 'N')
+            draw_number(&font_large_bold, 0, y, number);
+        else
+            font_draw(&font_large_bold, 0, y, text, 1);
+        while (*text && *text != '\n')
+            text++;
+        if (!*text++)
+            break;
+        y += 15;
+    }
+}
+
+static void draw_play(void)
+{
+    snake_draw();
 }
 
 /* Returns the start of the line after the one starting at `text`: as many
@@ -267,41 +317,127 @@ void menu_init(void)
 {
     screen = SCREEN_MAIN;
     game = 0;
+    resume = RESUME_NONE;
     platform_settings_load(GAME_SNAKE, &settings);
     if (settings.level >= LEVEL_COUNT)
         settings.level = 0;
 }
 
+/* Opens Snake's menu on New game, or on Continue or Last view if there. */
+static void game_menu_open(void)
+{
+    screen = SCREEN_GAME;
+    item = item_top = 1;
+}
+
+static void play_schedule(uint8_t ticks)
+{
+    play_ticks = ticks;
+    play_us = 0;
+}
+
+static void play_start(void)
+{
+    game_srand(uptime);
+    snake_init(settings.level);
+    screen = SCREEN_PLAY;
+    play_schedule((uint8_t)((uint16_t)game_speed_table[settings.level] * 320 / 249));
+}
+
+static void play_over(void)
+{
+    new_top_score = snake.score > settings.top_score;
+    if (new_top_score) {
+        settings.top_score = snake.score;
+        platform_settings_save(GAME_SNAKE, &settings);
+    }
+    resume = RESUME_LAST_VIEW;
+    screen = SCREEN_GAME_OVER;
+    page_ticks = NOTE_TICKS;
+}
+
+void menu_game_step(void)
+{
+    uint8_t delay;
+
+    if (screen != SCREEN_PLAY)
+        return;
+    delay = snake_step();
+    if (delay)
+        play_schedule(delay);
+    else
+        play_over();
+}
+
+static void play_key(uint8_t key)
+{
+    switch (key) {
+    case MENU_KEY_UP:
+        snake_key('2');
+        break;
+    case MENU_KEY_DOWN:
+        snake_key('8');
+        break;
+    case MENU_KEY_LEFT:
+        snake_key('4');
+        break;
+    case MENU_KEY_RIGHT:
+        snake_key('6');
+        break;
+    case MENU_KEY_BACK:
+        /* The C key pauses into the game's menu. */
+        resume = RESUME_CONTINUE;
+        game_menu_open();
+        break;
+    default:
+        break;
+    }
+}
+
 static void game_menu_select(void)
 {
-    switch (item) {
+    switch (item_id(item)) {
+    case ITEM_RESUME:
+        if (resume == RESUME_CONTINUE) {
+            screen = SCREEN_PLAY;
+            play_schedule((uint8_t)((uint16_t)game_speed_table[snake.level] * 320 / 249));
+        } else {
+            screen = SCREEN_LAST_VIEW;
+        }
+        break;
+    case ITEM_NEW_GAME:
+        resume = RESUME_NONE;
+        play_start();
+        break;
     case ITEM_LEVEL:
         screen = SCREEN_LEVEL;
         level_choice = settings.level;
         break;
     case ITEM_TOP_SCORE:
         screen = SCREEN_TOP_SCORE;
-        page_ticks = TOP_SCORE_TICKS;
+        page_ticks = NOTE_TICKS;
         break;
     case ITEM_INSTRUCTIONS:
         screen = SCREEN_HELP;
         help_page = text_help_snake;
         break;
     default:
-        break; /* New game: the game itself is not wired up yet */
+        break;
     }
 }
 
 static void game_menu_move(uint8_t key)
 {
+    uint8_t count = item_count();
+
     if (key == MENU_KEY_DOWN) {
-        item = (uint8_t)((item + 1) % ITEM_COUNT);
+        item = (uint8_t)((item + 1) % count);
         /* The window follows the selection, wrapping with it. */
-        if ((uint8_t)((item + ITEM_COUNT - item_top) % ITEM_COUNT) >= VISIBLE_ROWS)
-            item_top = (uint8_t)((item + ITEM_COUNT - (VISIBLE_ROWS - 1)) % ITEM_COUNT);
-    } else {
-        item = (uint8_t)((item + ITEM_COUNT - 1) % ITEM_COUNT);
-        if ((uint8_t)((item + ITEM_COUNT - item_top) % ITEM_COUNT) >= VISIBLE_ROWS)
+        if ((uint8_t)((item + count - item_top) % count) >= VISIBLE_ROWS)
+            item_top = (uint8_t)((item + count - (VISIBLE_ROWS - 1)) % count);
+    } else if (key == MENU_KEY_UP) {
+        item = (uint8_t)((item + count - 1) % count);
+        if ((uint8_t)((item + count - item_top) % count) >= VISIBLE_ROWS)
             item_top = item;
     }
 }
@@ -321,10 +457,8 @@ void menu_key(uint8_t key)
         } else if (key == MENU_KEY_UP) {
             game = (uint8_t)((game + GAME_COUNT - 1) % GAME_COUNT);
         } else if (key == MENU_KEY_SELECT) {
-            if (game == GAME_SNAKE) { /* the only game wired up so far */
-                screen = SCREEN_GAME;
-                item = item_top = ITEM_NEW_GAME;
-            }
+            if (game == GAME_SNAKE) /* the only game wired up so far */
+                game_menu_open();
         } else {
             screen = SCREEN_MAIN;
         }
@@ -356,12 +490,19 @@ void menu_key(uint8_t key)
         if (key != MENU_KEY_BACK)
             menu_key(key);
         break;
+    case SCREEN_GAME_OVER:
+    case SCREEN_LAST_VIEW:
+        game_menu_open();
+        break;
+    case SCREEN_PLAY:
+        play_key(key);
+        break;
     default:
         if (key == MENU_KEY_DOWN || key == MENU_KEY_UP)
             game_menu_move(key);
         else if (key == MENU_KEY_SELECT)
             game_menu_select();
-        else
+        else if (key == MENU_KEY_BACK)
             screen = SCREEN_GAMES;
         break;
     }
@@ -369,9 +510,32 @@ void menu_key(uint8_t key)
 
 uint8_t menu_tick(void)
 {
-    if (screen == SCREEN_TOP_SCORE && --page_ticks == 0) {
-        screen = SCREEN_GAME;
-        return 1;
+    uptime++;
+    switch (screen) {
+    case SCREEN_TOP_SCORE:
+        if (--page_ticks == 0) {
+            screen = SCREEN_GAME;
+            return 1;
+        }
+        break;
+    case SCREEN_GAME_OVER:
+        if (--page_ticks == 0) {
+            game_menu_open();
+            return 1;
+        }
+        break;
+    case SCREEN_PLAY:
+        play_us += FRAME_US;
+        while (play_us >= PHONE_TICK_US) {
+            play_us -= PHONE_TICK_US;
+            if (play_ticks && --play_ticks == 0) {
+                menu_game_step();
+                return 1;
+            }
+        }
+        break;
+    default:
+        break;
     }
     return 0;
 }
@@ -390,7 +554,14 @@ void menu_draw(void)
         draw_level();
         break;
     case SCREEN_TOP_SCORE:
-        draw_top_score();
+        draw_note(text_top_score_value, settings.top_score);
+        break;
+    case SCREEN_GAME_OVER:
+        draw_note(new_top_score ? text_game_over_top_score : text_game_over_score, snake.score);
+        break;
+    case SCREEN_PLAY:
+    case SCREEN_LAST_VIEW:
+        draw_play();
         break;
     case SCREEN_HELP:
         draw_help();

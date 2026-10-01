@@ -12,6 +12,7 @@ CFLAGS ?= -std=c99 -O2 -Wall -Wextra -pedantic
 # Game Boy: SDCC (sm83 port) and its makebin.
 SDCC ?= sdcc
 MAKEBIN ?= makebin
+SDAS ?= sdasgb
 SAMEBOY_TESTER ?= tools/SameBoy/build/bin/tester/sameboy_tester
 SAMEBOY_APP ?= /Applications/SameBoy.app
 # Emulated seconds to run before the screenshot, and its scale factor.
@@ -34,7 +35,7 @@ INCLUDES := -Icore -Iplatform/host -I$(ASSETS)
 
 GB_ROM := $(BUILD)/nokia3210.gb
 GBA_ROM := $(BUILD)/nokia3210.gba
-# Menu keys the Game Boy ROM presses at power-on (u, d, s, b), for scripted
+# Keys the Game Boy ROM presses at power-on (see platform/gb/main.c), for scripted
 # screenshots; check-gb compares the result with the host's frame for them.
 KEYS ?=
 GB_FRAME := menu-$(KEYS)
@@ -111,8 +112,12 @@ $(BUILD)/gb/game_assets.rel: $(ASSETS)/game_assets.c
 	@mkdir -p $(BUILD)/gb
 	$(SDCC) -msm83 -Icore -I$(ASSETS) -c $< -o $@
 
-$(GB_ROM): $(GB_REL) FORCE
-	$(SDCC) -msm83 -o $(BUILD)/gb/nokia3210.ihx $(GB_REL)
+$(BUILD)/gb/crt0.rel: platform/gb/crt0.s
+	@mkdir -p $(BUILD)/gb
+	$(SDAS) -o $@ $<
+
+$(GB_ROM): $(BUILD)/gb/crt0.rel $(GB_REL) FORCE
+	$(SDCC) -msm83 --no-std-crt0 -o $(BUILD)/gb/nokia3210.ihx $(BUILD)/gb/crt0.rel $(GB_REL)
 	$(MAKEBIN) -Z -yn NOKIA3210 -yt 0x03 -ya 1 $(BUILD)/gb/nokia3210.ihx $@
 
 gb: $(GB_ROM)

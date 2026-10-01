@@ -1,7 +1,8 @@
 /* Writes a reference frame for the platform builds and the MAME comparison.
    Usage: frame NAME OUT.pgm
    NAME: testcard, outline, snake-start, or menu-KEYS where KEYS is the menu
-   keys pressed from the first screen (u up, d down, s select, b back). */
+   keys pressed from the first screen (u up, d down, l left, r right,
+   s select, b back, t one move of the running game). */
 #include <stdio.h>
 #include <string.h>
 
@@ -26,6 +27,10 @@ void platform_settings_save(uint8_t game, const struct game_settings *in)
     (void)in;
 }
 
+void platform_beep(void)
+{
+}
+
 int main(int argc, char **argv)
 {
     if (argc != 3) {
@@ -38,14 +43,19 @@ int main(int argc, char **argv)
         testcard_frame();
     } else if (strcmp(argv[1], "snake-start") == 0) {
         lcd_clear();
-        snake_init();
+        snake_init(0);
         snake_draw();
     } else if (strncmp(argv[1], "menu-", 5) == 0) {
         const char *key;
 
         menu_init();
-        for (key = argv[1] + 5; *key; key++)
-            menu_key(*key == 'u' ? MENU_KEY_UP : *key == 'd' ? MENU_KEY_DOWN : *key == 's' ? MENU_KEY_SELECT : MENU_KEY_BACK);
+        for (key = argv[1] + 5; *key; key++) {
+            if (*key == 't')
+                menu_game_step();
+            else
+                menu_key(*key == 'u' ? MENU_KEY_UP : *key == 'd' ? MENU_KEY_DOWN : *key == 'l' ? MENU_KEY_LEFT
+                         : *key == 'r' ? MENU_KEY_RIGHT : *key == 's' ? MENU_KEY_SELECT : MENU_KEY_BACK);
+        }
         menu_draw();
     } else {
         fprintf(stderr, "unknown frame %s\n", argv[1]);

@@ -9,7 +9,9 @@ enum {
     MENU_KEY_UP,
     MENU_KEY_DOWN,
     MENU_KEY_SELECT, /* the phone's Navi key */
-    MENU_KEY_BACK    /* the phone's C key */
+    MENU_KEY_BACK,   /* the phone's C key */
+    MENU_KEY_LEFT,   /* only used in a game */
+    MENU_KEY_RIGHT
 };
 
 /* The platform calls menu_tick this many times a second. */
@@ -20,5 +22,9 @@ void menu_key(uint8_t key);
 /* Advances timed pages; returns nonzero when the screen must be redrawn. */
 uint8_t menu_tick(void);
 void menu_draw(void);
+
+/* Makes the running game's next move now instead of when its timer runs
+   out; menu_tick normally does this. For scripted frames. */
+void menu_game_step(void);
 
 #endif

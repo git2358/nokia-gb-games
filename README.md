@@ -72,7 +72,7 @@ scripts/setup-sameboy.sh
 make test                       # host checks, no firmware needed
 make gb gba                     # build/nokia3210.gb and build/nokia3210.gba
 make check-gb                   # run the .gb headlessly, compare with the host frame
-make shot-gb KEYS=sd            # screenshot after menu keys (u, d, s select, b back)
+make shot-gb KEYS=sd            # screenshot after scripted keys (u, d, l, r, s select, b back, t one game move)
 make check-golden               # compare host frames with MAME frames in golden/
 make assets DUMP=/path/to/3210f600a.fls
 make sheet                      # draw the extracted assets to build/sheet_*.pgm
@@ -88,12 +88,14 @@ checks. To run on hardware, pass a GBA ROM you own to copy it from:
 
 ## Status
 
-In progress: the phone's menus. Both cartridges build; the Game Boy ROM
-opens on the main menu's Games entry and walks the Games list and Snake's
-menu with its Level, Top score and Instructions pages, drawn with the
-phone's own fonts and text and matching frames captured from the firmware
-in MAME. Snake's level is kept in battery-backed cartridge RAM. Rotation and
-Memory do nothing yet, and New game does not start a game (Snake's starting
-position is implemented in the core). See
+In progress. Both cartridges build; the Game Boy ROM opens on the main
+menu's Games entry and walks the Games list and Snake's menu with its
+Level, Top score and Instructions pages, drawn with the phone's own fonts
+and text. New game starts a playable Snake: steering, food, scoring, the
+pause menu with Continue, the Game over page and Last view. Menus and
+gameplay match frames captured from the firmware in MAME. Level and top
+score are kept in battery-backed cartridge RAM. Rotation and Memory do
+nothing yet, there is no sound, and the Game Boy redraws too slowly for the
+fastest levels. See
 [`docs/handoff.md`](docs/handoff.md) for the decisions taken, the reference
 material and the work items.

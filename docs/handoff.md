@@ -98,10 +98,10 @@ use has each 16-bit pair swapped (see the fork's `roms/README.md`), so
 3. Golden frames: capture a deterministic Snake run in MAME (fixed keys, the
    seed read from RAM `0x11250c` at New game) and diff the host core's frames
    against it.
-4. GBA layer (devkitARM or gba toolchain of choice): mode 3 or 4 blit,
+4. GBA layer (bare `arm-none-eabi-gcc`): mode 3 or 4 blit,
    input, timer-driven tick, SRAM settings.
-5. Game Boy layer (GBDK-2020): tile renderer, input, timer tick, cartridge
-   RAM settings.
+5. Game Boy layer (SDCC `sm83`, no GBDK): tile renderer, input, timer tick,
+   cartridge RAM settings.
 6. Memory and Rotation, then the reaction game and Logic, each with the same
    golden-frame check.
 

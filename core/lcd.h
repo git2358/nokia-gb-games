@@ -18,4 +18,8 @@ void lcd_fill_rect(int x, int y, int w, int h, uint8_t color);
    pixels; anything outside the screen is clipped. */
 void lcd_blit_bitmap(int x, int y, int w, int h, const uint8_t *data);
 
+/* Bitmap stored as strips of 8 rows, w bytes per strip (the LCD
+   controller's own layout): bit (y & 7) of byte x + w * (y / 8). */
+void lcd_blit_strips(int x, int y, int w, int h, const uint8_t *data);
+
 #endif

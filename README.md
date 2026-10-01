@@ -34,20 +34,46 @@ your own legally obtained dump at build time into an ignored directory.
 
 ## Layout
 
-- `core/`: the portable game core (framebuffer and drawing primitives,
-  `rand`, the event and platform interface in `core/game.h`).
+- `core/`: the portable game core (framebuffer and drawing primitives, the
+  phone's fonts and menus, `rand`, the event and platform interface in
+  `core/game.h`, and a test card).
 - `platform/host/`: host layer used for verification; writes LCD frames as
   PGM in the layout of the fork's MAME frames.
-- `tools/extract_assets.py`: reads the game graphics from your dump into C
-  arrays under the ignored `build/assets/`.
+- `platform/gb/`: Game Boy layer (84x48 drawn 1:1 as background tiles).
+- `platform/gba/`: GBA layer (84x48 drawn at 2x in bitmap mode 3), with its
+  own startup code and linker script.
+- `tools/`: `extract_assets.py` reads the game graphics from your dump into
+  C arrays under the ignored `build/assets/`; `gbafix.py` finishes the GBA
+  header; `check_gb_frame.py` compares an emulator screenshot with a host
+  frame.
+- `scripts/setup-sameboy.sh`: clones upstream SameBoy at a pinned commit
+  into the ignored `tools/SameBoy/` and builds its headless tester.
 - `tests/`: host checks that need no firmware.
 
-The Game Boy and GBA layers will live in `platform/gb/` and `platform/gba/`.
+## Toolchains
+
+On macOS with Homebrew:
+
+```
+brew install sdcc rgbds arm-none-eabi-gcc
+scripts/setup-sameboy.sh
+```
+
+- Game Boy: SDCC's `sm83` port with its stock startup code, and `makebin`
+  for the cartridge header. No GBDK.
+- GBA: bare `arm-none-eabi-gcc` with no C library; `platform/gba/` supplies
+  the startup code, the linker script and `memset`/`memcpy`.
+- Emulators: SameBoy's tester for headless Game Boy frames; `make run-gb`
+  and `make run-gba` open the ROMs in SameBoy.app and mGBA.app.
 
 ## Building
 
 ```
 make test                       # host checks, no firmware needed
+make gb gba                     # build/nokia3210.gb and build/nokia3210.gba
+make check-gb                   # run the .gb headlessly, compare with the host frame
+make shot-gb KEYS=sd            # screenshot after menu keys (u, d, s select, b back)
+make check-golden               # compare host frames with MAME frames in golden/
 make assets DUMP=/path/to/3210f600a.fls
 make sheet                      # draw the extracted assets to build/sheet_*.pgm
 ```
@@ -56,9 +82,17 @@ make sheet                      # draw the extracted assets to build/sheet_*.pgm
 NSE-8/9 v6.00 (SHA-256 `7bf29b96…0d8a` raw, or the fork's `_swap16.bin`
 form); the extractor refuses anything else.
 
+The GBA ROM is built without the boot logo, which a real console's BIOS
+checks. To run on hardware, pass a GBA ROM you own to copy it from:
+`make gba GBA_LOGO_FROM=/path/to/some.gba`.
+
 ## Status
 
-Scaffolded: asset extraction and the core's drawing and `rand` services
-build and are checked on the host. No game is implemented yet. See
+In progress: the phone's menus. Both cartridges build; the Game Boy ROM
+opens on the main menu's Games entry and walks the Games list and each
+game's menu, drawn with the phone's own fonts and text and matching frames
+captured from the firmware in MAME. The Level, Top score and Instructions
+pages and the games themselves are not implemented yet (Snake's starting
+position is). See
 [`docs/handoff.md`](docs/handoff.md) for the decisions taken, the reference
 material and the work items.

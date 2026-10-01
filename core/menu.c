@@ -1,6 +1,7 @@
 #include "menu.h"
 
 #include "font.h"
+#include "game.h"
 #include "game_assets.h"
 #include "lcd.h"
 
@@ -21,8 +22,21 @@
 enum {
     SCREEN_MAIN,
     SCREEN_GAMES,
-    SCREEN_GAME
+    SCREEN_GAME,
+    SCREEN_LEVEL,
+    SCREEN_TOP_SCORE,
+    SCREEN_HELP
 };
+
+#define LEVEL_COUNT 9
+#define LEVEL_BASE_Y 36 /* bottom row of the level bars */
+
+#define HELP_Y 7
+#define HELP_LINE_HEIGHT 9
+#define HELP_LINES 3
+
+/* The Top score page closes by itself after this long. */
+#define TOP_SCORE_TICKS (5 * MENU_TICKS_PER_SECOND)
 
 /* A game's menu in item-number order. It opens on New game. */
 enum {
@@ -39,6 +53,10 @@ static uint8_t screen;
 static uint8_t game;     /* selection in the list of games */
 static uint8_t item;     /* selection in a game's menu */
 static uint8_t item_top; /* first visible row of a game's menu */
+static struct game_settings settings; /* Snake's level and top score */
+static uint8_t level_choice;  /* level shown on the Level page */
+static uint16_t page_ticks;   /* ticks left on a timed page */
+static const char *help_page; /* first character of the Instructions page shown */
 
 static const char *game_name(uint8_t index)
 {
@@ -148,10 +166,130 @@ static void draw_game(void)
     draw_softkey(text_select);
 }
 
+/* One bar per level: an outline that grows by two pixels a level, filled
+   up to the chosen level. */
+static void draw_level(void)
+{
+    uint8_t i;
+
+    font_draw(&font_small_bold, 5, 0, text_level_title, 1);
+    for (i = 0; i < LEVEL_COUNT; i++) {
+        uint8_t x = (uint8_t)(5 + i * 8);
+        uint8_t height = (uint8_t)(6 + i * 2);
+
+        lcd_fill_rect(x + 5, LEVEL_BASE_Y - height, 1, height, 1);
+        lcd_fill_rect(x + 1, LEVEL_BASE_Y, 5, 1, 1);
+        if (i <= level_choice)
+            lcd_fill_rect(x, LEVEL_BASE_Y - height - 1, 4, height, 1);
+    }
+    draw_softkey(text_ok);
+}
+
+static void draw_number(const struct font *font, int x, int y, uint16_t value)
+{
+    char digits[6];
+    uint8_t n = sizeof digits - 1;
+
+    digits[n] = 0;
+    do {
+        digits[--n] = (char)('0' + value % 10);
+        value /= 10;
+    } while (value);
+    font_draw(font, x, y, digits + n, 1);
+}
+
+/* "Top score:" and the score on the next line, in the large font. */
+static void draw_top_score(void)
+{
+    font_draw(&font_large_bold, 0, 3, text_top_score_value, 1);
+    draw_number(&font_large_bold, 0, 18, settings.top_score);
+}
+
+/* Returns the start of the line after the one starting at `text`: as many
+   whole words as fit across the screen. */
+static const char *help_next_line(const char *text)
+{
+    const char *end = text, *p = text;
+    uint8_t width = 0;
+
+    for (;;) {
+        while (*p && *p != ' ')
+            width += font_char_width(&font_small_plain, *p++);
+        if (width > LCD_WIDTH && end != text)
+            break;
+        end = p;
+        if (!*p)
+            return p;
+        width += font_char_width(&font_small_plain, *p++);
+    }
+    return end + 1; /* skip the space the line broke at */
+}
+
+static void draw_help_line(uint8_t row, const char *text, const char *end)
+{
+    int x = 0;
+
+    for (; text != end && *text; text++) {
+        char one[2];
+
+        one[0] = *text;
+        one[1] = 0;
+        x = font_draw(&font_small_plain, x, HELP_Y + row * HELP_LINE_HEIGHT, one, 1);
+    }
+}
+
+static void draw_help(void)
+{
+    const char *line = help_page;
+    uint8_t row;
+
+    for (row = 0; row < HELP_LINES && *line; row++) {
+        const char *next = help_next_line(line);
+
+        draw_help_line(row, line, next);
+        line = next;
+    }
+    draw_softkey(text_more);
+}
+
+/* More: the next page, or the first one again after the last. */
+static void help_more(void)
+{
+    uint8_t row;
+
+    for (row = 0; row < HELP_LINES && *help_page; row++)
+        help_page = help_next_line(help_page);
+    if (!*help_page)
+        help_page = text_help_snake;
+}
+
 void menu_init(void)
 {
     screen = SCREEN_MAIN;
     game = 0;
+    platform_settings_load(GAME_SNAKE, &settings);
+    if (settings.level >= LEVEL_COUNT)
+        settings.level = 0;
+}
+
+static void game_menu_select(void)
+{
+    switch (item) {
+    case ITEM_LEVEL:
+        screen = SCREEN_LEVEL;
+        level_choice = settings.level;
+        break;
+    case ITEM_TOP_SCORE:
+        screen = SCREEN_TOP_SCORE;
+        page_ticks = TOP_SCORE_TICKS;
+        break;
+    case ITEM_INSTRUCTIONS:
+        screen = SCREEN_HELP;
+        help_page = text_help_snake;
+        break;
+    default:
+        break; /* New game: the game itself is not wired up yet */
+    }
 }
 
 static void game_menu_move(uint8_t key)
@@ -183,19 +321,59 @@ void menu_key(uint8_t key)
         } else if (key == MENU_KEY_UP) {
             game = (uint8_t)((game + GAME_COUNT - 1) % GAME_COUNT);
         } else if (key == MENU_KEY_SELECT) {
-            screen = SCREEN_GAME;
-            item = item_top = ITEM_NEW_GAME;
+            if (game == GAME_SNAKE) { /* the only game wired up so far */
+                screen = SCREEN_GAME;
+                item = item_top = ITEM_NEW_GAME;
+            }
         } else {
             screen = SCREEN_MAIN;
         }
         break;
+    case SCREEN_LEVEL:
+        if (key == MENU_KEY_UP) {
+            if (level_choice < LEVEL_COUNT - 1)
+                level_choice++;
+        } else if (key == MENU_KEY_DOWN) {
+            if (level_choice > 0)
+                level_choice--;
+        } else {
+            if (key == MENU_KEY_SELECT) {
+                settings.level = level_choice;
+                platform_settings_save(GAME_SNAKE, &settings);
+            }
+            screen = SCREEN_GAME;
+        }
+        break;
+    case SCREEN_HELP:
+        if (key == MENU_KEY_SELECT)
+            help_more();
+        else if (key == MENU_KEY_BACK)
+            screen = SCREEN_GAME;
+        break;
+    case SCREEN_TOP_SCORE:
+        /* Any key closes the page; all but C then act on the menu under it. */
+        screen = SCREEN_GAME;
+        if (key != MENU_KEY_BACK)
+            menu_key(key);
+        break;
     default:
         if (key == MENU_KEY_DOWN || key == MENU_KEY_UP)
             game_menu_move(key);
-        else if (key == MENU_KEY_BACK)
+        else if (key == MENU_KEY_SELECT)
+            game_menu_select();
+        else
             screen = SCREEN_GAMES;
         break;
     }
+}
+
+uint8_t menu_tick(void)
+{
+    if (screen == SCREEN_TOP_SCORE && --page_ticks == 0) {
+        screen = SCREEN_GAME;
+        return 1;
+    }
+    return 0;
 }
 
 void menu_draw(void)
@@ -207,6 +385,15 @@ void menu_draw(void)
         break;
     case SCREEN_GAMES:
         draw_games();
+        break;
+    case SCREEN_LEVEL:
+        draw_level();
+        break;
+    case SCREEN_TOP_SCORE:
+        draw_top_score();
+        break;
+    case SCREEN_HELP:
+        draw_help();
         break;
     default:
         draw_game();

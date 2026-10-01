@@ -6,9 +6,16 @@
 
 #define LCD_WIDTH 84
 #define LCD_HEIGHT 48
+#define LCD_STRIDE 11 /* bytes per row; the last four bits are unused */
 
-/* One byte per pixel, row-major, 0 = clear, 1 = set. */
-extern uint8_t lcd_fb[LCD_WIDTH * LCD_HEIGHT];
+/* One bit per pixel, row-major, the leftmost pixel in bit 7. A set bit is a
+   dark pixel. */
+extern uint8_t lcd_fb[LCD_STRIDE * LCD_HEIGHT];
+
+/* Bit of pixel x within its byte. */
+extern const uint8_t lcd_bit[8];
+
+#define lcd_pixel(x, y) ((lcd_fb[(y) * LCD_STRIDE + ((x) >> 3)] & lcd_bit[(x) & 7]) != 0)
 
 void lcd_clear(void);
 void lcd_fill_rect(int x, int y, int w, int h, uint8_t color);

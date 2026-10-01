@@ -3,6 +3,7 @@
    C key, and Up/Down scroll. */
 #include <stdint.h>
 
+#include "game.h"
 #include "lcd.h"
 #include "menu.h"
 
@@ -32,12 +33,50 @@
 #define PAD_UP 0x40
 #define PAD_DOWN 0x80
 
-/* Menu keys pressed at power-on, for scripted screenshots: u, d, s, b. */
+/* Menu keys pressed at power-on, for scripted screenshots: u, d, s, b, and
+   r to start over as after a power cycle (settings are read back). */
 #ifndef START_KEYS
 #define START_KEYS ""
 #endif
 
+/* Battery-backed cartridge RAM (MBC1): a two-byte signature, then one
+   four-byte record per game laid out as the phone stores them: top score
+   high byte, low byte, level, and a check byte. */
+#define MBC_RAM_ENABLE REG(0x0000)
+#define SAVE ((uint8_t *)0xa000)
+#define SAVE_SIGNATURE_0 'N'
+#define SAVE_SIGNATURE_1 '3'
+#define SAVE_CHECK(r) ((uint8_t)((r)[0] + (r)[1] + (r)[2] + 0x5a))
+
 static uint8_t tiles[TILES_X * TILES_Y * 16];
+
+void platform_settings_load(uint8_t game, struct game_settings *out)
+{
+    const uint8_t *record = SAVE + 2 + game * 4;
+
+    out->top_score = 0;
+    out->level = 0;
+    MBC_RAM_ENABLE = 0x0a;
+    if (SAVE[0] == SAVE_SIGNATURE_0 && SAVE[1] == SAVE_SIGNATURE_1 && record[3] == SAVE_CHECK(record)) {
+        out->top_score = (uint16_t)(record[0] << 8 | record[1]);
+        out->level = record[2];
+    }
+    MBC_RAM_ENABLE = 0x00;
+}
+
+void platform_settings_save(uint8_t game, const struct game_settings *in)
+{
+    uint8_t *record = SAVE + 2 + game * 4;
+
+    MBC_RAM_ENABLE = 0x0a;
+    SAVE[0] = SAVE_SIGNATURE_0;
+    SAVE[1] = SAVE_SIGNATURE_1;
+    record[0] = (uint8_t)(in->top_score >> 8);
+    record[1] = (uint8_t)in->top_score;
+    record[2] = in->level;
+    record[3] = SAVE_CHECK(record);
+    MBC_RAM_ENABLE = 0x00;
+}
 
 static void wait_vblank(void)
 {
@@ -45,25 +84,21 @@ static void wait_vblank(void)
         ;
 }
 
-/* Converts lcd_fb to tile data: a set pixel is colour 3, a clear one 0. */
+/* Converts lcd_fb to tile data: a set pixel is colour 3, a clear one 0.
+   A framebuffer row is 11 bytes, one per tile across, so each tile row is
+   one framebuffer byte written to both bit planes. */
 static void render_tiles(void)
 {
     uint8_t *tile = tiles;
-    uint8_t tx, ty, row, bit, bits;
-    const uint8_t *src;
+    const uint8_t *strip = lcd_fb, *src;
+    uint8_t tx, ty, row;
 
-    for (ty = 0; ty < TILES_Y; ty++) {
+    for (ty = 0; ty < TILES_Y; ty++, strip += 8 * LCD_STRIDE) {
         for (tx = 0; tx < TILES_X; tx++) {
-            for (row = 0; row < 8; row++) {
-                bits = 0;
-                src = lcd_fb + (ty * 8 + row) * LCD_WIDTH + tx * 8;
-                for (bit = 0; bit < 8; bit++) {
-                    bits <<= 1;
-                    if (tx * 8 + bit < LCD_WIDTH && src[bit])
-                        bits |= 1;
-                }
-                *tile++ = bits;
-                *tile++ = bits;
+            src = strip + tx;
+            for (row = 0; row < 8; row++, src += LCD_STRIDE) {
+                *tile++ = *src;
+                *tile++ = *src;
             }
         }
     }
@@ -129,21 +164,22 @@ void main(void)
 
     menu_init();
     for (key = START_KEYS; *key; key++)
-        press(*key == 'u' ? MENU_KEY_UP : *key == 'd' ? MENU_KEY_DOWN : *key == 's' ? MENU_KEY_SELECT : MENU_KEY_BACK);
+        if (*key == 'r')
+            menu_init();
+        else
+            press(*key == 'u' ? MENU_KEY_UP : *key == 'd' ? MENU_KEY_DOWN : *key == 's' ? MENU_KEY_SELECT : MENU_KEY_BACK);
     menu_draw();
     present();
 
     for (;;) {
+        uint8_t redraw;
+
+        /* One pass per frame: line 144 starts the vertical blank. */
         wait_vblank();
+        redraw = menu_tick();
         pad = read_pad();
         pressed = (uint8_t)(pad & ~last);
         last = pad;
-        if (!pressed) {
-            /* Leave line 144 so the next wait is a new frame. */
-            while (LY == 144)
-                ;
-            continue;
-        }
         if (pressed & (PAD_START | PAD_A))
             press(MENU_KEY_SELECT);
         else if (pressed & PAD_B)
@@ -152,7 +188,11 @@ void main(void)
             press(MENU_KEY_UP);
         else if (pressed & PAD_DOWN)
             press(MENU_KEY_DOWN);
-        menu_draw();
-        present();
+        if (pressed || redraw) {
+            menu_draw();
+            present();
+        }
+        while (LY == 144)
+            ;
     }
 }

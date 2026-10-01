@@ -5,11 +5,26 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "game.h"
 #include "lcd.h"
 #include "menu.h"
 #include "pgm.h"
 #include "snake.h"
 #include "testcard.h"
+
+/* The host keeps no settings: every frame starts from a fresh cartridge. */
+void platform_settings_load(uint8_t game, struct game_settings *out)
+{
+    (void)game;
+    out->top_score = 0;
+    out->level = 0;
+}
+
+void platform_settings_save(uint8_t game, const struct game_settings *in)
+{
+    (void)game;
+    (void)in;
+}
 
 int main(int argc, char **argv)
 {

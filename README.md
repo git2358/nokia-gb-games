@@ -89,10 +89,11 @@ checks. To run on hardware, pass a GBA ROM you own to copy it from:
 ## Status
 
 In progress: the phone's menus. Both cartridges build; the Game Boy ROM
-opens on the main menu's Games entry and walks the Games list and each
-game's menu, drawn with the phone's own fonts and text and matching frames
-captured from the firmware in MAME. The Level, Top score and Instructions
-pages and the games themselves are not implemented yet (Snake's starting
-position is). See
+opens on the main menu's Games entry and walks the Games list and Snake's
+menu with its Level, Top score and Instructions pages, drawn with the
+phone's own fonts and text and matching frames captured from the firmware
+in MAME. Snake's level is kept in battery-backed cartridge RAM. Rotation and
+Memory do nothing yet, and New game does not start a game (Snake's starting
+position is implemented in the core). See
 [`docs/handoff.md`](docs/handoff.md) for the decisions taken, the reference
 material and the work items.

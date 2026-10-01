@@ -31,13 +31,13 @@ static void test_blit(void)
 
     lcd_fill_rect(0, 0, LCD_WIDTH, LCD_HEIGHT, 1);
     lcd_blit_bitmap(2, 3, 3, 10, bitmap);
-    CHECK(lcd_fb[3 * LCD_WIDTH + 2] == 1);
-    CHECK(lcd_fb[10 * LCD_WIDTH + 3] == 1);
-    CHECK(lcd_fb[11 * LCD_WIDTH + 3] == 1);
-    CHECK(lcd_fb[12 * LCD_WIDTH + 4] == 1);
+    CHECK(lcd_pixel(2, 3) == 1);
+    CHECK(lcd_pixel(3, 10) == 1);
+    CHECK(lcd_pixel(3, 11) == 1);
+    CHECK(lcd_pixel(4, 12) == 1);
     for (y = 3; y < 13; y++)
         for (x = 2; x < 5; x++)
-            set += lcd_fb[y * LCD_WIDTH + x];
+            set += lcd_pixel(x, y);
     CHECK(set == 4);
 
     /* Clipped at every edge without writing outside the buffer. */
@@ -45,8 +45,8 @@ static void test_blit(void)
     lcd_blit_bitmap(-1, -1, 3, 10, bitmap);
     lcd_blit_bitmap(LCD_WIDTH - 1, LCD_HEIGHT - 1, 3, 10, bitmap);
     lcd_fill_rect(-5, -5, 6, 6, 1);
-    CHECK(lcd_fb[0] == 1);
-    CHECK(lcd_fb[LCD_WIDTH * LCD_HEIGHT - 1] == 1);
+    CHECK(lcd_pixel(0, 0) == 1);
+    CHECK(lcd_pixel(LCD_WIDTH - 1, LCD_HEIGHT - 1) == 1);
 }
 
 int main(void)

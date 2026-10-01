@@ -113,7 +113,7 @@ $(BUILD)/gb/game_assets.rel: $(ASSETS)/game_assets.c
 
 $(GB_ROM): $(GB_REL) FORCE
 	$(SDCC) -msm83 -o $(BUILD)/gb/nokia3210.ihx $(GB_REL)
-	$(MAKEBIN) -Z -yn NOKIA3210 $(BUILD)/gb/nokia3210.ihx $@
+	$(MAKEBIN) -Z -yn NOKIA3210 -yt 0x03 -ya 1 $(BUILD)/gb/nokia3210.ihx $@
 
 gb: $(GB_ROM)
 

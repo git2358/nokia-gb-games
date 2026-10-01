@@ -36,13 +36,19 @@ int font_draw(const struct font *font, int x, int y, const char *text, uint8_t c
 
         for (; column != end; column++, x++) {
             uint16_t bits = *column;
-            uint8_t *pixel;
+            uint8_t mask, *pixel;
 
             if (x < 0 || x >= LCD_WIDTH || y < 0 || y + font->height > LCD_HEIGHT)
                 continue;
-            for (pixel = lcd_fb + y * LCD_WIDTH + x; bits; pixel += LCD_WIDTH, bits >>= 1)
-                if (bits & 1)
-                    *pixel = color;
+            mask = lcd_bit[x & 7];
+            for (pixel = lcd_fb + y * LCD_STRIDE + (x >> 3); bits; pixel += LCD_STRIDE, bits >>= 1) {
+                if (!(bits & 1))
+                    continue;
+                if (color)
+                    *pixel |= mask;
+                else
+                    *pixel &= (uint8_t)~mask;
+            }
         }
     }
     return x;

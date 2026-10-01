@@ -12,8 +12,13 @@ enum {
     MENU_KEY_BACK    /* the phone's C key */
 };
 
+/* The platform calls menu_tick this many times a second. */
+#define MENU_TICKS_PER_SECOND 60
+
 void menu_init(void);
 void menu_key(uint8_t key);
+/* Advances timed pages; returns nonzero when the screen must be redrawn. */
+uint8_t menu_tick(void);
 void menu_draw(void);
 
 #endif

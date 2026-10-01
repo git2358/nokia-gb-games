@@ -7,12 +7,13 @@
 int pgm_write_lcd(const char *path)
 {
     FILE *f = fopen(path, "wb");
-    int i;
+    int x, y;
 
     if (!f)
         return -1;
     fprintf(f, "P5\n%d %d\n255\n", LCD_WIDTH, LCD_HEIGHT);
-    for (i = 0; i < LCD_WIDTH * LCD_HEIGHT; i++)
-        fputc(lcd_fb[i] ? 0 : 255, f);
+    for (y = 0; y < LCD_HEIGHT; y++)
+        for (x = 0; x < LCD_WIDTH; x++)
+            fputc(lcd_pixel(x, y) ? 0 : 255, f);
     return fclose(f);
 }

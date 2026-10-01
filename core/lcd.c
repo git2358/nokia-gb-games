@@ -1,11 +1,20 @@
 #include "lcd.h"
 
-uint8_t lcd_fb[LCD_WIDTH * LCD_HEIGHT];
+uint8_t lcd_fb[LCD_STRIDE * LCD_HEIGHT];
+
+const uint8_t lcd_bit[8] = { 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01 };
 
 static void put_pixel(int x, int y, uint8_t color)
 {
-    if (x >= 0 && x < LCD_WIDTH && y >= 0 && y < LCD_HEIGHT)
-        lcd_fb[y * LCD_WIDTH + x] = color;
+    uint8_t *p;
+
+    if (x < 0 || x >= LCD_WIDTH || y < 0 || y >= LCD_HEIGHT)
+        return;
+    p = lcd_fb + y * LCD_STRIDE + (x >> 3);
+    if (color)
+        *p |= lcd_bit[x & 7];
+    else
+        *p &= (uint8_t)~lcd_bit[x & 7];
 }
 
 void lcd_clear(void)
@@ -18,8 +27,8 @@ void lcd_clear(void)
 
 void lcd_fill_rect(int x, int y, int w, int h, uint8_t color)
 {
-    uint8_t *row, *p;
-    int i;
+    uint8_t *row;
+    uint8_t first, count, i, bit;
 
     /* Clip once, then walk the rows without a multiply per pixel. */
     if (x < 0) {
@@ -37,10 +46,23 @@ void lcd_fill_rect(int x, int y, int w, int h, uint8_t color)
     if (w <= 0 || h <= 0)
         return;
 
-    row = lcd_fb + y * LCD_WIDTH + x;
-    for (; h; h--, row += LCD_WIDTH)
-        for (p = row, i = w; i; i--)
-            *p++ = color;
+    first = (uint8_t)(x & 7);
+    count = (uint8_t)w;
+    for (row = lcd_fb + y * LCD_STRIDE + (x >> 3); h; h--, row += LCD_STRIDE) {
+        uint8_t *p = row;
+
+        bit = first;
+        for (i = count; i; i--) {
+            if (color)
+                *p |= lcd_bit[bit];
+            else
+                *p &= (uint8_t)~lcd_bit[bit];
+            if (++bit == 8) {
+                bit = 0;
+                p++;
+            }
+        }
+    }
 }
 
 void lcd_blit_bitmap(int x, int y, int w, int h, const uint8_t *data)

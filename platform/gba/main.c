@@ -2,6 +2,7 @@
    at 2x (168x96), centred on the 240x160 screen in bitmap mode 3. */
 #include <stdint.h>
 
+#include "game.h"
 #include "lcd.h"
 #include "testcard.h"
 
@@ -18,16 +19,28 @@
 #define COLOR_CLEAR RGB(19, 24, 15)
 #define COLOR_SET RGB(4, 6, 3)
 
+/* Settings are not saved on the GBA yet. */
+void platform_settings_load(uint8_t game, struct game_settings *out)
+{
+    (void)game;
+    out->top_score = 0;
+    out->level = 0;
+}
+
+void platform_settings_save(uint8_t game, const struct game_settings *in)
+{
+    (void)game;
+    (void)in;
+}
+
 static void present(void)
 {
     int x, y;
 
     for (y = 0; y < LCD_HEIGHT * SCALE; y++) {
         uint16_t *dst = VRAM + (ORIGIN_Y + y) * SCREEN_W + ORIGIN_X;
-        const uint8_t *src = lcd_fb + y / SCALE * LCD_WIDTH;
-
         for (x = 0; x < LCD_WIDTH * SCALE; x++)
-            dst[x] = src[x / SCALE] ? COLOR_SET : COLOR_CLEAR;
+            dst[x] = lcd_pixel(x / SCALE, y / SCALE) ? COLOR_SET : COLOR_CLEAR;
     }
 }
 

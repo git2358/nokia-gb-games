@@ -2,7 +2,7 @@
    Usage: frame NAME OUT.pgm
    NAME: testcard, outline, snake-start, or menu-KEYS where KEYS is the menu
    keys pressed from the first screen (u up, d down, l left, r right,
-   s select, b back, t one move of the running game). */
+   s select, b back, a the full-screen key, t one move of the running game). */
 #include <stdio.h>
 #include <string.h>
 
@@ -43,7 +43,7 @@ int main(int argc, char **argv)
         testcard_frame();
     } else if (strcmp(argv[1], "snake-start") == 0) {
         lcd_clear();
-        snake_init(0);
+        snake_init(0, SNAKE_COLS, SNAKE_ROWS);
         snake_draw();
     } else if (strncmp(argv[1], "menu-", 5) == 0) {
         const char *key;
@@ -57,7 +57,8 @@ int main(int argc, char **argv)
                 menu_game_step();
             else
                 menu_key(*key == 'u' ? MENU_KEY_UP : *key == 'd' ? MENU_KEY_DOWN : *key == 'l' ? MENU_KEY_LEFT
-                         : *key == 'r' ? MENU_KEY_RIGHT : *key == 's' ? MENU_KEY_SELECT : MENU_KEY_BACK);
+                         : *key == 'r' ? MENU_KEY_RIGHT : *key == 's' ? MENU_KEY_SELECT : *key == 'a' ? MENU_KEY_ALT
+                         : MENU_KEY_BACK);
         }
         menu_draw();
     } else {

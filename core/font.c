@@ -40,10 +40,10 @@ int font_draw(const struct font *font, int x, int y, const char *text, uint8_t c
             uint16_t bits = *column;
             uint8_t mask, *pixel;
 
-            if (x < 0 || x >= LCD_WIDTH || y < 0 || y + font->height > LCD_HEIGHT)
+            if (x < 0 || x >= lcd_view_w || y < 0 || y + font->height > lcd_view_h)
                 continue;
-            mask = lcd_bit[x & 7];
-            for (pixel = lcd_fb + y * LCD_STRIDE + (x >> 3); bits; pixel += LCD_STRIDE, bits >>= 1) {
+            mask = lcd_bit[(x + lcd_view_x) & 7];
+            for (pixel = lcd_fb + (y + lcd_view_y) * LCD_STRIDE + ((x + lcd_view_x) >> 3); bits; pixel += LCD_STRIDE, bits >>= 1) {
                 if (!(bits & 1))
                     continue;
                 if (color)
@@ -54,11 +54,11 @@ int font_draw(const struct font *font, int x, int y, const char *text, uint8_t c
         }
     }
     /* Mark what was drawn, clipped as the columns above were. */
-    if (y >= 0 && y + font->height <= LCD_HEIGHT) {
-        int left = start < 0 ? 0 : start, right = x > LCD_WIDTH ? LCD_WIDTH : x;
+    if (y >= 0 && y + font->height <= lcd_view_h) {
+        int left = start < 0 ? 0 : start, right = x > lcd_view_w ? lcd_view_w : x;
 
         if (right > left)
-            lcd_mark_dirty((uint8_t)left, (uint8_t)y, (uint8_t)(right - left), font->height);
+            lcd_mark_dirty((uint8_t)(left + lcd_view_x), (uint8_t)(y + lcd_view_y), (uint8_t)(right - left), font->height);
     }
     return x;
 }

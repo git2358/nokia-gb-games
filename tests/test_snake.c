@@ -12,30 +12,32 @@ void platform_beep(void)
 {
 }
 
-int main(void)
+static int play(uint8_t cols, uint8_t rows)
 {
     static uint8_t stepped[sizeof lcd_fb];
     static const char keys[] = "2468";
     unsigned step, games = 1, eaten = 0, seed = 1;
 
+    lcd_view_full();
     game_srand(1);
-    snake_init(0);
+    snake_init(0, cols, rows);
     lcd_clear();
     snake_draw();
-    /* Head for the first food, then steer at random. */
     for (step = 0; step < 20000; step++) {
         uint16_t score = snake.score;
 
-        if (step < 5)
-            snake_key('2');
-        else if (step < 7)
-            snake_key('6');
-        else if ((seed = seed * 1103515245u + 12345u) >> 16 & 3)
+        /* Mostly steer towards the food, sometimes at random. */
+        seed = seed * 1103515245u + 12345u;
+        if ((seed >> 16 & 7) == 0)
             snake_key(keys[seed >> 20 & 3]);
+        else if (snake.food_y != snake.head_y && (seed >> 24 & 1 || snake.food_x == snake.head_x))
+            snake_key(snake.food_y < snake.head_y ? '2' : '8');
+        else if (snake.food_x != snake.head_x)
+            snake_key(snake.food_x < snake.head_x ? '4' : '6');
 
         if (!snake_step() ) {
             games++;
-            snake_init(0);
+            snake_init(0, cols, rows);
             lcd_clear();
             snake_draw();
             continue;
@@ -50,10 +52,20 @@ int main(void)
             return 1;
         }
     }
-    if (eaten < 10) {
+    if (eaten < 100) {
         printf("FAIL: only %u foods eaten; the test did not cover eating\n", eaten);
         return 1;
     }
-    printf("ok (%u games, %u foods)\n", games, eaten);
+    printf("ok %ux%u (%u games, %u foods)\n", cols, rows, games, eaten);
+    return 0;
+}
+
+int main(void)
+{
+    if (play(SNAKE_COLS, SNAKE_ROWS))
+        return 1;
+    /* The full-screen board, when built with a bigger framebuffer. */
+    if (SNAKE_MAX_COLS != SNAKE_COLS && play(SNAKE_FULL_COLS, SNAKE_FULL_ROWS))
+        return 1;
     return 0;
 }

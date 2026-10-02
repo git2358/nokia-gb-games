@@ -47,4 +47,24 @@ reset:
     mov     lr, pc
     bx      r0
 3:  b       3b
+
+@ Interrupt handler, entered from the BIOS in ARM mode with r0-r3, r12 and
+@ lr saved. Acknowledges whatever fired and counts vertical blanks.
+    .global irq_handler
+irq_handler:
+    mov     r0, #0x04000000
+    add     r0, r0, #0x200
+    ldr     r1, [r0]            @ IE in the low half, IF in the high half
+    and     r1, r1, r1, lsr #16
+    strh    r1, [r0, #2]        @ acknowledge in IF
+    ldr     r2, =0x03007ff8     @ and in the BIOS's copy
+    ldrh    r3, [r2]
+    orr     r3, r3, r1
+    strh    r3, [r2]
+    tst     r1, #1              @ vertical blank
+    ldrne   r2, =frame_count
+    ldrne   r3, [r2]
+    addne   r3, r3, #1
+    strne   r3, [r2]
+    bx      lr
     .pool

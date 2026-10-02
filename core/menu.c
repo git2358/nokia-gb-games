@@ -1,6 +1,7 @@
 #include "menu.h"
 
 #include "font.h"
+#include "font12.h"
 #include "game.h"
 #include "game_assets.h"
 #include "lcd.h"
@@ -75,10 +76,52 @@ static uint16_t play_ticks;    /* phone ticks until Snake's next move */
 static uint16_t play_us;       /* time not yet turned into phone ticks */
 static uint16_t uptime;        /* menu_tick calls so far; seeds rand */
 static uint8_t board_drawn;    /* the LCD holds the running game's board */
+static uint8_t full_screen;    /* the full-screen variant was chosen */
+static uint8_t view_mode;      /* which of the views below the LCD is set up for */
+
+/* The phone's LCD; the full-screen variant's own menus; its board. */
+enum {
+    VIEW_PHONE,
+    VIEW_NATIVE,
+    VIEW_BOARD
+};
+
+/* The full-screen variant's menus: a title bar, a list with every entry
+   visible, and a line of button hints, all in the 12px font. The port's own
+   design and words; the entries and their text are the phone's. */
+#define NATIVE_TITLE_HEIGHT 14
+#define NATIVE_LIST_Y 20
+#define NATIVE_ROW_HEIGHT 14
+#define NATIVE_HINT_Y (LCD_FB_HEIGHT - 13)
+#define NATIVE_MARGIN 4
+#define NATIVE_HELP_LINES 7
+
+static const char text_hint_select[] = "A select   B back";
+static const char text_hint_ok[] = "A OK   B back";
+static const char text_hint_more[] = "A more   B back";
+static uint8_t surround_used;  /* something is drawn around the phone's LCD */
+
+#if LCD_HAS_SURROUND
+/* Shown under the phone's LCD on the first screen. The port's own words. */
+static const char text_full_screen_hint[] = "SELECT: full screen";
+#endif
 static struct game_settings settings; /* Snake's level and top score */
 static uint8_t level_choice;  /* level shown on the Level page */
 static uint16_t page_ticks;   /* ticks left on a timed page */
 static const char *help_page; /* first character of the Instructions page shown */
+
+/* The two variants keep separate levels and top scores. */
+static uint8_t settings_slot(void)
+{
+    return full_screen ? GAME_SNAKE_FULL : GAME_SNAKE;
+}
+
+static void settings_load(void)
+{
+    platform_settings_load(settings_slot(), &settings);
+    if (settings.level >= LEVEL_COUNT)
+        settings.level = 0;
+}
 
 static const char *game_name(uint8_t index)
 {
@@ -97,9 +140,14 @@ static uint8_t item_count(void)
     return resume ? 5 : 4;
 }
 
-/* The item at visible position `index`. */
+/* The item at visible position `index`. The phone numbers Level first; the
+   full-screen menus list the entries in the order they are used. */
 static uint8_t item_id(uint8_t index)
 {
+    static const uint8_t native_order[] = { ITEM_RESUME, ITEM_NEW_GAME, ITEM_LEVEL, ITEM_TOP_SCORE, ITEM_INSTRUCTIONS };
+
+    if (full_screen)
+        return native_order[resume ? index : index + 1];
     return (uint8_t)(resume || index == 0 ? index : index + 1);
 }
 
@@ -167,8 +215,21 @@ static void draw_row(uint8_t row, const char *label, uint8_t selected)
     font_draw(&font_small_bold, 2, y + 1, label, !selected);
 }
 
+/* The hint for the full-screen variant, in the space under the phone's LCD. */
+static void draw_hint(void)
+{
+#if LCD_HAS_SURROUND
+    lcd_view_full();
+    font_draw(&font_small_plain, (LCD_FB_WIDTH - font_text_width(&font_small_plain, text_full_screen_hint)) / 2,
+              LCD_PHONE_Y + LCD_HEIGHT + 8, text_full_screen_hint, 1);
+    lcd_view_phone();
+    surround_used = 1;
+#endif
+}
+
 static void draw_main(void)
 {
+    draw_hint();
     draw_path(0);
     font_draw(&font_large_bold, (CONTENT_WIDTH - font_text_width(&font_large_bold, text_games)) / 2, LIST_Y, text_games, 1);
     lcd_blit_strips(10, 23, 64, 16, menu_games_icon);
@@ -199,6 +260,95 @@ static void draw_game(void)
     }
     draw_scrollbar(thumb_for(item, item_count()));
     draw_softkey(text_select);
+}
+
+static void native_title(const char *title)
+{
+    lcd_fill_rect(0, 0, LCD_FB_WIDTH, NATIVE_TITLE_HEIGHT, 1);
+    font_draw(&font12, NATIVE_MARGIN, 1, title, 0);
+}
+
+static void native_hint(const char *hint)
+{
+    lcd_fill_rect(0, NATIVE_HINT_Y - 3, LCD_FB_WIDTH, 1, 1);
+    font_draw(&font12, NATIVE_MARGIN, NATIVE_HINT_Y, hint, 1);
+}
+
+static void native_row(uint8_t row, const char *label, uint8_t selected)
+{
+    uint8_t y = (uint8_t)(NATIVE_LIST_Y + row * NATIVE_ROW_HEIGHT);
+
+    if (selected)
+        lcd_fill_rect(0, y, LCD_FB_WIDTH, NATIVE_ROW_HEIGHT, 1);
+    font_draw(&font12, NATIVE_MARGIN, y + 1, label, !selected);
+}
+
+static void native_games(void)
+{
+    uint8_t i;
+
+    native_title(text_games);
+    for (i = 0; i < GAME_COUNT; i++)
+        native_row(i, game_name(i), i == game);
+    native_hint(text_hint_select);
+}
+
+static void native_game(void)
+{
+    uint8_t i;
+
+    native_title(game_name(game));
+    for (i = 0; i < item_count(); i++)
+        native_row(i, item_name(item_id(i)), i == item);
+    native_hint(text_hint_select);
+}
+
+/* Nine bars across the screen, filled up to the chosen level. */
+static void native_level(void)
+{
+    uint8_t i;
+
+    native_title(text_level);
+    for (i = 0; i < LEVEL_COUNT; i++) {
+        uint8_t x = (uint8_t)(13 + i * 15);
+        uint8_t height = (uint8_t)(16 + i * 8);
+        uint8_t top = (uint8_t)(NATIVE_HINT_Y - 12 - height);
+
+        lcd_fill_rect(x, top, 12, height, 1);
+        if (i > level_choice)
+            lcd_fill_rect(x + 1, top + 1, 10, height - 2, 0);
+    }
+    native_hint(text_hint_ok);
+}
+
+/* A note: its lines centred on the screen; %N is the number. */
+static void native_note(const char *title, const char *text, uint16_t number)
+{
+    uint8_t y = 48;
+
+    if (title)
+        native_title(title);
+    for (;;) {
+        if (text[0] == '%' && text[1] == 'N') {
+            char digits[6];
+            uint8_t n = sizeof digits - 1;
+            uint16_t value = number;
+
+            digits[n] = 0;
+            do {
+                digits[--n] = (char)('0' + value % 10);
+                value /= 10;
+            } while (value);
+            font_draw(&font12, (LCD_FB_WIDTH - font_text_width(&font12, digits + n)) / 2, y, digits + n, 1);
+        } else {
+            font_draw(&font12, (LCD_FB_WIDTH - font_text_width(&font12, text)) / 2, y, text, 1);
+        }
+        while (*text && *text != '\n')
+            text++;
+        if (!*text++)
+            break;
+        y += 16;
+    }
 }
 
 /* One bar per level: an outline that grows by two pixels a level, filled
@@ -263,36 +413,45 @@ static void draw_play(void)
     }
 }
 
+static const struct font *help_font(void)
+{
+    return full_screen ? &font12 : &font_small_plain;
+}
+
+static uint8_t help_lines(void)
+{
+    return full_screen ? NATIVE_HELP_LINES : HELP_LINES;
+}
+
 /* Returns the start of the line after the one starting at `text`: as many
    whole words as fit across the screen. */
 static const char *help_next_line(const char *text)
 {
     const char *end = text, *p = text;
+    uint8_t limit = full_screen ? LCD_FB_WIDTH - 2 * NATIVE_MARGIN : LCD_WIDTH;
     uint8_t width = 0;
 
     for (;;) {
         while (*p && *p != ' ')
-            width += font_char_width(&font_small_plain, *p++);
-        if (width > LCD_WIDTH && end != text)
+            width += font_char_width(help_font(), *p++);
+        if (width > limit && end != text)
             break;
         end = p;
         if (!*p)
             return p;
-        width += font_char_width(&font_small_plain, *p++);
+        width += font_char_width(help_font(), *p++);
     }
     return end + 1; /* skip the space the line broke at */
 }
 
-static void draw_help_line(uint8_t row, const char *text, const char *end)
+static void draw_help_line(int x, int y, const char *text, const char *end)
 {
-    int x = 0;
-
     for (; text != end && *text; text++) {
         char one[2];
 
         one[0] = *text;
         one[1] = 0;
-        x = font_draw(&font_small_plain, x, HELP_Y + row * HELP_LINE_HEIGHT, one, 1);
+        x = font_draw(help_font(), x, y, one, 1);
     }
 }
 
@@ -301,13 +460,21 @@ static void draw_help(void)
     const char *line = help_page;
     uint8_t row;
 
-    for (row = 0; row < HELP_LINES && *line; row++) {
+    if (full_screen)
+        native_title(text_instructions);
+    for (row = 0; row < help_lines() && *line; row++) {
         const char *next = help_next_line(line);
 
-        draw_help_line(row, line, next);
+        if (full_screen)
+            draw_help_line(NATIVE_MARGIN, NATIVE_LIST_Y + row * NATIVE_ROW_HEIGHT, line, next);
+        else
+            draw_help_line(0, HELP_Y + row * HELP_LINE_HEIGHT, line, next);
         line = next;
     }
-    draw_softkey(text_more);
+    if (full_screen)
+        native_hint(text_hint_more);
+    else
+        draw_softkey(text_more);
 }
 
 /* More: the next page, or the first one again after the last. */
@@ -315,7 +482,7 @@ static void help_more(void)
 {
     uint8_t row;
 
-    for (row = 0; row < HELP_LINES && *help_page; row++)
+    for (row = 0; row < help_lines() && *help_page; row++)
         help_page = help_next_line(help_page);
     if (!*help_page)
         help_page = text_help_snake;
@@ -326,29 +493,32 @@ void menu_init(void)
     screen = SCREEN_MAIN;
     game = 0;
     resume = RESUME_NONE;
-    platform_settings_load(GAME_SNAKE, &settings);
-    if (settings.level >= LEVEL_COUNT)
-        settings.level = 0;
+    full_screen = 0;
+    settings_load();
 }
 
 /* Opens Snake's menu on New game, or on Continue or Last view if there. */
 static void game_menu_open(void)
 {
     screen = SCREEN_GAME;
-    item = item_top = 1;
+    item = item_top = full_screen ? 0 : 1;
 }
 
+/* Time left over from the last tick is kept, so moves do not drift late. */
 static void play_schedule(uint8_t ticks)
 {
     play_ticks = ticks;
-    play_us = 0;
 }
 
 static void play_start(void)
 {
     game_srand(uptime);
-    snake_init(settings.level);
+    if (full_screen)
+        snake_init(settings.level, SNAKE_FULL_COLS, SNAKE_FULL_ROWS);
+    else
+        snake_init(settings.level, SNAKE_COLS, SNAKE_ROWS);
     screen = SCREEN_PLAY;
+    play_us = 0;
     play_schedule((uint8_t)((uint16_t)game_speed_table[settings.level] * 320 / 249));
 }
 
@@ -357,7 +527,7 @@ static void play_over(void)
     new_top_score = snake.score > settings.top_score;
     if (new_top_score) {
         settings.top_score = snake.score;
-        platform_settings_save(GAME_SNAKE, &settings);
+        platform_settings_save(settings_slot(), &settings);
     }
     resume = RESUME_LAST_VIEW;
     screen = SCREEN_GAME_OVER;
@@ -408,6 +578,7 @@ static void game_menu_select(void)
     case ITEM_RESUME:
         if (resume == RESUME_CONTINUE) {
             screen = SCREEN_PLAY;
+            play_us = 0;
             play_schedule((uint8_t)((uint16_t)game_speed_table[snake.level] * 320 / 249));
         } else {
             screen = SCREEN_LAST_VIEW;
@@ -454,7 +625,10 @@ void menu_key(uint8_t key)
 {
     switch (screen) {
     case SCREEN_MAIN:
-        if (key == MENU_KEY_SELECT) {
+        if (key == MENU_KEY_SELECT || (key == MENU_KEY_ALT && LCD_HAS_SURROUND)) {
+            full_screen = key == MENU_KEY_ALT;
+            settings_load();
+            resume = RESUME_NONE;
             screen = SCREEN_GAMES;
             game = 0;
         }
@@ -481,7 +655,7 @@ void menu_key(uint8_t key)
         } else {
             if (key == MENU_KEY_SELECT) {
                 settings.level = level_choice;
-                platform_settings_save(GAME_SNAKE, &settings);
+                platform_settings_save(settings_slot(), &settings);
             }
             screen = SCREEN_GAME;
         }
@@ -550,6 +724,28 @@ uint8_t menu_tick(void)
 
 void menu_draw(void)
 {
+    /* The full-screen variant has its own menus over the whole framebuffer
+       and its board inside a margin; all else is drawn in the phone's LCD.
+       Changing between them, or leaving a screen that drew around the LCD,
+       clears everything. */
+    uint8_t mode = VIEW_PHONE;
+
+    if (full_screen && screen != SCREEN_MAIN)
+        mode = screen == SCREEN_PLAY || screen == SCREEN_LAST_VIEW ? VIEW_BOARD : VIEW_NATIVE;
+    if (mode != view_mode || surround_used) {
+        lcd_view_full();
+        lcd_clear();
+        view_mode = mode;
+        surround_used = 0;
+        board_drawn = 0;
+    }
+    if (mode == VIEW_PHONE)
+        lcd_view_phone();
+    else if (mode == VIEW_NATIVE)
+        lcd_view_full();
+    else
+        lcd_view_set(SNAKE_FULL_X, SNAKE_FULL_Y, SNAKE_FULL_COLS * 4 + 3, SNAKE_FULL_ROWS * 4 + 3);
+
     if (screen != SCREEN_PLAY) {
         lcd_clear();
         board_drawn = 0;
@@ -559,16 +755,28 @@ void menu_draw(void)
         draw_main();
         break;
     case SCREEN_GAMES:
-        draw_games();
+        if (full_screen)
+            native_games();
+        else
+            draw_games();
         break;
     case SCREEN_LEVEL:
-        draw_level();
+        if (full_screen)
+            native_level();
+        else
+            draw_level();
         break;
     case SCREEN_TOP_SCORE:
-        draw_note(text_top_score_value, settings.top_score);
+        if (full_screen)
+            native_note(text_top_score, "%N", settings.top_score);
+        else
+            draw_note(text_top_score_value, settings.top_score);
         break;
     case SCREEN_GAME_OVER:
-        draw_note(new_top_score ? text_game_over_top_score : text_game_over_score, snake.score);
+        if (full_screen)
+            native_note(0, new_top_score ? text_game_over_top_score : text_game_over_score, snake.score);
+        else
+            draw_note(new_top_score ? text_game_over_top_score : text_game_over_score, snake.score);
         break;
     case SCREEN_PLAY:
         draw_play();
@@ -581,7 +789,10 @@ void menu_draw(void)
         draw_help();
         break;
     default:
-        draw_game();
+        if (full_screen)
+            native_game();
+        else
+            draw_game();
         break;
     }
 }

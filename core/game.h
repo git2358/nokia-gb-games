@@ -21,7 +21,10 @@ enum {
     GAME_MEMORY,
     GAME_REACTION,
     GAME_LOGIC,
-    GAME_COUNT
+    GAME_COUNT,
+    /* Settings slot of the full-screen Snake, after the phone's five. */
+    GAME_SNAKE_FULL = GAME_COUNT,
+    GAME_SLOTS
 };
 
 typedef void (*game_handler)(int event);

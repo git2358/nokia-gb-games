@@ -11,9 +11,9 @@ int pgm_write_lcd(const char *path)
 
     if (!f)
         return -1;
-    fprintf(f, "P5\n%d %d\n255\n", LCD_WIDTH, LCD_HEIGHT);
-    for (y = 0; y < LCD_HEIGHT; y++)
-        for (x = 0; x < LCD_WIDTH; x++)
-            fputc(lcd_pixel(x, y) ? 0 : 255, f);
+    fprintf(f, "P5\n%d %d\n255\n", LCD_FB_WIDTH, LCD_FB_HEIGHT);
+    for (y = 0; y < LCD_FB_HEIGHT; y++)
+        for (x = 0; x < LCD_FB_WIDTH; x++)
+            fputc(lcd_fb_pixel(x, y) ? 0 : 255, f);
     return fclose(f);
 }

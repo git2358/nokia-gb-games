@@ -63,8 +63,10 @@ scripts/setup-sameboy.sh
   for the cartridge header. No GBDK.
 - GBA: bare `arm-none-eabi-gcc` with no C library; `platform/gba/` supplies
   the startup code, the linker script and `memset`/`memcpy`.
-- Emulators: SameBoy's tester for headless Game Boy frames; `make run-gb`
-  and `make run-gba` open the ROMs in SameBoy.app and mGBA.app.
+- Emulators: SameBoy's tester for headless Game Boy frames and mGBA's core
+  library for headless GBA frames (`scripts/setup-mgba.sh`, needs cmake);
+  `make run-gb` and `make run-gba` open the ROMs in SameBoy.app and
+  mGBA.app.
 
 ## Building
 
@@ -72,7 +74,9 @@ scripts/setup-sameboy.sh
 make test                       # host checks, no firmware needed
 make gb gba                     # build/nokia3210.gb and build/nokia3210.gba
 make check-gb                   # run the .gb headlessly, compare with the host frame
-make shot-gb KEYS=sd            # screenshot after scripted keys (u, d, l, r, s select, b back, t one game move)
+make check-gba                  # the same for the .gba
+make shot-gb KEYS=sd            # screenshot after scripted keys (u, d, l, r, s select, b back,
+                                # a the full-screen key, t one game move)
 make check-golden               # compare host frames with MAME frames in golden/
 make assets DUMP=/path/to/3210f600a.fls
 make sheet                      # draw the extracted assets to build/sheet_*.pgm
@@ -88,14 +92,18 @@ checks. To run on hardware, pass a GBA ROM you own to copy it from:
 
 ## Status
 
-In progress. Both cartridges build; the Game Boy ROM opens on the main
-menu's Games entry and walks the Games list and Snake's menu with its
+In progress. Both cartridges build and run the same core: they open on the
+main menu's Games entry and walk the Games list and Snake's menu with its
 Level, Top score and Instructions pages, drawn with the phone's own fonts
 and text. New game starts a playable Snake: steering, food, scoring, the
 pause menu with Continue, the Game over page and Last view. Menus and
 gameplay match frames captured from the firmware in MAME. Level and top
 score are kept in battery-backed cartridge RAM. Rotation and Memory do
-nothing yet, there is no sound, and the Game Boy redraws too slowly for the
-fastest levels. See
+nothing yet and there is no sound. On the Game Boy, Select on the first
+screen picks a full-screen variant instead, which is the port's own design
+and not the phone's: menus laid out for the 160x144 screen in a 12px font
+with every entry visible, and Snake on a 38x34 board of the same 4-pixel
+cells, with its own level and top score. [`docs/authenticity.md`](docs/authenticity.md)
+lists where the code's structure still differs from the firmware's. See
 [`docs/handoff.md`](docs/handoff.md) for the decisions taken, the reference
 material and the work items.

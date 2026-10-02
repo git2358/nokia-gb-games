@@ -11,7 +11,7 @@
 	.org	0x40		; vertical blank
 	jp	vblank
 	.org	0x48		; LCD status
-	reti
+	jp	lcd_split
 	.org	0x50		; timer
 	reti
 	.org	0x58		; serial
@@ -63,8 +63,19 @@ vblank:
 	push	hl
 	ld	hl, #_frame_count
 	inc	(hl)
+	;; The top of the screen takes its tiles from 0x8000.
+	ld	hl, #0xff40
+	set	4, (hl)
 	pop	hl
 	pop	af
+	reti
+
+;; Raised at the line where the screen's tiles continue at 0x9000.
+lcd_split:
+	push	hl
+	ld	hl, #0xff40
+	res	4, (hl)
+	pop	hl
 	reti
 
 ;; void flush_tiles(void): waits for the start of the next vertical blank,

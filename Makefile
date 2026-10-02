@@ -13,6 +13,8 @@ CFLAGS ?= -std=c99 -O2 -Wall -Wextra -pedantic
 SDCC ?= sdcc
 MAKEBIN ?= makebin
 SDAS ?= sdasgb
+# The Game Boy gives the core a framebuffer the size of its screen.
+GB_FB := -DLCD_FB_WIDTH=160 -DLCD_FB_HEIGHT=144
 SAMEBOY_TESTER ?= tools/SameBoy/build/bin/tester/sameboy_tester
 SAMEBOY_APP ?= /Applications/SameBoy.app
 # Emulated seconds to run before the screenshot, and its scale factor.
@@ -29,6 +31,7 @@ GBA_LOGO_FROM ?=
 
 BUILD := build
 ASSETS := $(BUILD)/assets
+ASSET_SRC := $(ASSETS)/game_assets.c $(ASSETS)/font12.c
 CORE_SRC := $(wildcard core/*.c)
 CORE_HDR := $(wildcard core/*.h)
 INCLUDES := -Icore -Iplatform/host -I$(ASSETS)
@@ -40,12 +43,12 @@ GBA_ROM := $(BUILD)/nokia3210.gba
 KEYS ?=
 GB_FRAME := menu-$(KEYS)
 GB_SRC := $(CORE_SRC) platform/gb/main.c
-GB_REL := $(patsubst %.c,$(BUILD)/gb/%.rel,$(notdir $(GB_SRC))) $(BUILD)/gb/game_assets.rel
-GBA_SRC := platform/gba/crt0.s platform/gba/main.c platform/gba/libc.c $(CORE_SRC) $(ASSETS)/game_assets.c
+GB_REL := $(patsubst %.c,$(BUILD)/gb/%.rel,$(notdir $(GB_SRC))) $(BUILD)/gb/game_assets.rel $(BUILD)/gb/font12.rel
+GBA_SRC := platform/gba/crt0.s platform/gba/main.c platform/gba/libc.c $(CORE_SRC) $(ASSET_SRC)
 
 vpath %.c core platform/gb
 
-.PHONY: help assets test test-snake sheet frames check-golden gb gba check-gb shot-gb run-gb run-gba clean
+.PHONY: help assets test test-snake sheet frames check-golden gb gba check-gb shot-gb check-gba shot-gba run-gb run-gba clean
 
 help:
 	@echo "make test      build and run the host checks (no firmware needed)"
@@ -58,11 +61,17 @@ help:
 	@echo "make gba       build $(GBA_ROM)"
 	@echo "make check-gb  run the Game Boy ROM headlessly and compare its frame with the host's"
 	@echo "make shot-gb   run the Game Boy ROM headlessly and write $(BUILD)/nokia3210-gb.png"
+	@echo "make check-gba run the GBA ROM headlessly and compare its frame with the host's"
+	@echo "make shot-gba  run the GBA ROM headlessly and write $(BUILD)/nokia3210-gba.png"
 	@echo "make run-gb    open the Game Boy ROM in SameBoy"
 	@echo "make run-gba   open the GBA ROM in mGBA"
 	@echo "make clean     remove $(BUILD)/"
 
-assets: $(ASSETS)/game_assets.c
+assets: $(ASSET_SRC)
+
+# The full-screen menus' font is the port's own, kept as an ASCII-art sheet.
+$(ASSETS)/font12.c: tools/font12_to_c.py assets/font12.txt
+	$(PYTHON) tools/font12_to_c.py assets/font12.txt $(ASSETS)
 
 $(ASSETS)/game_assets.c: tools/extract_assets.py
 	@test -f "$(DUMP)" || { echo "Missing $(DUMP): pass DUMP=/path/to/3210f600a.fls (see README.md)"; exit 1; }
@@ -76,23 +85,34 @@ test: $(BUILD)/test_core
 	$(BUILD)/test_core
 
 # Needs the extracted assets, unlike `test`.
-$(BUILD)/test_snake: tests/test_snake.c core/lcd.c core/rand.c core/snake.c $(CORE_HDR) $(ASSETS)/game_assets.c
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ tests/test_snake.c core/lcd.c core/rand.c core/snake.c $(ASSETS)/game_assets.c
+$(BUILD)/test_snake: tests/test_snake.c core/lcd.c core/rand.c core/snake.c $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ tests/test_snake.c core/lcd.c core/rand.c core/snake.c $(ASSET_SRC)
 
-test-snake: $(BUILD)/test_snake
+$(BUILD)/test_snake_gb: tests/test_snake.c core/lcd.c core/rand.c core/snake.c $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ tests/test_snake.c core/lcd.c core/rand.c core/snake.c $(ASSET_SRC)
+
+test-snake: $(BUILD)/test_snake $(BUILD)/test_snake_gb
 	$(BUILD)/test_snake
+	$(BUILD)/test_snake_gb
 
-$(BUILD)/asset_sheet: platform/host/asset_sheet.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSETS)/game_assets.c
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/asset_sheet.c platform/host/pgm.c $(CORE_SRC) $(ASSETS)/game_assets.c
+$(BUILD)/asset_sheet: platform/host/asset_sheet.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/asset_sheet.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
 
 sheet: $(BUILD)/asset_sheet
 	$(BUILD)/asset_sheet $(BUILD)
 
-$(BUILD)/frame: platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSETS)/game_assets.c
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(ASSETS)/game_assets.c
+$(BUILD)/frame: platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
 
 $(BUILD)/frame_%.pgm: $(BUILD)/frame
 	$(BUILD)/frame $* $@
+
+# The same tool with the Game Boy's framebuffer, for comparing its screen.
+$(BUILD)/frame_gb: platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+
+$(BUILD)/gbframe_%.pgm: $(BUILD)/frame_gb
+	$(BUILD)/frame_gb $* $@
 
 # Frames captured from the original firmware in MAME, named after the host
 # frame they must equal. Derived from the firmware, so the directory is ignored.
@@ -105,16 +125,20 @@ frames: $(BUILD)/frame_testcard.pgm $(BUILD)/frame_outline.pgm $(BUILD)/frame_sn
 
 # Game Boy
 
-$(BUILD)/gb/%.rel: %.c $(CORE_HDR) $(ASSETS)/game_assets.c
+$(BUILD)/gb/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
 	@mkdir -p $(BUILD)/gb
-	$(SDCC) -msm83 --opt-code-speed -Icore -I$(ASSETS) -c $< -o $@
+	$(SDCC) -msm83 --opt-code-speed $(GB_FB) -Icore -I$(ASSETS) -c $< -o $@
 
 # Always rebuilt, so a change of KEYS takes effect.
 $(BUILD)/gb/main.rel: platform/gb/main.c $(CORE_HDR) FORCE
 	@mkdir -p $(BUILD)/gb
-	$(SDCC) -msm83 --opt-code-speed -Icore -I$(ASSETS) '-DSTART_KEYS="$(KEYS)"' -c $< -o $@
+	$(SDCC) -msm83 --opt-code-speed $(GB_FB) -Icore -I$(ASSETS) '-DSTART_KEYS="$(KEYS)"' -c $< -o $@
 
 FORCE:
+
+$(BUILD)/gb/font12.rel: $(ASSETS)/font12.c
+	@mkdir -p $(BUILD)/gb
+	$(SDCC) -msm83 -Icore -I$(ASSETS) -c $< -o $@
 
 $(BUILD)/gb/game_assets.rel: $(ASSETS)/game_assets.c
 	@mkdir -p $(BUILD)/gb
@@ -130,10 +154,10 @@ $(GB_ROM): $(BUILD)/gb/crt0.rel $(GB_REL) FORCE
 
 gb: $(GB_ROM)
 
-check-gb: $(GB_ROM) $(BUILD)/frame_$(GB_FRAME).pgm
+check-gb: $(GB_ROM) $(BUILD)/gbframe_$(GB_FRAME).pgm
 	@test -x "$(SAMEBOY_TESTER)" || { echo "Missing $(SAMEBOY_TESTER): run scripts/setup-sameboy.sh"; exit 1; }
 	$(SAMEBOY_TESTER) --dmg --length $(SHOT_SECONDS) $(GB_ROM)
-	$(PYTHON) tools/check_gb_frame.py $(BUILD)/nokia3210.bmp $(BUILD)/frame_$(GB_FRAME).pgm
+	$(PYTHON) tools/check_gb_frame.py $(BUILD)/nokia3210.bmp $(BUILD)/gbframe_$(GB_FRAME).pgm
 
 # Headless screenshot of the Game Boy ROM as a PNG.
 shot-gb: $(GB_ROM)
@@ -146,15 +170,32 @@ run-gb: $(GB_ROM)
 
 # GBA
 
-$(BUILD)/gba/nokia3210.elf: $(GBA_SRC) $(CORE_HDR) platform/gba/gba.ld
+$(BUILD)/gba/nokia3210.elf: $(GBA_SRC) $(CORE_HDR) platform/gba/gba.ld FORCE
 	@mkdir -p $(BUILD)/gba
-	$(ARM_CC) $(ARM_CFLAGS) -Icore -I$(ASSETS) -nostdlib -T platform/gba/gba.ld -Wl,-Map,$(BUILD)/gba/nokia3210.map -o $@ $(GBA_SRC) -lgcc
+	$(ARM_CC) $(ARM_CFLAGS) -Icore -I$(ASSETS) '-DSTART_KEYS="$(KEYS)"' -nostdlib -T platform/gba/gba.ld -Wl,-Map,$(BUILD)/gba/nokia3210.map -o $@ $(GBA_SRC) -lgcc
 
-$(GBA_ROM): $(BUILD)/gba/nokia3210.elf tools/gbafix.py
+$(GBA_ROM): $(BUILD)/gba/nokia3210.elf tools/gbafix.py FORCE
 	$(ARM_OBJCOPY) -O binary $< $@
 	$(PYTHON) tools/gbafix.py $@ $(if $(GBA_LOGO_FROM),--logo-from "$(GBA_LOGO_FROM)")
 
 gba: $(GBA_ROM)
+
+# Headless GBA runs use mGBA's core library; scripts/setup-mgba.sh builds it.
+MGBA ?= tools/mgba
+SHOT_FRAMES ?= 60
+
+$(BUILD)/gba_shot: tools/gba_shot.c
+	@test -f "$(MGBA)/build/libmgba.a" || { echo "Missing $(MGBA)/build/libmgba.a: run scripts/setup-mgba.sh"; exit 1; }
+	@mkdir -p $(BUILD)
+	$(CC) -O2 -I$(MGBA)/include -I$(MGBA)/build/include -o $@ $< $(MGBA)/build/libmgba.a -lm -framework CoreFoundation
+
+check-gba: $(GBA_ROM) $(BUILD)/gba_shot $(BUILD)/frame_$(GB_FRAME).pgm
+	$(BUILD)/gba_shot $(GBA_ROM) $(BUILD)/nokia3210-gba.bmp $(SHOT_FRAMES)
+	$(PYTHON) tools/check_gb_frame.py $(BUILD)/nokia3210-gba.bmp $(BUILD)/frame_$(GB_FRAME).pgm
+
+shot-gba: $(GBA_ROM) $(BUILD)/gba_shot
+	$(BUILD)/gba_shot $(GBA_ROM) $(BUILD)/nokia3210-gba.bmp $(SHOT_FRAMES)
+	$(PYTHON) tools/bmp_to_png.py $(BUILD)/nokia3210-gba.bmp $(BUILD)/nokia3210-gba.png 2
 
 run-gba: $(GBA_ROM)
 	open -a "$(MGBA_APP)" $(GBA_ROM)

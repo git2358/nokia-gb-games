@@ -7,10 +7,12 @@ The boot logo (header bytes 0x04..0x9f) is left as built unless --logo-from
 names a GBA ROM you own to copy it from. Emulators run without it; a real
 console's BIOS refuses a cartridge whose logo is wrong.
 """
+import hashlib
 import sys
 from pathlib import Path
 
 LOGO = slice(0x04, 0xA0)
+LOGO_SHA1 = "17daa0fec02fc33c0f6abb549a8b80b6613b48ee"
 
 
 def main():
@@ -28,7 +30,10 @@ def main():
         sys.exit(f"{path}: too short to hold a GBA header")
 
     if logo_from:
-        rom[LOGO] = logo_from.read_bytes()[LOGO]
+        logo = logo_from.read_bytes()[LOGO]
+        if hashlib.sha1(logo).hexdigest() != LOGO_SHA1:
+            sys.exit(f"{logo_from}: its header does not hold the standard boot logo; use another ROM")
+        rom[LOGO] = logo
     rom[0xB2] = 0x96
     rom[0xBD] = (-(sum(rom[0xA0:0xBD]) + 0x19)) & 0xFF
     path.write_bytes(rom)

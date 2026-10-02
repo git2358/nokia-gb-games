@@ -12,7 +12,7 @@ struct snake snake;
 
 static void set_occupied(int8_t x, int8_t y, uint8_t on)
 {
-    uint8_t *cell = &snake.occupied[x + SNAKE_COLS * (y / 8)];
+    uint8_t *cell = &snake.occupied[x + snake.cols * (y / 8)];
     uint8_t bit = (uint8_t)(1 << (y & 7));
 
     if (on)
@@ -38,13 +38,16 @@ static int8_t step_y(uint8_t direction)
 
 static uint8_t is_occupied(int8_t x, int8_t y)
 {
-    return (snake.occupied[x + SNAKE_COLS * (y / 8)] >> (y & 7)) & 1;
+    return (snake.occupied[x + snake.cols * (y / 8)] >> (y & 7)) & 1;
 }
 
-void snake_init(uint8_t level)
+void snake_init(uint8_t level, uint8_t cols, uint8_t rows)
 {
     unsigned i;
 
+    snake.cols = cols;
+    snake.rows = rows;
+    snake.ring_size = (uint16_t)(cols * rows / 4 * 4);
     snake.level = level;
     snake.score = 0;
     snake.grow = 0;
@@ -53,7 +56,7 @@ void snake_init(uint8_t level)
     snake.tail_index = 0;
     snake.head_index = 0;
     snake.head_x = snake.tail_x = 0;
-    snake.head_y = snake.tail_y = SNAKE_ROWS - 1;
+    snake.head_y = snake.tail_y = snake.rows - 1;
     for (i = 0; i < sizeof snake.occupied; i++)
         snake.occupied[i] = 0;
     for (i = 0; i < sizeof snake.ring; i++)
@@ -63,8 +66,8 @@ void snake_init(uint8_t level)
     for (i = 0; i < 8; i++)
         snake_move_head();
 
-    snake.food_x = SNAKE_COLS / 2;
-    snake.food_y = SNAKE_ROWS / 2;
+    snake.food_x = snake.cols / 2;
+    snake.food_y = snake.rows / 2;
 }
 
 void snake_key(char key)
@@ -112,7 +115,7 @@ static uint8_t move_blocked(void)
     int8_t x = (int8_t)(snake.head_x + step_x(snake.direction));
     int8_t y = (int8_t)(snake.head_y + step_y(snake.direction));
 
-    if (x < 0 || y < 0 || x >= SNAKE_COLS || y >= SNAKE_ROWS)
+    if (x < 0 || y < 0 || x >= snake.cols || y >= snake.rows)
         return 1;
     if (x == snake.tail_x && y == snake.tail_y)
         return snake.grow;
@@ -126,8 +129,8 @@ static void place_food(void)
     int8_t x, y;
 
     do {
-        x = (int8_t)(game_rand() % SNAKE_COLS);
-        y = (int8_t)(game_rand() % SNAKE_ROWS);
+        x = (int8_t)(game_rand() % snake.cols);
+        y = (int8_t)(game_rand() % snake.rows);
     } while (is_occupied(x, y) && --tries);
     snake.food_x = x;
     snake.food_y = y;
@@ -168,11 +171,11 @@ void snake_move_head(void)
     uint8_t shift = (uint8_t)((snake.head_index & 3) << 1);
     uint8_t *slot = &snake.ring[snake.head_index >> 2];
 
-    if ((snake.head_index + 1) % SNAKE_RING_SIZE == snake.tail_index)
+    if ((snake.head_index + 1) % snake.ring_size == snake.tail_index)
         snake_advance_tail();
 
     *slot = (uint8_t)((*slot & ~(3 << shift)) | (snake.direction << shift));
-    snake.head_index = (uint16_t)((snake.head_index + 1) % SNAKE_RING_SIZE);
+    snake.head_index = (uint16_t)((snake.head_index + 1) % snake.ring_size);
     snake.head_x += step_x(snake.direction);
     snake.head_y += step_y(snake.direction);
     set_occupied(snake.head_x, snake.head_y, 1);
@@ -185,7 +188,7 @@ void snake_advance_tail(void)
     set_occupied(snake.tail_x, snake.tail_y, 0);
     snake.tail_x += step_x(direction);
     snake.tail_y += step_y(direction);
-    snake.tail_index = (uint16_t)((snake.tail_index + 1) % SNAKE_RING_SIZE);
+    snake.tail_index = (uint16_t)((snake.tail_index + 1) % snake.ring_size);
 }
 
 void snake_draw(void)
@@ -194,17 +197,17 @@ void snake_draw(void)
     int8_t x = snake.tail_x, y = snake.tail_y;
 
     /* Border: 83x47, leaving the last column and row of the LCD clear. */
-    lcd_fill_rect(0, 0, SNAKE_COLS * 4 + 2, 1, 1);
-    lcd_fill_rect(SNAKE_COLS * 4 + 2, 0, 1, SNAKE_ROWS * 4 + 2, 1);
-    lcd_fill_rect(0, 0, 1, SNAKE_ROWS * 4 + 2, 1);
-    lcd_fill_rect(0, SNAKE_ROWS * 4 + 2, SNAKE_COLS * 4 + 3, 1, 1);
+    lcd_fill_rect(0, 0, snake.cols * 4 + 2, 1, 1);
+    lcd_fill_rect(snake.cols * 4 + 2, 0, 1, snake.rows * 4 + 2, 1);
+    lcd_fill_rect(0, 0, 1, snake.rows * 4 + 2, 1);
+    lcd_fill_rect(0, snake.rows * 4 + 2, snake.cols * 4 + 3, 1, 1);
 
     lcd_blit_bitmap(snake.food_x * 4 + 2, snake.food_y * 4 + 2, 4, 4, snake_food_bitmap);
 
     /* The tail is a 3x3 block; every later segment is widened by one pixel
        towards the cell it came from, so neighbours join. */
     lcd_fill_rect(x * 4 + 2, y * 4 + 2, 3, 3, 1);
-    for (index = snake.tail_index; index != snake.head_index; index = (uint16_t)((index + 1) % SNAKE_RING_SIZE)) {
+    for (index = snake.tail_index; index != snake.head_index; index = (uint16_t)((index + 1) % snake.ring_size)) {
         uint8_t direction = ring_get(index);
 
         x += step_x(direction);

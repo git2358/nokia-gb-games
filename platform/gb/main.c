@@ -1,6 +1,8 @@
-/* Game Boy layer. The 84x48 LCD is drawn 1:1 as an 11x6 block of background
-   tiles, centred on the screen. Start or A is the phone's Navi key, B is its
-   C key, and Up/Down scroll. */
+/* Game Boy layer. The core's framebuffer is the whole 160x144 screen, shown
+   as a 20x18 block of background tiles, one tile per 8x8 cell; the phone's
+   84x48 LCD is a window in the middle of it. Start or A is the phone's Navi
+   key, B is its C key, the D-pad scrolls and steers, and Select on the first
+   screen picks the full-screen variant. */
 #include <stdint.h>
 
 #include "game.h"
@@ -12,25 +14,30 @@
 #define IF REG(0xff0f)
 #define IE REG(0xffff)
 #define LCDC REG(0xff40)
+#define STAT REG(0xff41)
 #define SCY REG(0xff42)
 #define SCX REG(0xff43)
 #define LY REG(0xff44)
+#define LYC REG(0xff45)
 #define BGP REG(0xff47)
 
-#define VRAM_TILES ((uint8_t *)0x8000)
 #define VRAM_MAP ((uint8_t *)0x9800)
 
-#define TILES_X 11 /* 88 px, holds the 84 px LCD */
-#define TILES_Y 6
-#define MAP_X 4
-#define MAP_Y 6
-/* Map column 4 starts at x = 32; scrolling by -6 puts the LCD at x = 38. */
-#define SCROLL_X ((uint8_t)-6)
+#define TILES_X LCD_CELLS_X /* 20 */
+#define TILES_Y LCD_CELLS_Y /* 18 */
+
+/* 360 tiles are more than the 256 a tile number can name. The first 240
+   (12 rows) are at 0x8000, the rest at 0x9000, and the handlers in crt0.s
+   switch the LCD between the two tile areas at this line of every frame. */
+#define SPLIT_ROW 12
+#define SPLIT_TILE (SPLIT_ROW * TILES_X)
+#define SPLIT_LINE (SPLIT_ROW * 8)
 
 #define LCDC_ON 0x91 /* LCD on, tile data at 0x8000, background on */
 
 #define PAD_A 0x01
 #define PAD_B 0x02
+#define PAD_SELECT 0x04
 #define PAD_START 0x08
 #define PAD_RIGHT 0x10
 #define PAD_LEFT 0x20
@@ -38,7 +45,7 @@
 #define PAD_DOWN 0x80
 
 /* Keys pressed at power-on, for scripted screenshots: u, d, l, r, s select,
-   b back, t one move of the running game, and p to start over as after a
+   b back, a the full-screen key, t one move of the running game, and p to start over as after a
    power cycle (settings are read back). */
 #ifndef START_KEYS
 #define START_KEYS ""
@@ -108,7 +115,7 @@ static void wait_vblank(void)
 }
 
 /* Converts one 8x8 cell of lcd_fb to tile data: a set pixel is colour 3, a
-   clear one 0. A framebuffer row is 11 bytes, one per tile across, so each
+   clear one 0. A framebuffer row is 20 bytes, one per tile across, so each
    tile row is one framebuffer byte written to both bit planes. */
 static void render_tile(uint8_t tx, uint8_t ty, uint8_t *tile)
 {
@@ -123,7 +130,11 @@ static void render_tile(uint8_t tx, uint8_t ty, uint8_t *tile)
 
 static uint8_t *tile_address(uint8_t tx, uint8_t ty)
 {
-    return VRAM_TILES + 16 + (uint16_t)(ty * TILES_X + tx) * 16; /* tile 0 stays blank */
+    uint16_t n = (uint16_t)(ty * TILES_X + tx);
+
+    if (n < SPLIT_TILE)
+        return (uint8_t *)0x8000 + n * 16;
+    return (uint8_t *)0x9000 + (n - SPLIT_TILE) * 16;
 }
 
 /* Brings video RAM up to date with the cells of lcd_fb drawn to since the
@@ -132,12 +143,12 @@ static uint8_t *tile_address(uint8_t tx, uint8_t ty)
    screen with the LCD off. */
 static void present(void)
 {
-    uint8_t tx, ty, count = 0, n = 0;
-    uint16_t mask;
+    uint8_t tx, ty, n = 0;
+    uint16_t count = 0, i;
+    const uint8_t *dirty = lcd_dirty;
 
-    for (ty = 0; ty < TILES_Y; ty++)
-        for (mask = lcd_dirty[ty]; mask; mask >>= 1)
-            count += mask & 1;
+    for (i = 0; i < sizeof lcd_dirty; i++)
+        count += lcd_dirty[i];
     if (!count && (LCDC & 0x80))
         return;
 
@@ -147,14 +158,14 @@ static void present(void)
             LCDC = 0;
         }
         for (ty = 0; ty < TILES_Y; ty++)
-            for (tx = 0, mask = lcd_dirty[ty]; tx < TILES_X; tx++, mask >>= 1)
-                if (mask & 1)
+            for (tx = 0; tx < TILES_X; tx++)
+                if (*dirty++)
                     render_tile(tx, ty, tile_address(tx, ty));
         LCDC = LCDC_ON;
     } else {
         for (ty = 0; ty < TILES_Y; ty++) {
-            for (tx = 0, mask = lcd_dirty[ty]; tx < TILES_X; tx++, mask >>= 1) {
-                if (!(mask & 1))
+            for (tx = 0; tx < TILES_X; tx++) {
+                if (!*dirty++)
                     continue;
                 render_tile(tx, ty, staged + n * 16);
                 staged_at[n] = tile_address(tx, ty);
@@ -170,8 +181,8 @@ static void present(void)
             flush_tiles();
         }
     }
-    for (ty = 0; ty < TILES_Y; ty++)
-        lcd_dirty[ty] = 0;
+    for (i = 0; i < sizeof lcd_dirty; i++)
+        lcd_dirty[i] = 0;
 }
 
 /* Buttons currently held: A, B, Select, Start in bits 0-3, then Right,
@@ -197,22 +208,25 @@ static void press(uint8_t key)
 
 void main(void)
 {
-    uint16_t i;
     uint8_t tx, ty, pad, last = 0, pressed, seen = 0;
+    uint16_t i;
     const char *key;
 
     wait_vblank();
     LCDC = 0;
-    for (i = 0; i < 16; i++)
-        VRAM_TILES[i] = 0;
-    for (i = 0; i < 32 * 32; i++)
-        VRAM_MAP[i] = 0;
+    /* Every cell of the screen gets its own tile. */
     for (ty = 0; ty < TILES_Y; ty++)
         for (tx = 0; tx < TILES_X; tx++)
-            VRAM_MAP[(MAP_Y + ty) * 32 + MAP_X + tx] = (uint8_t)(1 + ty * TILES_X + tx);
-    SCX = SCROLL_X;
+            VRAM_MAP[ty * 32 + tx] = (uint8_t)((ty * TILES_X + tx) % SPLIT_TILE);
+    SCX = 0;
     SCY = 0;
     BGP = 0xe4;
+    LYC = SPLIT_LINE;
+    STAT = 0x40; /* interrupt when LY reaches LYC */
+
+    /* Video RAM holds whatever the boot ROM left: write every tile once. */
+    for (i = 0; i < sizeof lcd_dirty; i++)
+        lcd_dirty[i] = 1;
 
     menu_init();
     for (key = START_KEYS; *key; key++) {
@@ -222,13 +236,14 @@ void main(void)
             menu_game_step();
         else
             press(*key == 'u' ? MENU_KEY_UP : *key == 'd' ? MENU_KEY_DOWN : *key == 'l' ? MENU_KEY_LEFT
-                  : *key == 'r' ? MENU_KEY_RIGHT : *key == 's' ? MENU_KEY_SELECT : MENU_KEY_BACK);
+                  : *key == 'r' ? MENU_KEY_RIGHT : *key == 's' ? MENU_KEY_SELECT : *key == 'a' ? MENU_KEY_ALT
+                  : MENU_KEY_BACK);
     }
     menu_draw();
     present();
 
     IF = 0;
-    IE = 0x01; /* vertical blank */
+    IE = 0x03; /* vertical blank and LCD status */
     __asm__("ei");
 
     for (;;) {
@@ -253,6 +268,8 @@ void main(void)
             press(MENU_KEY_SELECT);
         else if (pressed & PAD_B)
             press(MENU_KEY_BACK);
+        else if (pressed & PAD_SELECT)
+            press(MENU_KEY_ALT);
         else if (pressed & PAD_UP)
             press(MENU_KEY_UP);
         else if (pressed & PAD_DOWN)

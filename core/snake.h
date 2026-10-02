@@ -1,13 +1,25 @@
-/* Snake. The board is 20x11 cells on a 4 px pitch; the snake is a ring of
-   2-bit directions walked from the tail to the head. */
+/* Snake. The phone's board is 20x11 cells on a 4 px pitch; the snake is a
+   ring of 2-bit directions walked from the tail to the head. A bigger board,
+   up to what the framebuffer holds, gives the full-screen variant. */
 #ifndef CORE_SNAKE_H
 #define CORE_SNAKE_H
 
 #include <stdint.h>
 
-#define SNAKE_COLS 20
+#include "lcd.h"
+
+#define SNAKE_COLS 20 /* the phone's board */
 #define SNAKE_ROWS 11
-#define SNAKE_RING_SIZE (SNAKE_COLS * SNAKE_ROWS / 4 * 4)
+/* The biggest board the framebuffer holds: 4 px a cell plus the border. */
+#define SNAKE_MAX_COLS ((LCD_FB_WIDTH - 3) / 4)
+#define SNAKE_MAX_ROWS ((LCD_FB_HEIGHT - 3) / 4)
+/* The full-screen board is one cell smaller each way, which leaves room to
+   put the same margin on every side (to within the odd pixel: the board's
+   outline is always an odd number of pixels across). */
+#define SNAKE_FULL_COLS (SNAKE_MAX_COLS - 1)
+#define SNAKE_FULL_ROWS (SNAKE_MAX_ROWS - 1)
+#define SNAKE_FULL_X ((LCD_FB_WIDTH - (SNAKE_FULL_COLS * 4 + 3)) / 2)
+#define SNAKE_FULL_Y ((LCD_FB_HEIGHT - (SNAKE_FULL_ROWS * 4 + 3)) / 2)
 
 enum {
     SNAKE_UP,
@@ -17,6 +29,8 @@ enum {
 };
 
 struct snake {
+    uint8_t cols, rows;
+    uint16_t ring_size; /* cols * rows, rounded down to a multiple of 4 */
     uint16_t tail_index;
     uint16_t head_index;
     int8_t head_x, head_y;
@@ -27,9 +41,9 @@ struct snake {
     uint8_t hit;       /* the last move was blocked; one more ends the game */
     uint8_t level;     /* 0..8 */
     uint16_t score;
-    uint8_t ring[SNAKE_RING_SIZE / 4];
-    /* One bit per cell: byte x + SNAKE_COLS * (y / 8), bit y & 7. */
-    uint8_t occupied[SNAKE_COLS * ((SNAKE_ROWS - 1) / 8 + 1)];
+    uint8_t ring[SNAKE_MAX_COLS * SNAKE_MAX_ROWS / 4];
+    /* One bit per cell: byte x + cols * (y / 8), bit y & 7. */
+    uint8_t occupied[SNAKE_MAX_COLS * ((SNAKE_MAX_ROWS - 1) / 8 + 1)];
     int8_t food_x, food_y;
     /* What the last step changed, for snake_draw_step. */
     int8_t old_tail_x, old_tail_y;
@@ -38,9 +52,9 @@ struct snake {
 
 extern struct snake snake;
 
-/* New one-player game: nine cells along the bottom row heading right, and
-   the first food in the middle of the board. */
-void snake_init(uint8_t level);
+/* New one-player game on a board of cols x rows cells: nine cells along the
+   bottom row heading right, and the first food in the middle of the board. */
+void snake_init(uint8_t level, uint8_t cols, uint8_t rows);
 
 /* A phone key, '1' to '9': 2/4/6/8 steer, and the corner keys turn towards
    whichever of their two directions is a turn. A reversal is ignored. */

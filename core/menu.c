@@ -100,9 +100,9 @@ enum {
 #define NATIVE_MARGIN 4
 #define NATIVE_HELP_LINES 7
 
-static const char text_hint_select[] = "A select   B back";
-static const char text_hint_ok[] = "A OK   B back";
-static const char text_hint_more[] = "A more   B back";
+static const char text_hint_select[] = "B back   A select";
+static const char text_hint_ok[] = "B back   A OK";
+static const char text_hint_more[] = "B back   A more";
 static uint8_t surround_used;  /* something is drawn around the phone's LCD */
 
 #if LCD_HAS_SURROUND

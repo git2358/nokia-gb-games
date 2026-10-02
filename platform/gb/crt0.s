@@ -58,6 +58,21 @@ init:
 	halt
 	jr	4$
 
+	;; Order of the areas for the linker.
+	.area	_HOME
+	.area	_CODE
+	.area	_INITIALIZER
+	.area	_GSINIT
+	.area	_GSFINAL
+	.area	_DATA
+	.area	_INITIALIZED
+	.area	_BSEG
+	.area	_BSS
+	.area	_HEAP
+
+	;; The handlers and helpers go with the rest of the code: the header
+	;; area above is at fixed addresses and ends where the code begins.
+	.area	_HOME
 vblank:
 	push	af
 	push	hl
@@ -120,50 +135,49 @@ lcd_split:
 	pop	af
 	reti
 
-;; void flush_tiles(void): waits for the next vertical blank, then copies
-;; staged_count 16-byte tiles from staged to the video RAM addresses in
-;; staged_at. About 180 cycles a tile; a vertical blank is 1140. It waits
-;; for the frame counter to change, not for line 144: the handler above
-;; takes longer than that one line, so a loop polling for it would miss it.
+;; void flush_tiles(void): copies staged_count 16-byte tiles from staged to
+;; the video RAM addresses in staged_at, with the LCD on. Video RAM accepts
+;; writes only outside the part of each line where the LCD controller is
+;; drawing, so each pair of bytes waits for a horizontal or vertical blank;
+;; the writes then land within the first 10 cycles after the check, inside
+;; the 20 that the following line's OAM scan still leaves. Interrupts are
+;; held off between the check and the writes.
 _flush_tiles::
-	ld	hl, #_frame_count
-	ld	a, (hl)
-1$:
-	cp	a, (hl)
-	jr	z, 1$
 	ld	a, (#_staged_count)
 	or	a, a
 	ret	z
-	ld	c, a
 	ld	de, #_staged
 	ld	hl, #_staged_at
-3$:
-	push	hl
+1$:
+	push	af			; tiles left
 	ld	a, (hl+)
-	ld	h, (hl)
-	ld	l, a
-	ld	b, #16
-4$:
+	ld	c, a
+	ld	a, (hl+)
+	push	hl
+	ld	h, a
+	ld	l, c			; hl = where this tile goes
+2$:
 	ld	a, (de)
-	ld	(hl+), a
 	inc	de
-	dec	b
-	jr	nz, 4$
+	ld	b, a
+	ld	a, (de)
+	inc	de
+	ld	c, a
+	di
+3$:
+	ld	a, (#0xff41)
+	and	a, #0x02
+	jr	nz, 3$			; drawing, or about to: wait
+	ld	(hl), b
+	inc	hl
+	ld	(hl), c
+	inc	hl
+	ei
+	ld	a, l
+	and	a, #0x0f
+	jr	nz, 2$			; tiles start on 16-byte boundaries
 	pop	hl
-	inc	hl
-	inc	hl
-	dec	c
-	jr	nz, 3$
+	pop	af
+	dec	a
+	jr	nz, 1$
 	ret
-
-	;; Order of the areas for the linker.
-	.area	_HOME
-	.area	_CODE
-	.area	_INITIALIZER
-	.area	_GSINIT
-	.area	_GSFINAL
-	.area	_DATA
-	.area	_INITIALIZED
-	.area	_BSEG
-	.area	_BSS
-	.area	_HEAP

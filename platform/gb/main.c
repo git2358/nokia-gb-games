@@ -60,20 +60,18 @@
 #define SAVE_SIGNATURE_1 '3'
 #define SAVE_CHECK(r) ((uint8_t)((r)[0] + (r)[1] + (r)[2] + 0x5a))
 
-/* Tiles copied to video RAM in one vertical blank with the LCD on. */
-#define TILES_PER_BLANK 4
-/* With more changed tiles than this the LCD is switched off for the copy. */
-#define MAX_LIVE_TILES 24
+/* Tiles converted at a time before being copied to video RAM. */
+#define STAGED_TILES 4
 /* Most frames of game time made up at once after a slow draw. */
 #define MAX_CATCH_UP 6
 
 /* Frames since power-on, counted by the vertical-blank handler in crt0.s. */
 volatile uint8_t frame_count;
 
-/* Tile data waiting for the next vertical blank, and where it goes;
-   flush_tiles in crt0.s copies it. */
-uint8_t staged[TILES_PER_BLANK * 16];
-uint8_t *staged_at[TILES_PER_BLANK];
+/* Tile data on its way to video RAM, and where it goes; flush_tiles in
+   crt0.s copies it between the lines the LCD is drawing. */
+uint8_t staged[STAGED_TILES * 16];
+uint8_t *staged_at[STAGED_TILES];
 uint8_t staged_count;
 
 void flush_tiles(void);
@@ -110,22 +108,11 @@ void platform_settings_save(uint8_t game, const struct game_settings *in)
     MBC_RAM_ENABLE = 0x00;
 }
 
-/* Waits for the start of the next vertical blank. Once interrupts are on,
-   the frame counter is the signal: the handler in crt0.s takes longer than
-   line 144 lasts, so polling for that line would miss it. */
-static uint8_t interrupts_on;
-
+/* Used once, at power-on, before interrupts are enabled. */
 static void wait_vblank(void)
 {
-    uint8_t frame = frame_count;
-
-    if (interrupts_on) {
-        while (frame_count == frame)
-            ;
-    } else {
-        while (LY != 144)
-            ;
-    }
+    while (LY != 144)
+        ;
 }
 
 /* Converts one 8x8 cell of lcd_fb to tile data: a set pixel is colour 3, a
@@ -152,51 +139,39 @@ static uint8_t *tile_address(uint8_t tx, uint8_t ty)
 }
 
 /* Brings video RAM up to date with the cells of lcd_fb drawn to since the
-   last call. Video RAM can only be written while the LCD controller is not
-   using it: a few tiles are copied during vertical blanks, and a whole new
-   screen with the LCD off. */
+   last call. The LCD stays on: the tiles go in a few at a time between the
+   lines being drawn, so a changed screen fills in over a few frames instead
+   of blinking. */
 static void present(void)
 {
     uint8_t tx, ty, n = 0;
-    uint16_t count = 0, i;
-    const uint8_t *dirty = lcd_dirty;
+    uint8_t *dirty = lcd_dirty;
 
-    for (i = 0; i < sizeof lcd_dirty; i++)
-        count += lcd_dirty[i];
-    if (!count && (LCDC & 0x80))
-        return;
-
-    if (count > MAX_LIVE_TILES || !(LCDC & 0x80)) {
-        if (LCDC & 0x80) {
-            wait_vblank();
-            LCDC = 0;
-        }
-        for (ty = 0; ty < TILES_Y; ty++)
-            for (tx = 0; tx < TILES_X; tx++)
-                if (*dirty++)
-                    render_tile(tx, ty, tile_address(tx, ty));
-        LCDC = LCDC_ON;
-    } else {
-        for (ty = 0; ty < TILES_Y; ty++) {
-            for (tx = 0; tx < TILES_X; tx++) {
-                if (!*dirty++)
-                    continue;
-                render_tile(tx, ty, staged + n * 16);
-                staged_at[n] = tile_address(tx, ty);
-                if (++n == TILES_PER_BLANK) {
-                    staged_count = n;
-                    flush_tiles();
-                    n = 0;
-                }
+    for (ty = 0; ty < TILES_Y; ty++) {
+        for (tx = 0; tx < TILES_X; tx++, dirty++) {
+            if (!*dirty)
+                continue;
+            *dirty = 0;
+            if (!(LCDC & 0x80)) {
+                /* Only at power-on: nothing is being drawn yet. */
+                render_tile(tx, ty, tile_address(tx, ty));
+                continue;
+            }
+            render_tile(tx, ty, staged + n * 16);
+            staged_at[n] = tile_address(tx, ty);
+            if (++n == STAGED_TILES) {
+                staged_count = n;
+                flush_tiles();
+                n = 0;
             }
         }
-        if (n) {
-            staged_count = n;
-            flush_tiles();
-        }
     }
-    for (i = 0; i < sizeof lcd_dirty; i++)
-        lcd_dirty[i] = 0;
+    if (n) {
+        staged_count = n;
+        flush_tiles();
+    }
+    if (!(LCDC & 0x80))
+        LCDC = LCDC_ON;
 }
 
 /* The pad is read once a frame by the vertical-blank handler in crt0.s:
@@ -260,7 +235,6 @@ void main(void)
     IF = 0;
     IE = 0x03; /* vertical blank and LCD status */
     __asm__("ei");
-    interrupts_on = 1;
 
     for (;;) {
         uint8_t frames;

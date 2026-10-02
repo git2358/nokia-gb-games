@@ -48,6 +48,10 @@ struct sprite {
     uint8_t x, y;
     uint8_t x2, y2; /* lines and fills only */
     struct sprite_image image;
+#ifdef __SDCC
+    /* 16 bytes, so that finding a sprite by its id is a shift. */
+    uint8_t unused[5];
+#endif
 };
 
 /* sprites[0] is only the head of the list. */
@@ -74,7 +78,7 @@ extern uint8_t sprite_screen[84 * SPRITE_SCREEN_BANDS];
 /* Draws the list into sprite_screen. */
 void sprite_render(void);
 /* Copies what changed in sprite_screen since the last call to the LCD view;
-   with `all`, everything. */
+   with `all`, everything: the view then holds something else, or nothing. */
 void sprite_present(uint8_t all);
 
 /* A strip of terrain made of 32x8 tiles that scrolls and wraps. It is drawn
@@ -88,15 +92,16 @@ struct tilemap {
     uint8_t top;            /* 0x2b when the strip is at the top of the screen, else 0 */
     uint16_t sprite;
     struct sprite_image image;
-    const uint32_t *tiles;  /* firmware addresses of the tile bitmaps, for tile numbers 1 upwards */
+    const uint16_t *tiles;  /* where the tile bitmaps are, for tile numbers 1 upwards */
+    uint16_t scroll;        /* the place the bitmap was last drawn for */
     uint8_t bitmap[84 * TILEMAP_ROWS_MAX];
 };
 
-/* Resolves a tile's firmware address to its 32 bytes. */
-const uint8_t *tilemap_tile(uint32_t address);
+/* Resolves one of those to the tile's 32 bytes. */
+const uint8_t *tilemap_tile(uint16_t tile);
 
 uint16_t tilemap_init(struct tilemap *t, uint8_t width, uint8_t rows, const uint8_t *map, uint8_t top,
-                      const uint32_t *tiles, uint8_t mode);
+                      const uint16_t *tiles, uint8_t mode);
 void tilemap_render(struct tilemap *t, unsigned scroll);
 /* Whether a sprite's set pixels touch the terrain's when the sprite is at
    row y. */

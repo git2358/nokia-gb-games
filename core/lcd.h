@@ -31,6 +31,14 @@
 #ifndef LCD_ZOOM
 #define LCD_ZOOM 1
 #endif
+/* A platform that shows the phone's LCD as it is may still magnify it by
+   this much for the games played on it in the full-screen variant, cutting
+   off what does not fit at the sides. */
+#ifndef LCD_GAME_ZOOM
+#define LCD_GAME_ZOOM LCD_ZOOM
+#endif
+/* How much bigger the rectangle named with lcd_zoom_set is shown. */
+#define LCD_ZOOM_BY (LCD_ZOOM > 1 ? LCD_ZOOM : LCD_GAME_ZOOM)
 /* The first screen row below the phone's LCD when it is the one magnified. */
 #define LCD_BELOW_PHONE (LCD_FB_HEIGHT / 2 + LCD_HEIGHT * LCD_ZOOM / 2)
 /* Whether there is room around the phone's LCD. */
@@ -78,6 +86,18 @@ void lcd_clear(void); /* clears the view */
 /* Color 0 clears, 1 sets, LCD_INVERT flips every pixel of the rectangle. */
 #define LCD_INVERT 2
 void lcd_fill_rect(int x, int y, int w, int h, uint8_t color);
+
+/* The innermost loops of the two routines above and below, which work down
+   a column of framebuffer bytes one row apart, starting at p and touching
+   the bits of `mask` in each. A platform whose compiler makes slow work of
+   them may supply its own and define LCD_PLATFORM_COLUMNS. Their other
+   arguments are in variables, to keep the calls cheap:
+   lcd_column_fill sets, clears or inverts, by lcd_column_color, in
+   lcd_column_rows bytes; lcd_column_blit sets or clears by the bits of
+   lcd_column_bits from bit 0 up, in lcd_column_rows bytes, 1 to 8. */
+extern uint8_t lcd_column_rows, lcd_column_color, lcd_column_bits;
+void lcd_column_fill(uint8_t *p, uint8_t mask);
+void lcd_column_blit(uint8_t *p, uint8_t mask);
 
 /* Column-major bitmap as stored in the firmware: (h + 7) / 8 bytes per
    column, bit (y & 7) of each byte is row y. Draws both set and clear

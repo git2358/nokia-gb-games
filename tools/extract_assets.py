@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""Extract the 3310 v6.39 Space Impact data from your own dump into C arrays.
+"""Extract the 3310 v6.39 Space Impact data, fonts and text from your own dump into C arrays.
 
 Usage: extract_assets.py DUMP OUT_DIR
 
 DUMP is the 2 MiB flash image `make dump` writes (3310f639e.fls), or the
 16-bit byte-swapped form the static tools use; it is identified by hash.
-Writes OUT_DIR/game_assets.c and OUT_DIR/game_assets.h. The output is derived
-from the firmware and must stay in an ignored directory.
+Writes OUT_DIR/game_assets.h and three sources: si_data.c (the game's data
+region), si_tables.c (its small tables) and game_assets.c (the menus'
+fonts, text and pictures), apart so that a platform can place them apart.
+The output is derived from the firmware and must stay in an ignored
+directory.
 
 The game's data is one contiguous region of the image that refers to itself
 by absolute address (sprite descriptors hold bitmap pointers, level headers
@@ -15,6 +18,7 @@ firmware address; see core/si_data.h and the map in the MAME fork's
 docs/games_applications_3310.md.
 """
 import hashlib
+import struct
 import sys
 from pathlib import Path
 
@@ -28,6 +32,41 @@ DATA_START, DATA_END = 0x311740, 0x313384
 DIGIT_GLYPHS = (0x2F2320, 40)  # ten 4x5 digits, 4 bytes each
 LEVEL_TABLE = (0x2F30D4, 8)  # pointers to the level headers
 TYPE_FRAMES = (0x2F3108, 37)  # per object type, pointer to its sprite descriptors
+
+# Pictures the phone's menus use, as strips of 8 rows with a byte per column.
+PICTURES = [
+    ("menu_games_icon", 0x2F6C68, 128, "64x16 frame of the main menu's Games animation, 64 bytes per 8 rows"),
+    ("top_score_sparkle", 0x2FAA40, 11 * 84, "11 pictures of the Top score page's animation, 21x32, 21 bytes per 8 rows"),
+]
+
+# The language pack ("PPM") holds the fonts and the text. Each chunk is
+# {u32 checksum, u32 length, 4-byte name, ...}.
+FONT_CHUNK = 0x34041C - 8
+TEXT_CHUNK = 0x342984 - 8
+ENGLISH_BLOCK = 0x2B4  # offset of the ENGL block inside the TEXT chunk
+
+FONT_NAMES = ["font_large_bold", "font_small_plain", "font_small_bold", "font_tiny_plain"]
+FIRST_CHAR, LAST_CHAR = 0x20, 0x7E
+
+# English text by index in the language pack's string table.
+STRINGS = [
+    ("text_select", 360),
+    ("text_more", 1002),
+    ("text_top_score_value", 537),
+    ("text_bantumi", 545),
+    ("text_games", 549),
+    ("text_continue", 552),
+    ("text_top_score", 553),
+    ("text_instructions", 554),
+    ("text_new_game", 560),
+    ("text_settings", 562),
+    ("text_pairs", 566),
+    ("text_snake", 574),
+    ("text_space_impact", 575),
+    ("text_game_over_top_score", 576),
+    ("text_game_over_score", 578),
+    ("text_help_space_impact", 1332),
+]
 
 
 def swap16(data):
@@ -45,6 +84,86 @@ def load_image(path):
     sys.exit(f"{path} is not the NHM-5 v6.39 PPM E image (SHA-256 {SHA256_RAW})")
 
 
+def chunk(image, addr, name):
+    start = addr - FLASH_BASE
+    length, tag = struct.unpack_from(">I4s", image, start + 4)
+    if tag != name:
+        sys.exit(f"no {name.decode()} chunk at 0x{addr:06x}")
+    return image[start:start + 8 + length]
+
+
+def extract_fonts(image):
+    """Returns [(height, baseline, [columns per character])] for the fonts.
+
+    A font record is 44 bytes: offsets (relative to the record) of the glyph
+    pool table and of the character range table, and the range count. A range
+    entry is {u16 first, u16 last, u32 packed}: row offset << 14, pool << 10,
+    height << 5, baseline. A pool is one tall bitmap of a fixed width, stored
+    as strips of 8 rows with one byte per column; a glyph is `height` rows of
+    it starting at the row offset.
+    """
+    data = chunk(image, FONT_CHUNK, b"FONT")
+    count, = struct.unpack_from(">I", data, 0x24)
+    fonts = []
+    for index in range(count):
+        record = 0x28 + index * 44
+        pools_at, _, ranges_at, ranges = struct.unpack_from(">IIII", data, record)
+        glyphs, height, baseline = [], 0, 0
+        for char in range(FIRST_CHAR, LAST_CHAR + 1):
+            columns = []
+            for r in range(ranges):
+                first, last, packed = struct.unpack_from(">HHI", data, record + ranges_at + r * 8)
+                if first <= char <= last:
+                    height, baseline = packed >> 5 & 31, packed & 31
+                    pool = record + pools_at + (packed >> 10 & 15) * 12
+                    pool_data, _, width = struct.unpack_from(">IHH", data, pool)
+                    row = (packed >> 14) + (char - first) * height
+                    for x in range(width):
+                        bits = 0
+                        for y in range(height):
+                            byte = data[pool + pool_data + ((row + y) >> 3) * width + x]
+                            bits |= (byte >> ((row + y) & 7) & 1) << y
+                        columns.append(bits)
+                    break
+            glyphs.append(columns)
+        fonts.append((height, baseline, glyphs))
+    return fonts
+
+
+def extract_strings(image):
+    data = chunk(image, TEXT_CHUNK, b"TEXT")
+    size, tag = struct.unpack_from(">I4s", data, ENGLISH_BLOCK + 4)
+    if tag != b"ENGL":
+        sys.exit("no ENGL block in the TEXT chunk")
+    lengths, end = ENGLISH_BLOCK + 16, ENGLISH_BLOCK + size
+    count = total = 0
+    while lengths + count + total < end:
+        total += data[lengths + count]
+        count += 1
+    strings, at = [], lengths + count
+    for i in range(count):
+        strings.append(data[at:at + data[lengths + i]])
+        at += data[lengths + i]
+    if strings[0] != b"English\0":
+        sys.exit("unexpected ENGL string table layout")
+    return strings
+
+
+def c_string(text):
+    out = ""
+    for byte in text:
+        char = chr(byte)
+        if char == "\n":
+            out += "\\n"
+        elif char in '"\\':
+            out += "\\" + char
+        elif 0x20 <= byte < 0x7F:
+            out += char
+        else:
+            out += f'\\x{byte:02x}""'
+    return f'"{out}"'
+
+
 def c_bytes(name, data):
     lines = [f"const uint8_t {name}[{len(data)}] = {{"]
     for i in range(0, len(data), 16):
@@ -53,10 +172,12 @@ def c_bytes(name, data):
     return "\n".join(lines)
 
 
-def c_words(name, words):
-    lines = [f"const uint32_t {name}[{len(words)}] = {{"]
-    for i in range(0, len(words), 4):
-        lines.append("    " + ", ".join(f"0x{w:06x}" for w in words[i:i + 4]) + ",")
+def c_refs(name, pointers):
+    """Pointers into the copied region as 16-bit places in it; null is 0xffff."""
+    refs = [p - DATA_START if p else 0xFFFF for p in pointers]
+    lines = [f"const uint16_t {name}[{len(refs)}] = {{"]
+    for i in range(0, len(refs), 8):
+        lines.append("    " + ", ".join(f"0x{r:04x}" for r in refs[i:i + 8]) + ",")
     lines.append("};")
     return "\n".join(lines)
 
@@ -94,20 +215,55 @@ def main():
 
 extern const uint8_t si_data[SI_DATA_SIZE];
 extern const uint8_t si_digit_glyphs[{DIGIT_GLYPHS[1]}];
-extern const uint32_t si_level_table[SI_LEVEL_COUNT];
-extern const uint32_t si_type_frames[SI_TYPE_COUNT];
-
-#endif
+extern const uint16_t si_level_table[SI_LEVEL_COUNT];
+extern const uint16_t si_type_frames[SI_TYPE_COUNT];
 """
-    source = "\n\n".join([
-        '/* Generated by tools/extract_assets.py from the firmware dump. Do not commit. */\n#include "game_assets.h"',
-        c_bytes("si_data", data),
+    banner = '/* Generated by tools/extract_assets.py from the firmware dump. Do not commit. */\n#include "game_assets.h"'
+    (out / "si_data.c").write_text("\n\n".join([banner, c_bytes("si_data", data)]) + "\n")
+    (out / "si_tables.c").write_text("\n\n".join([
+        banner,
         c_bytes("si_digit_glyphs", at(*DIGIT_GLYPHS)),
-        c_words("si_level_table", levels),
-        c_words("si_type_frames", frames),
-    ]) + "\n"
-    (out / "game_assets.h").write_text(header)
-    (out / "game_assets.c").write_text(source)
+        c_refs("si_level_table", levels),
+        c_refs("si_type_frames", frames),
+    ]) + "\n")
+    source = [banner, ""]
+    header = [header]
+    for name, addr, size, desc in PICTURES:
+        header.append(f"/* 0x{addr:06x}: {desc} */")
+        header.append(f"extern const uint8_t {name}[{size}];")
+        source.append(c_bytes(name, at(addr, size)))
+        source.append("")
+
+    header += ["", '#include "font.h"', ""]
+    for name, (height, baseline, glyphs) in zip(FONT_NAMES, extract_fonts(image)):
+        columns = [c for glyph in glyphs for c in glyph]
+        offsets, place = [], 0
+        for glyph in glyphs:
+            offsets.append(place)
+            place += len(glyph)
+        offsets.append(place)
+        source.append(f"static const uint16_t {name}_columns[{len(columns)}] = {{")
+        for i in range(0, len(columns), 10):
+            source.append("    " + " ".join(f"0x{c:04x}," for c in columns[i:i + 10]))
+        source.append("};")
+        source.append(f"static const uint16_t {name}_offsets[{len(offsets)}] = {{")
+        for i in range(0, len(offsets), 12):
+            source.append("    " + " ".join(f"{o}," for o in offsets[i:i + 12]))
+        source.append("};")
+        source.append(f"const struct font {name} = {{ {height}, {baseline}, {name}_offsets, {name}_columns }};")
+        source.append("")
+        header.append(f"extern const struct font {name};")
+
+    header.append("")
+    strings = extract_strings(image)
+    for name, index in STRINGS:
+        source.append(f"const char {name}[] = {c_string(strings[index])};")
+        header.append(f"extern const char {name}[];")
+    source.append("")
+    header += ["", "#endif", ""]
+
+    (out / "game_assets.h").write_text("\n".join(header))
+    (out / "game_assets.c").write_text("\n".join(source))
     print(f"wrote {out}/game_assets.c ({len(data)} bytes of game data)")
 
 

@@ -4,20 +4,43 @@
 
 The Nokia 3310 (NHM-5 v6.39) follow-up to
 <https://github.com/lukesau/nokia-3210-games>: Space Impact re-implemented
-in C from a map of the firmware, with the levels, sprites and object
-tables read from your own dump at build time. It runs on the host and as a
-GBA cartridge that shows the phone's 84x48 screen at 2x.
+in C from a map of the firmware, behind the phone's own Games menus, with
+the levels, sprites, fonts and text read from your own dump at build time.
+One portable core runs on the host, as a Game Boy ROM (`.gb`) and as a
+Game Boy Advance ROM (`.gba`).
 
 What is there so far:
 
+- the phone's menus: the main menu's Games entry, the list of games,
+  Space Impact's menu with Continue while a game is paused, its Top score
+  page with the animation, its Instructions and the Game over page, drawn
+  with the phone's fonts and text;
 - the sprite and scrolling-terrain layer the 3310's games draw with;
 - the player, shots, the three special weapons, the level scripts, the
   movement patterns, collisions, scoring, lives and continues;
-- the bosses of all eight levels, so the game can be played to its end.
+- the bosses of all eight levels, so the game can be played to its end;
+- the top score, kept in battery-backed cartridge RAM. It starts at 4075,
+  as on the phone.
 
-What is not: there is no sound, no title, menu, game-over page or top
-score (when a game ends the screen stops until Start begins another); and
-there is no Game Boy build.
+Start on the first screen picks a full-screen mode instead, as in the 3210
+project: the port's own menus laid out for the console's whole screen in
+the phone's large font. On the Game Boy that mode shows the game at 2x.
+At 2x the phone's 84 columns are 8 pixels too wide for the Game Boy, which
+leaves off the last four: nothing of the score, which ends at column 75,
+but enemies come on four columns late and the ship can fly its nose out of
+sight.
+
+| | Menus | Space Impact |
+|---|---|---|
+| D-pad | up and down | move the ship |
+| A | select | fire |
+| B | back | special weapon |
+| Start, Select | select | pause |
+
+What is not: Snake II, Bantumi, Pairs II and Settings are in the list but
+do nothing; there is no sound; and Space Impact's title animation is not
+shown. A paused game continues exactly where it stopped, where the phone
+gives the ship a second and a half of shield.
 
 ## Firmware policy
 
@@ -62,23 +85,92 @@ make phone-window                            # a MAME window
 `make phone` leaves every LCD frame as PGM in the ignored `run_phone/` and
 the last one as `run_phone/latest.png`. PPM E starts in Russian.
 
+## Toolchains
+
+On macOS with Homebrew:
+
+```
+brew install sdcc arm-none-eabi-gcc imagemagick
+```
+
+- Game Boy: SDCC's `sm83` port and `makebin`, with this project's own
+  startup code. No GBDK.
+- GBA: bare `arm-none-eabi-gcc` with no C library.
+- Emulators, for the headless checks: SameBoy's core as a library
+  (`scripts/setup-sameboy.sh`, needs rgbds) and mGBA's
+  (`scripts/setup-mgba.sh`, needs cmake). `SAMEBOY=` and `MGBA=` name
+  existing builds, such as the 3210 project's.
+
 ## Building
 
 ```
 make test          # core checks, no firmware needed
-make assets        # extract the game data from the dump into build/assets/
+make assets        # extract the game data, fonts and text from the dump into build/assets/
 make sheet         # the extracted sprites and tiles as build/sheet_*.pgm
-make gba           # build/nokia3310.gba (needs arm-none-eabi-gcc)
-make run-gba       # open it in mGBA
+make gb gba        # build/nokia3310.gb and build/nokia3310.gba
+make run-gb        # open the .gb in SameBoy
+make run-gba       # open the .gba in mGBA
 ```
 
-On the GBA the D-pad moves the ship, A fires, B uses the special weapon and
-Start begins a new game. The phone moves the ship with 8, 0, * and #, fires
-with 1 or 3 and uses the special with 4 or 6, one key at a time; the pad
-is mapped onto those keys, so only the button pressed last counts.
+The GBA ROM is built without the boot logo, which a real console's BIOS
+checks. To run on hardware, pass a GBA ROM you own to copy it from:
+`make gba GBA_LOGO_FROM=/path/to/some.gba`.
 
-`make check-gba` and `make shot-gba` run the ROM headlessly in mGBA's core
-(`scripts/setup-mgba.sh` builds it; `MGBA=` names an existing build).
+`make cards` (`scripts/copy-to-cards.sh`) copies the ROMs to the root of
+the flash carts' SD cards: the `.gb` to `/Volumes/EZGB_FW4` and
+`/Volumes/EZGB_FW5`, the `.gba` to `/Volumes/OMEGADE`. It skips a card
+that is not mounted, refuses a `.gba` without the boot logo, checks each
+copy and ejects nothing.
+
+The phone moves the ship with 8, 0, * and #, fires with 1 or 3 and uses
+the special with 4 or 6, one key at a time; the pad is mapped onto those
+keys, so only the button pressed last counts.
+
+## Checks
+
+```
+make check-menus                 # the menu pages against the phone's own, to the pixel
+make check-golden                # the game against a recorded run of the firmware (below)
+make check-gb                    # the .gb in SameBoy against the host's frames, and its speed
+make check-gb KEYS=a3sdss        # the same in the full-screen mode's 2x, starting at the fourth level
+make check-gba                   # the .gba in mGBA against the host's frames
+make shot-gb KEYS=sds            # a screenshot after scripted keys
+```
+
+`KEYS` are pressed by a test ROM at power-on (`menu_script` in
+`core/menu.c` lists them); the ROMs `make gb` and `make gba` build press
+none. `check-gb` also reports how fast the ROM ran the game, 100% being
+the phone's pace.
+
+`golden/menus/` holds frames of the phone's menus captured in MAME with
+the phone switched to English (Menu, 6, 2, 1, up, Select), each named
+after the host frame it must equal.
+
+## Game Boy
+
+The Game Boy has a slow processor for this game, and the things the game
+does every tick that the compiler makes too slow are the Game Boy's own,
+in assembly (`platform/gb/draw.s`): putting a sprite into the picture,
+finding what a shot has hit, and turning the picture into background
+tiles, of which only those that changed are made again.
+
+At 2x the terrain, which moves a column every tick from the second level
+on, is not made into tiles at all (`platform/gb/strip.c`). Its rows of
+the tile map hold tiles made once per level and the LCD scrolls just
+those rows, between two cuts across the screen. Where anything else is
+over the terrain, a ship or a shot, that cell gets a tile of its own made
+from the picture, so what is shown is still the phone's picture to the
+pixel; `make check-gb` holds it to that.
+
+When a tick still takes longer to show than the 93 ms between ticks, the
+game keeps the phone's pace and shows fewer pictures: every tick is
+played, not every one is drawn.
+
+The ROM is four 16 KiB banks on an MBC1 with 8 KiB of battery-backed RAM
+(`platform/gb/far.h` says what is where). Space Impact's 7 KiB of data is
+copied from the ROM to cartridge RAM at power-on, because both the game
+and the sprite code, which are in different banks, read it. The save file
+therefore holds a copy of that data next to the top score.
 
 ## Golden run
 
@@ -101,14 +193,19 @@ ignored `golden/`.
 
 ## Layout
 
-- `core/` is portable C: `lcd` (framebuffer), `sprite` (sprite list and
-  tile layer), `si` (the game), `games` (keys and timers to game events),
-  `rand`.
-- `platform/host/` has the tools above; `platform/gba/` is the cartridge.
-- `tools/extract_assets.py` copies the game's data region out of the dump;
-  the core reads it by firmware address.
+- `core/` is portable C: `lcd` (framebuffer), `font`, `menu` (the phone's
+  menus and the full-screen ones), `sprite` (sprite list and tile layer),
+  `si`, `si_setup` and `si_base` (the game), `games` (keys and timers to
+  game events), `rand`.
+- `platform/host/` has the tools above; `platform/gb/` and `platform/gba/`
+  are the cartridges.
+- `tools/extract_assets.py` copies the game's data region, the fonts, the
+  English text and the menus' pictures out of the dump; the game reads its
+  data by firmware address.
+- `tools/gb_run.c` runs a Game Boy ROM headlessly with scripted buttons,
+  screenshots, memory peeks and a profiler (`tools/gb_profile.py`).
 - The firmware map the core follows is `docs/games_applications_3310.md`
   in the MAME fork.
 
-`tools/export_fonts.py`, `tools/check_golden.py` and the Game Boy tools are
-unchanged copies from the 3210 project and are not used yet.
+`tools/export_fonts.py` and `tools/gb_audio.c` are unchanged copies from
+the 3210 project and are not used yet.

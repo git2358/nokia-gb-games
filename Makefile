@@ -1,4 +1,4 @@
-# Builds the portable core for the host and the GBA. Everything
+# Builds the portable core for the host, the Game Boy and the GBA. Everything
 # generated lands in the ignored build/ directory; the assets in it are
 # derived from your firmware dump.
 
@@ -26,6 +26,24 @@ CFLAGS ?= -std=c99 -O2 -Wall -Wextra -pedantic
 # Scale factor of the screenshot.
 SHOT_SCALE ?= 3
 
+# Game Boy: SDCC (sm83 port) and its makebin. The Game Boy gives the core a
+# framebuffer the size of its screen, shows the phone's LCD in the middle
+# of it and, in the full-screen variant, the game at 2x. Space Impact's
+# data is read from cartridge RAM at SI_DATA_AT (see platform/gb/main.c).
+SDCC ?= sdcc
+MAKEBIN ?= makebin
+SDAS ?= sdasgb
+GB_FB := -DLCD_FB_WIDTH=160 -DLCD_FB_HEIGHT=144 -DLCD_GAME_ZOOM=2
+GB_CFLAGS = -msm83 --opt-code-speed $(GB_FB) -DSI_DATA_AT=0xa100 -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_BAND -DSPRITE_PLATFORM_BITMAP -DSPRITE_PLATFORM_PRESENT -DSI_PLATFORM_FIND_HIT -DSI_SETUP_FAR -Icore -Iplatform/gb -I$(ASSETS)
+# The SameBoy clone scripts/setup-sameboy.sh makes: its boot ROM, and its
+# core as a library (`make -C tools/SameBoy lib`) for tools/gb_run.
+SAMEBOY ?= tools/SameBoy
+SAMEBOY_BOOT ?= $(SAMEBOY)/build/bin/tester/dmg_boot.bin
+SAMEBOY_APP ?= /Applications/SameBoy.app
+# Screen frames from power-on at which check-gb takes the ROM's screen;
+# shot-gb takes it at the last.
+GB_FRAMES ?= 700 1000
+
 # GBA: bare arm-none-eabi GCC, no C library. The GBA gives the core a
 # framebuffer the size of its screen and shows the phone's LCD and the
 # full-screen board at 2x.
@@ -39,14 +57,31 @@ GBA_LOGO_FROM ?=
 
 BUILD := build
 ASSETS := $(BUILD)/assets
-ASSET_SRC := $(ASSETS)/game_assets.c
+ASSET_SRC := $(ASSETS)/game_assets.c $(ASSETS)/si_data.c $(ASSETS)/si_tables.c
 CORE_SRC := $(wildcard core/*.c)
 CORE_HDR := $(wildcard core/*.h)
 INCLUDES := -Icore -Iplatform/host -I$(ASSETS)
 
+GB_ROM := $(BUILD)/nokia3310.gb
+GB_TEST_ROM := $(BUILD)/nokia3310-keys.gb
+# The four banks of the Game Boy ROM (see platform/gb/far.h).
+GB_BANK0 := platform/gb/main.c platform/gb/far.c platform/gb/strip.c core/lcd.c core/sprite.c core/games.c core/rand.c core/si_base.c $(ASSETS)/si_tables.c
+GB_BANK1 := core/menu.c core/font.c $(ASSETS)/game_assets.c
+GB_BANK2 := core/si.c
+GB_BANK3 := core/si_setup.c $(ASSETS)/si_data.c
+gb_rels = $(patsubst %.c,$(BUILD)/gb/$(1)/%.rel,$(notdir $(2)))
+GB_RELS := $(call gb_rels,0,$(filter-out platform/gb/main.c,$(GB_BANK0))) $(call gb_rels,1,$(GB_BANK1)) \
+	$(call gb_rels,2,$(GB_BANK2)) $(call gb_rels,3,$(GB_BANK3))
 GBA_ROM := $(BUILD)/nokia3310.gba
+GBA_TEST_ROM := $(BUILD)/nokia3310-keys.gba
+# Keys a test ROM presses at power-on (see menu_script in core/menu.c), for
+# scripted screenshots and the checks against the host's frame for them.
+# The default opens Space Impact and starts a game. The ROMs `make gba` and
+# `make gb` build press none.
+KEYS ?= sdss
+# The game without the menus, for tools that drive it directly.
+GAME_SRC := $(filter-out core/menu.c core/font.c,$(CORE_SRC))
 GBA_SRC := platform/gba/crt0.s platform/gba/main.c platform/gba/libc.c $(CORE_SRC) $(ASSET_SRC)
-HOST_CORE := core/lcd.c core/rand.c core/sprite.c core/si.c core/games.c
 
 # The recorded Space Impact run the core is checked against: the keys, the
 # seed the title animation leaves the games' random generator with, and
@@ -56,7 +91,7 @@ GOLDEN_SEED := a335
 GOLDEN_SECONDS := 40
 GOLDEN_KEYS := enter,wait1000,enter,wait1200,up,up,up,up,up,wait800,enter,wait1500,down,wait600,enter,wait2500,enter,wait4000,1,wait400,1,wait400,8,8,8,1,wait400,0,0,0,0,1,wait300,3,wait300,4,wait2000,1,wait500,1,wait6000
 
-.PHONY: help dump install-roms phone phone-window assets test sheet frames golden check-golden gba check-gba shot-gba run-gba clean
+.PHONY: help dump install-roms phone phone-window assets test sheet frames golden check-golden check-menus gb check-gb shot-gb run-gb cards gba check-gba shot-gba run-gba clean
 
 help:
 	@echo "make dump      rebuild $(DUMP) from the Wintesla files in FLASH_FILES=$(FLASH_FILES)"
@@ -68,10 +103,16 @@ help:
 	@echo "make frames    write the host reference frames to $(BUILD)/frame_*.pgm"
 	@echo "make golden    record the reference Space Impact run in MAME into $(GOLDEN)/"
 	@echo "make check-golden replay that run through the core and compare every frame"
+	@echo "make check-menus compare the menu pages with the phone's in golden/menus/"
+	@echo "make gb        build $(GB_ROM)"
+	@echo "make check-gb  run the Game Boy ROM headlessly and compare its screen with the host's"
+	@echo "make shot-gb   run the Game Boy ROM headlessly and write $(BUILD)/nokia3310-gb.png"
+	@echo "make run-gb    open the Game Boy ROM in SameBoy"
 	@echo "make gba       build $(GBA_ROM)"
 	@echo "make check-gba run the GBA ROM headlessly and compare its screen with the host's"
 	@echo "make shot-gba  run the GBA ROM headlessly and write $(BUILD)/nokia3310-gba.png"
 	@echo "make run-gba   open the GBA ROM in mGBA"
+	@echo "make cards     copy the built ROMs to the flash carts' SD cards"
 	@echo "make clean     remove $(BUILD)/"
 
 # The 2 MiB flash image: MCU, PPM E and the PMM tail at their addresses.
@@ -107,8 +148,10 @@ phone-window: install-roms
 
 assets: $(ASSET_SRC)
 
-$(ASSET_SRC): tools/extract_assets.py
+$(ASSETS)/game_assets.c: tools/extract_assets.py
 	$(PYTHON) tools/extract_assets.py "$(DUMP)" $(ASSETS)
+
+$(ASSETS)/si_data.c $(ASSETS)/si_tables.c: $(ASSETS)/game_assets.c
 
 $(BUILD)/test_core: tests/test_core.c core/lcd.c core/rand.c core/sprite.c $(CORE_HDR)
 	@mkdir -p $(BUILD)
@@ -117,8 +160,8 @@ $(BUILD)/test_core: tests/test_core.c core/lcd.c core/rand.c core/sprite.c $(COR
 test: $(BUILD)/test_core
 	$(BUILD)/test_core
 
-$(BUILD)/asset_sheet: platform/host/asset_sheet.c core/si.c core/sprite.c core/lcd.c core/rand.c $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/asset_sheet.c core/si.c core/sprite.c core/lcd.c core/rand.c $(ASSET_SRC)
+$(BUILD)/asset_sheet: platform/host/asset_sheet.c core/si.c core/si_base.c core/si_setup.c core/sprite.c core/lcd.c core/rand.c $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/asset_sheet.c core/si.c core/si_base.c core/si_setup.c core/sprite.c core/lcd.c core/rand.c $(ASSET_SRC)
 
 sheet: $(BUILD)/asset_sheet
 	$(BUILD)/asset_sheet $(BUILD)
@@ -151,8 +194,8 @@ golden:
 	cp run_golden/nokia_dct3_lcdmirror_*.pgm $(GOLDEN)/
 	awk '/^GEV 1 2b/{on=1} on && /^GEV 1 /{print $$3}' run_golden/error.log | tr '\n' ' ' > $(GOLDEN)/events.txt
 
-$(BUILD)/replay: platform/host/replay_main.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/replay_main.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/replay: platform/host/replay_main.c platform/host/pgm.c $(GAME_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/replay_main.c platform/host/pgm.c $(GAME_SRC) $(ASSET_SRC)
 
 # Skipped when the reference run has not been recorded.
 check-golden: $(BUILD)/replay
@@ -161,17 +204,99 @@ check-golden: $(BUILD)/replay
 		$(PYTHON) tools/check_replay.py $$out $(GOLDEN); \
 	else echo "no $(GOLDEN)/events.txt: run make golden; skipped"; fi
 
-# GBA
+# The menu pages against frames of the phone's own, captured in MAME with
+# the phone set to English and named after the host frame they must equal.
+# Derived from the firmware, so the directory is ignored; skipped when empty.
+check-menus: $(BUILD)/frame
+	$(PYTHON) tools/check_golden.py $(BUILD)/frame golden/menus
 
 FORCE:
 
-$(BUILD)/gba/nokia3310.elf: $(GBA_SRC) $(CORE_HDR) platform/gba/gba.ld FORCE
+# Game Boy
+
+vpath %.c core platform/gb $(ASSETS)
+
+# games.c reaches the game in bank 2 through far.c.
+$(BUILD)/gb/0/games.rel: GB_EXTRA := -Dsi_handler=far_si_handler
+
+$(BUILD)/gb/0/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
+	@mkdir -p $(BUILD)/gb/0
+	$(SDCC) $(GB_CFLAGS) $(GB_EXTRA) -c $< -o $@
+
+$(BUILD)/gb/1/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
+	@mkdir -p $(BUILD)/gb/1
+	$(SDCC) $(GB_CFLAGS) --codeseg CODE_1 -c $< -o $@
+
+$(BUILD)/gb/2/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
+	@mkdir -p $(BUILD)/gb/2
+	$(SDCC) $(GB_CFLAGS) --codeseg CODE_2 -c $< -o $@
+
+$(BUILD)/gb/3/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
+	@mkdir -p $(BUILD)/gb/3
+	$(SDCC) $(GB_CFLAGS) --codeseg CODE_3 -c $< -o $@
+
+# The layer itself twice: once pressing no keys, once pressing KEYS.
+$(BUILD)/gb/0/main.rel $(BUILD)/gb/0/main-keys.rel: platform/gb/main.c $(CORE_HDR) $(ASSET_SRC) FORCE
+	@mkdir -p $(BUILD)/gb/0
+	$(SDCC) $(GB_CFLAGS) '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -c $< -o $@
+
+$(BUILD)/gb/%.rel: platform/gb/%.s
+	@mkdir -p $(BUILD)/gb
+	$(SDAS) -o $@ $<
+
+# MBC1 with battery-backed RAM, four ROM banks and 8 KiB of RAM. The linker
+# does not mind the first bank running over into the second, so its end is
+# checked here.
+$(BUILD)/nokia3310%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/draw.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
+	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 -Wl-b_CODE_3=0x34000 \
+		-o $(BUILD)/gb/$(basename $(notdir $@)).ihx $^
+	@$(PYTHON) tools/gb_bank_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
+	$(MAKEBIN) -Z -yn NOKIA3310 -yt 0x03 -yo 4 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
+
+.SECONDARY: $(GB_RELS) $(BUILD)/gb/crt0.rel $(BUILD)/gb/draw.rel
+
+gb: $(GB_ROM)
+
+# Headless Game Boy runs with tools/gb_run, built on SameBoy's core.
+$(BUILD)/gb_run: tools/gb_run.c
+	@test -f "$(SAMEBOY)/build/lib/libsameboy.a" || { echo "Missing $(SAMEBOY)/build/lib/libsameboy.a: run scripts/setup-sameboy.sh, then make -C $(SAMEBOY) lib"; exit 1; }
+	@mkdir -p $(BUILD)
+	$(CC) -O2 -I$(SAMEBOY) -DGB_VERSION='"x"' -o $@ $< $(SAMEBOY)/build/lib/libsameboy.a -lm
+
+# The host's frame tool with the Game Boy's framebuffer and its 2x game.
+$(BUILD)/frame_gb: platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+
+# The ROM presses KEYS at power-on; its screen at each of GB_FRAMES must be
+# one of the host's frames for those keys, to the pixel. With the default
+# keys that is a game under way in the phone-sized mode; KEYS=asdss is the
+# full-screen variant's 2x. Also says how fast the ROM ran the game between
+# the screenshots, 100% being the phone's speed.
+check-gb: $(GB_TEST_ROM) $(BUILD)/gb_run $(BUILD)/frame_gb
+	$(PYTHON) tools/check_gb_run.py $(BUILD)/gb_run $(GB_TEST_ROM) $(SAMEBOY_BOOT) $(BUILD)/frame_gb "$(KEYS)" $(GB_FRAMES)
+
+# Headless screenshot of the Game Boy ROM after KEYS, as a PNG.
+shot-gb: $(GB_TEST_ROM) $(BUILD)/gb_run
+	$(BUILD)/gb_run $(GB_TEST_ROM) $(SAMEBOY_BOOT) $(lastword $(GB_FRAMES)) shot:$(BUILD)/nokia3310-gb.pgm
+	magick $(BUILD)/nokia3310-gb.pgm -filter point -resize $(SHOT_SCALE)00% $(BUILD)/nokia3310-gb.png
+
+run-gb: $(GB_ROM)
+	open -a "$(SAMEBOY_APP)" $(GB_ROM)
+
+# GBA
+
+
+$(BUILD)/gba/nokia3310.elf $(BUILD)/gba/nokia3310-keys.elf: $(GBA_SRC) $(CORE_HDR) platform/gba/gba.ld FORCE
 	@mkdir -p $(BUILD)/gba
-	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(ASSETS) -Iplatform/gba/include -nostdlib -T platform/gba/gba.ld -Wl,-Map,$(BUILD)/gba/nokia3310.map -o $@ $(GBA_SRC) -lgcc
+	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(ASSETS) -Iplatform/gba/include '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -nostdlib -T platform/gba/gba.ld -Wl,-Map,$(basename $@).map -o $@ $(GBA_SRC) -lgcc
 
 $(GBA_ROM): $(BUILD)/gba/nokia3310.elf tools/gbafix.py FORCE
 	$(ARM_OBJCOPY) -O binary $< $@
 	$(PYTHON) tools/gbafix.py $@ $(if $(GBA_LOGO_FROM),--logo-from "$(GBA_LOGO_FROM)")
+
+$(GBA_TEST_ROM): $(BUILD)/gba/nokia3310-keys.elf tools/gbafix.py FORCE
+	$(ARM_OBJCOPY) -O binary $< $@
+	$(PYTHON) tools/gbafix.py $@
 
 gba: $(GBA_ROM)
 
@@ -185,25 +310,34 @@ $(BUILD)/gba_shot: tools/gba_shot.c
 	@mkdir -p $(BUILD)
 	$(CC) -O2 -I$(MGBA)/include -I$(MGBA)/build/include -o $@ $< $(MGBA)/build/libmgba.a -lm -framework CoreFoundation
 
-# The ROM's screen after SHOT_FRAMES frames must be the host's picture of the
-# game after about as much time. The ROM takes some 35 frames to put up its
-# first picture and starts the game's clock then, so the host's frames up
-# to 48 earlier are accepted; a tick is 5 or 6 frames, so that is one
-# picture out of nine.
-check-gba: $(GBA_ROM) $(BUILD)/gba_shot $(BUILD)/frame_gba
-	$(BUILD)/gba_shot $(GBA_ROM) $(BUILD)/nokia3310-gba.bmp $(SHOT_FRAMES)
-	@for back in $$(seq 0 48); do \
-		n=$$(($(SHOT_FRAMES) - back)); $(BUILD)/frame_gba run-$$n $(BUILD)/gbaframe_run-$$n.pgm >/dev/null; \
-		if $(PYTHON) tools/check_gb_frame.py $(BUILD)/nokia3310-gba.bmp $(BUILD)/gbaframe_run-$$n.pgm >/dev/null 2>&1; then \
-			echo "ok: the ROM's screen after $(SHOT_FRAMES) frames is the host's after $$n"; exit 0; fi; \
-	done; echo "FAIL: the ROM's screen after $(SHOT_FRAMES) frames matches no host frame near it"; exit 1
+# The ROM presses KEYS at power-on and then runs SHOT_FRAMES frames; its
+# screen must be the host's picture after the same keys and about as much
+# time. With the default keys that is a game of Space Impact under way. The
+# ROM takes some 35 frames to put up its first picture and starts the
+# game's clock then, so the host's frames up to 48 earlier are accepted; a
+# tick is 5 or 6 frames, so that is one picture out of nine. A screenshot
+# may catch the ROM part-way through putting up a picture, so the next few
+# frames are tried too.
+check-gba: $(GBA_TEST_ROM) $(BUILD)/gba_shot $(BUILD)/frame_gba
+	@for later in 0 1 2 3; do \
+		$(BUILD)/gba_shot $(GBA_TEST_ROM) $(BUILD)/nokia3310-gba.bmp $$(($(SHOT_FRAMES) + later)) >/dev/null; \
+		for back in $$(seq 0 48); do \
+			n=$$(($(SHOT_FRAMES) + later - back)); $(BUILD)/frame_gba menu-$(KEYS)+$$n $(BUILD)/gbaframe.pgm >/dev/null; \
+			if $(PYTHON) tools/check_gb_frame.py $(BUILD)/nokia3310-gba.bmp $(BUILD)/gbaframe.pgm >/dev/null 2>&1; then \
+				echo "ok: the ROM's screen $$(($(SHOT_FRAMES) + later)) frames after keys '$(KEYS)' is the host's after $$n"; exit 0; fi; \
+		done; \
+	done; echo "FAIL: the ROM's screen about $(SHOT_FRAMES) frames after keys '$(KEYS)' matches no host frame near it"; exit 1
 
-shot-gba: $(GBA_ROM) $(BUILD)/gba_shot
-	$(BUILD)/gba_shot $(GBA_ROM) $(BUILD)/nokia3310-gba.bmp $(SHOT_FRAMES)
+shot-gba: $(GBA_TEST_ROM) $(BUILD)/gba_shot
+	$(BUILD)/gba_shot $(GBA_TEST_ROM) $(BUILD)/nokia3310-gba.bmp $(SHOT_FRAMES)
 	$(PYTHON) tools/bmp_to_png.py $(BUILD)/nokia3310-gba.bmp $(BUILD)/nokia3310-gba.png $(SHOT_SCALE)
 
 run-gba: $(GBA_ROM)
 	open -a "$(MGBA_APP)" $(GBA_ROM)
+
+# The ROMs to the root of the flash carts' SD cards; see the script.
+cards:
+	scripts/copy-to-cards.sh
 
 clean:
 	rm -rf $(BUILD)

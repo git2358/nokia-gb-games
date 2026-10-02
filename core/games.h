@@ -26,9 +26,10 @@ void games_key_up(void);
    drawing. */
 uint8_t games_advance(uint16_t units);
 
-/* Lets this much time pass, in microseconds; a platform calls it once per
-   screen frame. Returns nonzero when the screen needs drawing. */
-uint8_t games_elapse(uint32_t us);
+/* Lets this much time pass, in microseconds, at most 50000; a platform
+   calls it once per screen frame. Returns nonzero when the screen needs
+   drawing. */
+uint8_t games_elapse(uint16_t us);
 
 /* Delivers one event straight to the game, for replaying a recorded
    sequence. Returns nonzero when the screen needs drawing. */

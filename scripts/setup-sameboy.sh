@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Clone upstream SameBoy at a pinned commit into the ignored tools/SameBoy
-# and build its headless tester, which `make check-gb` uses to capture a
-# frame. Needs rgbds (for the boot ROMs) and a C compiler.
+# and build its boot ROMs and its core as a library, which tools/gb_run and
+# with it `make check-gb` are built on. Needs rgbds (for the boot ROMs) and
+# a C compiler.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,5 +20,5 @@ else
 fi
 git -C "$DEST" checkout --force "$BASE_COMMIT"
 
-make -C "$DEST" tester
-echo "SameBoy tester ready: $DEST/build/bin/tester/sameboy_tester"
+make -C "$DEST" tester lib
+echo "SameBoy ready: $DEST/build/lib/libsameboy.a and $DEST/build/bin/tester/dmg_boot.bin"

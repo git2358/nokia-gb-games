@@ -46,10 +46,10 @@ static int write_sheet(const char *dir, const char *name)
 int main(int argc, char **argv)
 {
     /* The terrain tiles of the eight levels' sets, in address order. */
-    static const uint32_t tiles[] = {
-        0x312254, 0x312274, 0x312294, 0x3122b4, 0x3124b8, 0x3124d8, 0x3124f8, 0x312518, 0x3126b8, 0x3126d8,
-        0x3126f8, 0x312718, 0x312760, 0x312780, 0x3127a0, 0x3127e4, 0x312804, 0x312824, 0x312844, 0x312864,
-        0x312884, 0x3128a4, 0x3128c4, 0x3128e4, 0x312904, 0x312924, 0x312944, 0x312964, 0x312984,
+    static const si_ref tiles[] = {
+        SI_REF(0x312254ul), SI_REF(0x312274ul), SI_REF(0x312294ul), SI_REF(0x3122b4ul), SI_REF(0x3124b8ul), SI_REF(0x3124d8ul), SI_REF(0x3124f8ul), SI_REF(0x312518ul), SI_REF(0x3126b8ul), SI_REF(0x3126d8ul),
+        SI_REF(0x3126f8ul), SI_REF(0x312718ul), SI_REF(0x312760ul), SI_REF(0x312780ul), SI_REF(0x3127a0ul), SI_REF(0x3127e4ul), SI_REF(0x312804ul), SI_REF(0x312824ul), SI_REF(0x312844ul), SI_REF(0x312864ul),
+        SI_REF(0x312884ul), SI_REF(0x3128a4ul), SI_REF(0x3128c4ul), SI_REF(0x3128e4ul), SI_REF(0x312904ul), SI_REF(0x312924ul), SI_REF(0x312944ul), SI_REF(0x312964ul), SI_REF(0x312984ul),
     };
     const char *dir = argc > 1 ? argv[1] : ".";
     int x = 1, y = 1, row_h = 0, failed, type, frame;
@@ -58,14 +58,14 @@ int main(int argc, char **argv)
     /* Every frame of every object type, packed left to right. */
     memset(sheet, 255, sizeof sheet);
     for (type = 0; type < SI_TYPE_COUNT; type++) {
-        int frames = SI_ROM(SI_TEMPLATES + 12ul * (unsigned)type)[0];
+        int frames = SI_ROM(SI_TEMPLATES + 12 * (unsigned)type)[0];
 
-        if (!si_type_frames[type])
+        if (si_type_frames[type] == SI_NO_REF)
             continue;
         for (frame = 0; frame < (frames ? frames : 1); frame++) {
             struct sprite_image image;
 
-            si_image(&image, si_type_frames[type] + 12ul * (unsigned)frame);
+            si_image(&image, si_type_frames[type] + 12 * (unsigned)frame);
             if (x + image.w + 1 > SHEET_W) {
                 x = 1;
                 y += row_h + 2;

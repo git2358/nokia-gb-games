@@ -57,6 +57,10 @@ struct si_context {
 
 int si_handler(int event, struct si_context *ctx);
 
+/* The level new games start at, 0 to 7: 0 on the phone, and here unless a
+   scripted test asks for a later one. */
+extern uint8_t si_first_level;
+
 /* The phone's vibrator, pulsed on hits. */
 void platform_vibrate(void);
 

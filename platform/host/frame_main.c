@@ -1,13 +1,17 @@
 /* Writes a reference frame for the platform builds.
    Usage: frame NAME OUT.pgm
-   NAME: testcard, outline, start (a new game, before any time passes), or
-   run-N (a new game after N GBA screen frames with no key pressed). */
+   NAME: testcard, outline, start (a new game, before any time passes),
+   run-N (a new game after N screen frames with no key pressed), or
+   menu-KEYS, the screen after the scripted keys of menu_script, or
+   menu-KEYS+N, the same N screen frames later. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "game.h"
 #include "games.h"
 #include "lcd.h"
+#include "menu.h"
 #include "pgm.h"
 #include "si.h"
 #include "testcard.h"
@@ -19,6 +23,20 @@ void platform_sound(uint8_t sound)
 
 void platform_vibrate(void)
 {
+}
+
+uint8_t platform_settings_load(uint8_t game, struct game_settings *out)
+{
+    (void)game;
+    out->top_score = 0;
+    out->level = 0;
+    return 0;
+}
+
+void platform_settings_save(uint8_t game, const struct game_settings *in)
+{
+    (void)game;
+    (void)in;
 }
 
 int main(int argc, char **argv)
@@ -40,6 +58,19 @@ int main(int argc, char **argv)
         while (frames-- > 0)
             games_elapse(16743);
         games_draw(1);
+    } else if (strncmp(argv[1], "menu-", 5) == 0) {
+        /* menu-KEYS+N lets N more screen frames pass after the keys. */
+        char *plus = strchr(argv[1], '+');
+        long frames = plus ? strtol(plus + 1, 0, 10) : 0;
+
+        if (plus)
+            *plus = 0;
+        menu_init();
+        menu_script(argv[1] + 5);
+        menu_draw();
+        while (frames-- > 0)
+            if (menu_tick())
+                menu_draw();
     } else {
         fprintf(stderr, "unknown frame %s\n", argv[1]);
         return 2;

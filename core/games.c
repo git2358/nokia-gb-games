@@ -25,7 +25,15 @@ enum {
    game's 100 ms tick is 12 units, about 93 ms. */
 static uint16_t units(uint16_t ms)
 {
-    return (uint16_t)((uint32_t)ms * 32 / 255);
+    /* The game asks for the same period tick after tick. */
+    static uint16_t last_ms, last_units;
+
+    if (ms != last_ms) {
+        last_ms = ms;
+        /* ms * 32 / 255, kept within 16 bits. */
+        last_units = (uint16_t)(ms / 255 * 32 + ms % 255 * 32 / 255);
+    }
+    return last_units;
 }
 
 static uint8_t deliver(int event, uint8_t from)
@@ -110,14 +118,13 @@ uint8_t games_advance(uint16_t n)
     return draw;
 }
 
-uint8_t games_elapse(uint32_t us)
+uint8_t games_elapse(uint16_t us)
 {
-    static uint32_t left; /* microseconds not yet turned into units */
-    uint16_t n;
+    static uint16_t left; /* microseconds not yet turned into units */
+    uint16_t n = 0;
 
-    left += us;
-    n = (uint16_t)(left / GAMES_UNIT_US);
-    left -= (uint32_t)n * GAMES_UNIT_US;
+    for (left += us; left >= GAMES_UNIT_US; left -= GAMES_UNIT_US)
+        n++;
     return games_advance(n);
 }
 

@@ -17,7 +17,7 @@ static int failures;
     } while (0)
 
 /* The sprite layer asks the game for tile bitmaps; none are used here. */
-const uint8_t *tilemap_tile(uint32_t address)
+const uint8_t *tilemap_tile(uint16_t address)
 {
     (void)address;
     return 0;
@@ -41,6 +41,14 @@ static void test_rand(void)
     for (i = 1; i < 60; i++)
         game_rand16();
     CHECK(game_rand16_seed == 0xa335);
+
+    /* Every seed against the generator's definition. */
+    for (i = 0; i < 0x10000; i++) {
+        game_rand16_seed = (uint16_t)i;
+        if (game_rand16() != (uint16_t)((i * 0x625ful + 0x3623ul) % 0xfff1ul))
+            break;
+    }
+    CHECK(i == 0x10000);
 }
 
 static int screen_pixel(int x, int y)
@@ -114,6 +122,99 @@ static void test_sprite_modes(void)
     CHECK(screen_pixel(19, 10) == 0 && screen_pixel(21, 10) == 0);
 }
 
+/* The renderer works a byte at a time. This is the same picture made a
+   pixel at a time, straight from the rules: each sprite in list order,
+   its set and clear bits doing what its mode says, nothing drawn at or
+   beyond column 84 or row 48, and nothing at all of a bitmap whose far
+   edge has wrapped past 255. */
+static uint8_t slow_screen[84 * 6];
+
+static void slow_put(unsigned x, unsigned y, int op)
+{
+    uint8_t *p = &slow_screen[x + 84 * (y >> 3)], bit = (uint8_t)(1 << (y & 7));
+
+    if (x >= 84 || y >= 48)
+        return;
+    if (op == 1)
+        *p |= bit;
+    else if (op == 2)
+        *p &= (uint8_t)~bit;
+    else if (op == 3)
+        *p ^= bit;
+}
+
+static void slow_render(void)
+{
+    /* 0 nothing, 1 set, 2 clear, 3 flip: for set bits, for clear bits. */
+    static const uint8_t ops[6][2] = { { 0, 2 }, { 1, 0 }, { 3, 0 }, { 2, 1 }, { 1, 2 }, { 1, 2 } };
+    uint16_t id;
+
+    memset(slow_screen, 0, sizeof slow_screen);
+    for (id = sprites[0].next; id; id = sprites[id].next) {
+        const struct sprite *s = &sprites[id];
+        unsigned x, y;
+
+        if (sprite_mode(s) >= SPRITE_MODE_HIDDEN)
+            continue;
+        if (sprite_kind(s) == SPRITE_FILL) {
+            for (y = s->y; y < (unsigned)s->y + s->y2; y++)
+                for (x = s->x; x < (unsigned)s->x + s->x2; x++)
+                    slow_put(x, y, ops[sprite_mode(s)][0]);
+        } else if (sprite_kind(s) == SPRITE_BITMAP) {
+            unsigned x_end = (uint8_t)(s->x + s->image.w - 1), y_end = (uint8_t)(s->y + s->image.h - 1);
+
+            for (x = s->x; x <= x_end; x++) {
+                for (y = s->y; y <= y_end; y++) {
+                    unsigned row = y - s->y;
+                    uint8_t bits = s->image.bitmap[(x - s->x) + s->image.w * (row >> 3)];
+
+                    slow_put(x, y, ops[sprite_mode(s)][(bits >> (row & 7)) & 1 ? 0 : 1]);
+                }
+            }
+        }
+    }
+}
+
+static void test_render_matches_pixels(void)
+{
+    static uint8_t noise[40 * 5];
+    unsigned trial, i;
+
+    game_srand(7);
+    for (i = 0; i < sizeof noise; i++)
+        noise[i] = (uint8_t)game_rand();
+    for (trial = 0; trial < 4000; trial++) {
+        unsigned count = 1 + (unsigned)game_rand() % 6;
+
+        sprite_reset_all();
+        for (i = 0; i < count; i++) {
+            /* Sizes up to the last boss's 38x38, places all over the byte
+               range, with the edges and the wrap-around more likely. */
+            static const uint8_t edges[] = { 0, 1, 7, 8, 40, 46, 47, 48, 76, 83, 84, 200, 250, 255 };
+            struct sprite_image image;
+            unsigned x = (unsigned)game_rand(), y = (unsigned)game_rand();
+            uint8_t mode = (uint8_t)(game_rand() % 7);
+
+            x = x & 0x100 ? edges[x % sizeof edges] : x & 0xff;
+            y = y & 0x100 ? edges[y % sizeof edges] : y & 0xff;
+            image.w = (uint8_t)(1 + game_rand() % 40);
+            image.h = (uint8_t)(1 + game_rand() % 40);
+            image.bitmap = noise;
+            if (game_rand() % 8 == 0)
+                sprite_create_fill(mode, 0, (int)(x % 90), (int)(y % 60), 1 + game_rand() % 90, 1 + game_rand() % 60);
+            else
+                sprite_create(&image, mode, (uint8_t)(game_rand() % 3), (int)x, (int)y);
+        }
+        sprite_render();
+        slow_render();
+        if (memcmp(sprite_screen, slow_screen, sizeof slow_screen) != 0) {
+            CHECK(!"the renderer and the pixel-by-pixel picture differ");
+            printf("  trial %u\n", trial);
+            return;
+        }
+    }
+}
+
 static void test_present(void)
 {
     static const uint8_t dot[] = { 1 };
@@ -135,6 +236,7 @@ int main(void)
     test_rand();
     test_sprite_order();
     test_sprite_modes();
+    test_render_matches_pixels();
     test_present();
     if (failures) {
         printf("%d checks failed\n", failures);

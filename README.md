@@ -99,7 +99,7 @@ and text. New game starts a playable Snake: steering, food, scoring, the
 pause menu with Continue, the Game over page and Last view. Menus and
 gameplay match frames captured from the firmware in MAME. Level and top
 score are kept in battery-backed cartridge RAM. Rotation and Memory do
-nothing yet and there is no sound. On the Game Boy, Select on the first
+nothing yet and there is no sound. On the Game Boy, Start on the first
 screen picks a full-screen variant instead, which is the port's own design
 and not the phone's: menus laid out for the 160x144 screen in a 12px font
 with every entry visible and a cursor beside the selection, and Snake on a

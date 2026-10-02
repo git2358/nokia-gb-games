@@ -12,7 +12,8 @@ enum {
     MENU_KEY_BACK,   /* the phone's C key */
     MENU_KEY_LEFT,   /* only used in a game */
     MENU_KEY_RIGHT,
-    MENU_KEY_ALT     /* on the first screen: enter the full-screen variant */
+    MENU_KEY_START   /* on the first screen: enter the full-screen variant;
+                        anywhere else the same as MENU_KEY_SELECT */
 };
 
 /* The platform calls menu_tick this many times a second. */

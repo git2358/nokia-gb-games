@@ -179,8 +179,10 @@ int main(void)
         /* Keys first, so a press takes effect before the game's next move. */
         pressed = take_presses();
         changed = 0;
-        if (pressed & (PAD_START | PAD_A))
+        if (pressed & PAD_A)
             changed |= menu_key(MENU_KEY_SELECT);
+        if (pressed & PAD_START)
+            changed |= menu_key(MENU_KEY_START);
         if (pressed & PAD_B)
             changed |= menu_key(MENU_KEY_BACK);
         if (pressed & PAD_UP)

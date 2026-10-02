@@ -1,8 +1,8 @@
 /* Game Boy layer. The core's framebuffer is the whole 160x144 screen, shown
    as a 20x18 block of background tiles, one tile per 8x8 cell; the phone's
-   84x48 LCD is a window in the middle of it. Start or A is the phone's Navi
-   key, B is its C key, the D-pad scrolls and steers, and Select on the first
-   screen picks the full-screen variant. */
+   84x48 LCD is a window in the middle of it. A, Select or Start is the
+   phone's Navi key, B is its C key, the D-pad scrolls and steers, and Start
+   on the first screen picks the full-screen variant. */
 #include <stdint.h>
 
 #include "game.h"
@@ -251,7 +251,7 @@ void main(void)
             menu_game_step();
         else
             press(*key == 'u' ? MENU_KEY_UP : *key == 'd' ? MENU_KEY_DOWN : *key == 'l' ? MENU_KEY_LEFT
-                  : *key == 'r' ? MENU_KEY_RIGHT : *key == 's' ? MENU_KEY_SELECT : *key == 'a' ? MENU_KEY_ALT
+                  : *key == 'r' ? MENU_KEY_RIGHT : *key == 's' ? MENU_KEY_SELECT : *key == 'a' ? MENU_KEY_START
                   : MENU_KEY_BACK);
     }
     menu_draw();
@@ -271,12 +271,12 @@ void main(void)
         /* Keys first, so a press takes effect before the game's next move. */
         pressed = take_presses();
         changed = 0;
-        if (pressed & (PAD_START | PAD_A))
+        if (pressed & (PAD_A | PAD_SELECT))
             changed |= press(MENU_KEY_SELECT);
+        if (pressed & PAD_START)
+            changed |= press(MENU_KEY_START);
         if (pressed & PAD_B)
             changed |= press(MENU_KEY_BACK);
-        if (pressed & PAD_SELECT)
-            changed |= press(MENU_KEY_ALT);
         if (pressed & PAD_UP)
             changed |= press(MENU_KEY_UP);
         if (pressed & PAD_DOWN)

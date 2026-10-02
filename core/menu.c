@@ -107,7 +107,7 @@ static uint8_t surround_used;  /* something is drawn around the phone's LCD */
 
 #if LCD_HAS_SURROUND
 /* Shown under the phone's LCD on the first screen. The port's own words. */
-static const char text_full_screen_hint[] = "SELECT: full screen";
+static const char text_full_screen_hint[] = "START: full screen";
 #endif
 static struct game_settings settings; /* Snake's level and top score */
 static uint8_t level_choice;  /* level shown on the Level page */
@@ -669,10 +669,16 @@ static void game_menu_move(uint8_t key)
 
 static void handle_key(uint8_t key)
 {
+    /* Start picks the full-screen variant on the first screen, where there
+       is one; otherwise it is another Navi key. */
+    uint8_t start = key == MENU_KEY_START;
+
+    if (start)
+        key = MENU_KEY_SELECT;
     switch (screen) {
     case SCREEN_MAIN:
-        if (key == MENU_KEY_SELECT || (key == MENU_KEY_ALT && LCD_HAS_SURROUND)) {
-            full_screen = key == MENU_KEY_ALT;
+        if (key == MENU_KEY_SELECT) {
+            full_screen = start && LCD_HAS_SURROUND;
             settings_load();
             resume = RESUME_NONE;
             screen = SCREEN_GAMES;

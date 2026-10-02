@@ -8,11 +8,19 @@
 #include "game.h"
 #include "lcd.h"
 #include "menu.h"
+#include "sound.h"
 
 #define REG(addr) (*(volatile uint8_t *)(addr))
 #define P1 REG(0xff00)
 #define IF REG(0xff0f)
 #define IE REG(0xffff)
+#define NR21 REG(0xff16)
+#define NR22 REG(0xff17)
+#define NR23 REG(0xff18)
+#define NR24 REG(0xff19)
+#define NR50 REG(0xff24)
+#define NR51 REG(0xff25)
+#define NR52 REG(0xff26)
 #define LCDC REG(0xff40)
 #define STAT REG(0xff41)
 #define SCY REG(0xff42)
@@ -76,8 +84,22 @@ uint8_t staged_count;
 
 void flush_tiles(void);
 
-void platform_beep(void)
+/* The buzzer is pulse channel 2: a 50% square wave at full volume. Its
+   frequency register is 2048 - 131072 / hz. */
+void platform_tone(uint16_t hz)
 {
+    uint16_t period;
+
+    if (!hz) {
+        NR22 = 0x00; /* volume 0 switches the channel off */
+        NR24 = 0x80;
+        return;
+    }
+    period = (uint16_t)(2048 - 131072ul / hz);
+    NR21 = 0x80;
+    NR22 = 0xf0;
+    NR23 = (uint8_t)period;
+    NR24 = (uint8_t)(0x80 | (period >> 8));
 }
 
 void platform_settings_load(uint8_t game, struct game_settings *out)
@@ -217,6 +239,10 @@ void main(void)
     /* Video RAM holds whatever the boot ROM left: write every tile once. */
     for (i = 0; i < sizeof lcd_dirty; i++)
         lcd_dirty[i] = 1;
+
+    NR52 = 0x80; /* sound on, full volume, channel 2 to both sides */
+    NR50 = 0x77;
+    NR51 = 0x22;
 
     menu_init();
     for (key = START_KEYS; *key; key++) {

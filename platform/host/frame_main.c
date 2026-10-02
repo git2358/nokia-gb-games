@@ -13,6 +13,7 @@
 #include "menu.h"
 #include "pgm.h"
 #include "snake.h"
+#include "sound.h"
 #include "testcard.h"
 
 /* The host keeps no settings: every frame starts from a fresh cartridge. */
@@ -29,8 +30,9 @@ void platform_settings_save(uint8_t game, const struct game_settings *in)
     (void)in;
 }
 
-void platform_beep(void)
+void platform_tone(uint16_t hz)
 {
+    (void)hz;
 }
 
 int main(int argc, char **argv)

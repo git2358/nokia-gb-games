@@ -4,6 +4,7 @@
 #include "game_assets.h"
 #include "lcd.h"
 #include "rand.h"
+#include "sound.h"
 
 /* Delay after a blocked move, giving one last chance to turn away. */
 #define HIT_GRACE_TICKS 20
@@ -158,7 +159,7 @@ uint8_t snake_step(void)
     snake_move_head();
     snake.grow = snake.head_x == snake.food_x && snake.head_y == snake.food_y;
     if (snake.grow) {
-        platform_beep();
+        sound_play(SOUND_EAT);
         snake.score += snake.level + 1;
         place_food();
     }

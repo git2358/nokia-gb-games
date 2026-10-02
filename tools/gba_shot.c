@@ -3,7 +3,9 @@
    Usage: gba_shot ROM.gba OUT.bmp FRAMES [KEYS FROM TO]
 
    KEYS is a mask of buttons held from frame FROM up to frame TO (bit 0 A,
-   1 B, 2 Select, 3 Start, 4 Right, 5 Left, 6 Up, 7 Down).
+   1 B, 2 Select, 3 Start, 4 Right, 5 Left, 6 Up, 7 Down). If the
+   environment variable GBA_SHOT_AUDIO names a file, the left channel's
+   samples are written to it as raw signed 16-bit at 32768 Hz.
 
    The picture is a 32-bit BMP in the layout SameBoy's tester writes, so the
    same tools read both. Built against the library scripts/setup-mgba.sh
@@ -14,6 +16,7 @@
 
 #include <mgba/core/config.h>
 #include <mgba/core/core.h>
+#include <mgba/core/blip_buf.h>
 #include <mgba/core/log.h>
 
 static void quiet(struct mLogger *logger, int category, enum mLogLevel level, const char *format, va_list args)
@@ -24,6 +27,8 @@ static void quiet(struct mLogger *logger, int category, enum mLogLevel level, co
     (void)format;
     (void)args;
 }
+
+#define AUDIO_SAMPLES 2048
 
 static void put32(FILE *f, unsigned long v)
 {
@@ -40,7 +45,8 @@ int main(int argc, char **argv)
     unsigned width, height, x, y;
     color_t *pixels;
     long frames, frame, keys = 0, from = 0, to = 0;
-    FILE *out;
+    FILE *out, *audio = NULL;
+    const char *audio_path;
 
     if (argc != 4 && argc != 7) {
         fprintf(stderr, "usage: gba_shot ROM.gba OUT.bmp FRAMES [KEYS FROM TO]\n");
@@ -68,10 +74,24 @@ int main(int argc, char **argv)
         return 1;
     }
     core->reset(core);
+    audio_path = getenv("GBA_SHOT_AUDIO");
+    if (audio_path) {
+        audio = fopen(audio_path, "wb");
+        core->setAudioBufferSize(core, AUDIO_SAMPLES);
+        blip_set_rates(core->getAudioChannel(core, 0), core->frequency(core), 32768);
+    }
     for (frame = 0; frame < frames; frame++) {
         core->setKeys(core, frame >= from && frame < to ? (uint32_t)keys : 0);
         core->runFrame(core);
+        if (audio) {
+            static short samples[AUDIO_SAMPLES];
+            int n = blip_read_samples(core->getAudioChannel(core, 0), samples, AUDIO_SAMPLES, 0);
+
+            fwrite(samples, sizeof samples[0], (size_t)n, audio);
+        }
     }
+    if (audio)
+        fclose(audio);
 
     out = fopen(argv[2], "wb");
     if (!out) {

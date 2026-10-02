@@ -6,6 +6,7 @@
 #include "lcd.h"
 #include "rand.h"
 #include "snake.h"
+#include "sound.h"
 
 /* Screen geometry shared by the phone's menu pages. */
 #define CONTENT_WIDTH 78 /* left of the scrollbar */
@@ -576,6 +577,7 @@ static void play_start(void)
 static void play_over(void)
 {
     new_top_score = snake.score > settings.top_score;
+    sound_play(new_top_score ? SOUND_TOP_SCORE : SOUND_GAME_OVER);
     if (new_top_score) {
         settings.top_score = snake.score;
         platform_settings_save(settings_slot(), &settings);
@@ -767,6 +769,7 @@ void menu_redraw_all(void)
 uint8_t menu_tick(void)
 {
     uptime++;
+    sound_tick(FRAME_US);
     switch (screen) {
     case SCREEN_TOP_SCORE:
         if (--page_ticks == 0) {

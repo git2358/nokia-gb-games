@@ -40,7 +40,6 @@ struct game_settings {
 
 /* Services a platform layer provides. */
 void platform_request_tick(unsigned ticks); /* deliver GAME_EVENT_TICK after this many ticks */
-void platform_beep(void);
 /* Load gives zeros when nothing has been saved. */
 void platform_settings_load(uint8_t game, struct game_settings *out);
 void platform_settings_save(uint8_t game, const struct game_settings *in);

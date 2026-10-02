@@ -83,11 +83,11 @@ test: $(BUILD)/test_core
 	$(BUILD)/test_core
 
 # Needs the extracted assets, unlike `test`.
-$(BUILD)/test_snake: tests/test_snake.c core/lcd.c core/rand.c core/snake.c $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ tests/test_snake.c core/lcd.c core/rand.c core/snake.c $(ASSET_SRC)
+$(BUILD)/test_snake: tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(ASSET_SRC)
 
-$(BUILD)/test_snake_gb: tests/test_snake.c core/lcd.c core/rand.c core/snake.c $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ tests/test_snake.c core/lcd.c core/rand.c core/snake.c $(ASSET_SRC)
+$(BUILD)/test_snake_gb: tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(ASSET_SRC)
 
 test-snake: $(BUILD)/test_snake $(BUILD)/test_snake_gb
 	$(BUILD)/test_snake

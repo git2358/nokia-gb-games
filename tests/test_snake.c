@@ -7,9 +7,11 @@
 #include "lcd.h"
 #include "rand.h"
 #include "snake.h"
+#include "sound.h"
 
-void platform_beep(void)
+void platform_tone(uint16_t hz)
 {
+    (void)hz;
 }
 
 static int play(uint8_t cols, uint8_t rows)

@@ -6,10 +6,16 @@
 #include "game.h"
 #include "lcd.h"
 #include "menu.h"
+#include "sound.h"
 
 #define REG16(addr) (*(volatile uint16_t *)(addr))
 #define REG_DISPCNT REG16(0x04000000)
 #define REG_DISPSTAT REG16(0x04000004)
+#define REG_SOUND2CNT_L REG16(0x04000068)
+#define REG_SOUND2CNT_H REG16(0x0400006c)
+#define REG_SOUNDCNT_L REG16(0x04000080)
+#define REG_SOUNDCNT_H REG16(0x04000082)
+#define REG_SOUNDCNT_X REG16(0x04000084)
 #define REG_KEYINPUT REG16(0x04000130)
 #define REG_IE REG16(0x04000200)
 #define REG_IME REG16(0x04000208)
@@ -106,8 +112,17 @@ void platform_settings_save(uint8_t game, const struct game_settings *in)
     record[3] = save_check(hi, lo, in->level);
 }
 
-void platform_beep(void)
+/* The buzzer is pulse channel 2: a 50% square wave at full volume. Its
+   frequency register is 2048 - 131072 / hz. */
+void platform_tone(uint16_t hz)
 {
+    if (!hz) {
+        REG_SOUND2CNT_L = 0; /* volume 0 */
+        REG_SOUND2CNT_H = 0x8000;
+        return;
+    }
+    REG_SOUND2CNT_L = 0xf080;
+    REG_SOUND2CNT_H = (uint16_t)(0x8000 | (2048 - 131072ul / hz));
 }
 
 /* Redraws the 8x8 cells of lcd_fb drawn to since the last call. */
@@ -163,6 +178,10 @@ int main(void)
     REG_DISPSTAT |= 0x0008; /* raise an interrupt at each vertical blank */
     REG_IE = 0x0001;
     REG_IME = 1;
+
+    REG_SOUNDCNT_X = 0x0080; /* sound on, channel 2 to both sides at full volume */
+    REG_SOUNDCNT_L = 0x2277;
+    REG_SOUNDCNT_H = 0x0002;
 
     menu_init();
     for (key = START_KEYS; *key; key++)

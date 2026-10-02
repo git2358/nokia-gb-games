@@ -44,8 +44,9 @@ enum {
 #define TOP_SCORE_TICKS ((uint16_t)(768ul * PHONE_TICK_US / MENU_FRAME_US))
 #define GAME_OVER_TICKS ((uint16_t)(385ul * PHONE_TICK_US / MENU_FRAME_US))
 
-/* The top score a phone has before anyone has played. */
-#define DEFAULT_TOP_SCORE 4075
+/* The top score before anyone has played. The firmware has no default of
+   its own: the 4075 MAME shows is a score saved in the PMM dump. */
+#define DEFAULT_TOP_SCORE 0
 
 /* The Top score page's animation in its top right corner: stars gather
    into a cup, which then flashes. A new picture every 25 phone ticks; the

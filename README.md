@@ -19,8 +19,7 @@ What is there so far:
 - the player, shots, the three special weapons, the level scripts, the
   movement patterns, collisions, scoring, lives and continues;
 - the bosses of all eight levels, so the game can be played to its end;
-- the top score, kept in battery-backed cartridge RAM. It starts at 4075,
-  as on the phone;
+- the top score, kept in battery-backed cartridge RAM. It starts at 0;
 - the game's five buzzer sounds: the shot, the missile or wall, the beam,
   a bonus collected and the ship destroyed.
 

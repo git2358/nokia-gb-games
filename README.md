@@ -34,6 +34,9 @@ No Nokia firmware, no extracted code or data from it, and nothing derived
 from a firmware image is committed here. Graphics and strings are read from
 your own legally obtained dump at build time into an ignored directory.
 
+That being said I got my firmware at firmware center
+<https://firmware.center/firmware/Nokia/3210%20(NSE-8-9)/Flash%20Files/NSE-8%20v.06.00%203210%20NSE-9.rar>
+
 ## Layout
 
 - `core/`: the portable game core (framebuffer and drawing primitives, the

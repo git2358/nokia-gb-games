@@ -19,6 +19,8 @@
 #define SCREEN_W 240
 #define SCREEN_H 160
 #define SCALE 2
+/* Most frames of game time made up at once after a slow draw. */
+#define MAX_CATCH_UP 6
 #define ORIGIN_X ((SCREEN_W - LCD_WIDTH * SCALE) / 2)
 #define ORIGIN_Y ((SCREEN_H - LCD_HEIGHT * SCALE) / 2)
 
@@ -189,14 +191,20 @@ int main(void)
             changed |= menu_key(MENU_KEY_LEFT);
         if (pressed & PAD_RIGHT)
             changed |= menu_key(MENU_KEY_RIGHT);
+        /* The time a key's redraw takes is not game time: a new game's
+           clock starts once its board is on the screen. */
         if (changed) {
             menu_draw();
             present();
+            seen = frame_count;
         }
 
-        /* One menu tick per frame, catching up on frames spent drawing. */
+        /* One menu tick per frame, catching up on frames spent drawing a
+           move, but never by so much that the game visibly jumps ahead. */
         frames = frame_count - seen;
         seen += frames;
+        if (frames > MAX_CATCH_UP)
+            frames = MAX_CATCH_UP;
         while (frames--) {
             if (menu_tick()) {
                 menu_draw();

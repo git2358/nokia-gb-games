@@ -64,6 +64,8 @@
 #define TILES_PER_BLANK 4
 /* With more changed tiles than this the LCD is switched off for the copy. */
 #define MAX_LIVE_TILES 24
+/* Most frames of game time made up at once after a slow draw. */
+#define MAX_CATCH_UP 6
 
 /* Frames since power-on, counted by the vertical-blank handler in crt0.s. */
 volatile uint8_t frame_count;
@@ -283,15 +285,21 @@ void main(void)
             changed |= press(MENU_KEY_LEFT);
         if (pressed & PAD_RIGHT)
             changed |= press(MENU_KEY_RIGHT);
-        /* Draw only when a key changed something, not on every press. */
+        /* Draw only when a key changed something, not on every press. The
+           time that takes is not game time: a new game's clock starts once
+           its board is on the screen. */
         if (changed) {
             menu_draw();
             present();
+            seen = frame_count;
         }
 
-        /* One menu tick per frame, catching up on frames spent drawing. */
+        /* One menu tick per frame, catching up on frames spent drawing a
+           move, but never by so much that the game visibly jumps ahead. */
         frames = (uint8_t)(frame_count - seen);
         seen += frames;
+        if (frames > MAX_CATCH_UP)
+            frames = MAX_CATCH_UP;
         while (frames--) {
             if (menu_tick()) {
                 menu_draw();

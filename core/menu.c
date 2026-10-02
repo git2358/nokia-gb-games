@@ -106,8 +106,15 @@ static uint8_t drawn_screen = NO_SCREEN, drawn_selection;
 static uint8_t full_screen;    /* the full-screen variant was chosen */
 static uint8_t view_mode;      /* which of the views below the LCD is set up for */
 
-/* Columns of the phone's LCD a platform with LCD_GAME_ZOOM shows. */
+/* Columns of the phone's LCD a platform with LCD_GAME_ZOOM shows, and how
+   many it leaves off on the left; the rest of what does not fit is left off
+   on the right. None on the left keeps all of Memory's biggest board, which
+   starts in the LCD's first column and ends five short of its last. The
+   game is drawn with that first shown column on a whole cell of the
+   framebuffer, GAME_ZOOM_X, which is what a platform can magnify. */
 #define GAME_ZOOM_WIDTH (LCD_FB_WIDTH / LCD_GAME_ZOOM < LCD_WIDTH ? LCD_FB_WIDTH / LCD_GAME_ZOOM : LCD_WIDTH)
+#define GAME_ZOOM_CUT_LEFT 0
+#define GAME_ZOOM_X ((LCD_FB_WIDTH - GAME_ZOOM_WIDTH) / 2 / 8 * 8)
 
 /* The phone's LCD; the full-screen variant's own menus; its board. */
 enum {
@@ -1038,12 +1045,14 @@ void menu_draw(void)
         lcd_view_phone();
         if (LCD_ZOOM > 1)
             lcd_zoom_set(LCD_PHONE_X, LCD_PHONE_Y, LCD_WIDTH, LCD_HEIGHT);
-        else if (LCD_GAME_ZOOM > 1 && full_screen && screen != SCREEN_MAIN)
+        else if (LCD_GAME_ZOOM > 1 && full_screen && screen != SCREEN_MAIN) {
             /* A game on the phone's LCD in the full-screen variant: as much
-               of the LCD's middle as fits across the screen. */
-            lcd_zoom_set(LCD_PHONE_X + (LCD_WIDTH - GAME_ZOOM_WIDTH) / 2, LCD_PHONE_Y, GAME_ZOOM_WIDTH, LCD_HEIGHT);
-        else
+               of the LCD as fits across the screen. */
+            lcd_view_set(GAME_ZOOM_X - GAME_ZOOM_CUT_LEFT, LCD_PHONE_Y, LCD_WIDTH, LCD_HEIGHT);
+            lcd_zoom_set(GAME_ZOOM_X, LCD_PHONE_Y, GAME_ZOOM_WIDTH, LCD_HEIGHT);
+        } else {
             lcd_zoom_set(0, 0, 0, 0);
+        }
     } else if (mode == VIEW_NATIVE) {
         lcd_view_full();
         lcd_zoom_set(0, 0, 0, 0);

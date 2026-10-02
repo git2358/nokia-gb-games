@@ -137,8 +137,8 @@ on the GBA, which shows the board at 2x), with its own level, top score and
 speeds. Rotation and Memory are the same games in both modes: from the
 full-screen menus they are played on the phone's screen at 2x, and share
 their level and top score with the phone-sized mode. At 2x the phone's 84
-columns are 8 pixels too wide for the Game Boy, which leaves off the two
-columns at each side. [`docs/authenticity.md`](docs/authenticity.md)
+columns are 8 pixels too wide for the Game Boy, which leaves off the last
+four; Memory's biggest board still fits whole. [`docs/authenticity.md`](docs/authenticity.md)
 lists where the code's structure still differs from the firmware's. See
 [`docs/handoff.md`](docs/handoff.md) for the decisions taken, the reference
 material and the work items.

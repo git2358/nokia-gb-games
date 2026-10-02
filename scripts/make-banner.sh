@@ -38,24 +38,25 @@ moves() { printf 't%.0s' $(seq 1 "$1"); }
 # buttons, t one move or tick of the running game.
 GAMES_PHONE="s"
 GAMES_FULL="a"
-# From a game's menu: its third level, then New game. The full-screen menus
-# list the entries in another order.
-LEVEL_3="usuusds"
-LEVEL_3_FULL="dsuusus"
-# Rotation on a 5x5 board: the game's own ten opening turns, four ticks
-# each, then the frame moved off the corner.
+# From a game's menu: its last level, reached with that many presses of up,
+# then New game. The full-screen menus list the entries in another order.
+level() { printf 'us%ssds' "$(printf 'u%.0s' $(seq 1 "$1"))"; }
+level_full() { printf 'ds%ssus' "$(printf 'u%.0s' $(seq 1 "$1"))"; }
+# Rotation on its biggest board, 6x6 with the 3x3 frame: the game's own ten
+# opening turns, four ticks each, then the frame moved off the corner.
 ROTATION_TURNS="$(moves 40)rd"
-ROTATION="ss${LEVEL_3}${ROTATION_TURNS}"
-ROTATION_FULL="as${LEVEL_3_FULL}${ROTATION_TURNS}"
+ROTATION="ss$(level 6)${ROTATION_TURNS}"
+ROTATION_FULL="as$(level_full 6)${ROTATION_TURNS}"
 # Each Snake eats the first food, in the middle of its board, then turns left.
 SNAKE_PHONE="sdss$(moves 2)u$(moves 5)l$(moves 3)"
 SNAKE_FULL_GB="adss$(moves 11)u$(moves 16)l$(moves 4)"
 SNAKE_FULL_GBA="adss$(moves 6)u$(moves 8)l$(moves 3)"
-# Memory on a 6x4 board: three pairs found and one more card turned up. The
-# scripted game starts from seed 0, so the cards are where these keys expect.
-MEMORY_TRIES="srrrddsldsllsuusllusrsdd"
-MEMORY="sdds${LEVEL_3}${MEMORY_TRIES}"
-MEMORY_FULL="adds${LEVEL_3_FULL}${MEMORY_TRIES}"
+# Memory on its biggest board, 10x6: three pairs found and one more card
+# turned up. The scripted game starts from seed 0, so the cards are where
+# these keys expect.
+MEMORY_TRIES="srrrrrdddslluusluslsrrrddsrsddr"
+MEMORY="sdds$(level 4)${MEMORY_TRIES}"
+MEMORY_FULL="adds$(level_full 4)${MEMORY_TRIES}"
 
 # gb_shot KEYS OUT: a Game Boy screenshot at 3x, in the console's own green.
 gb_shot() {

@@ -4,6 +4,7 @@
 	.globl	_main
 	.globl	_flush_tiles
 	.globl	_frame_count, _pad_last, _pad_latch
+	.globl	_sound_frame
 	.globl	_staged, _staged_at, _staged_count
 	.globl	s__INITIALIZER, s__INITIALIZED, l__INITIALIZER
 
@@ -114,6 +115,13 @@ vblank:
 	ld	(#_pad_latch), a
 	ld	a, l
 	ld	(#_pad_last), a
+
+	;; Advance the sound in progress.
+	push	bc
+	push	de
+	call	_sound_frame
+	pop	de
+	pop	bc
 	pop	hl
 	pop	af
 	reti

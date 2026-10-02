@@ -172,6 +172,12 @@ shot-gb: $(GB_ROM)
 	$(SAMEBOY_TESTER) --dmg --length $(SHOT_SECONDS) $(GB_ROM)
 	$(PYTHON) tools/bmp_to_png.py $(BUILD)/nokia3210.bmp $(BUILD)/nokia3210-gb.png $(SHOT_SCALE)
 
+# Headless Game Boy sound capture; needs `make -C tools/SameBoy lib`.
+$(BUILD)/gb_audio: tools/gb_audio.c
+	@test -f tools/SameBoy/build/lib/libsameboy.a || { echo "Missing SameBoy's library: run make -C tools/SameBoy lib"; exit 1; }
+	@mkdir -p $(BUILD)
+	$(CC) -O2 -Itools/SameBoy -DGB_VERSION='"x"' -o $@ $< tools/SameBoy/build/lib/libsameboy.a -lm
+
 run-gb: $(GB_ROM)
 	open -a "$(SAMEBOY_APP)" $(GB_ROM)
 

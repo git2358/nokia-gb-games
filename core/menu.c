@@ -801,7 +801,6 @@ void menu_redraw_all(void)
 uint8_t menu_tick(void)
 {
     uptime++;
-    sound_tick(FRAME_US);
     switch (screen) {
     case SCREEN_TOP_SCORE:
         if (--page_ticks == 0) {

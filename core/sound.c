@@ -13,18 +13,28 @@ static const struct note top_score[] = {
     { 880, 412 }, { 0, 23 },  { 587, 117 }, { 0, 23 }, { 880, 444 }, { 0, 0 },
 };
 
+static volatile uint8_t requested; /* a sound to start, plus one; 0 for none */
 static const struct note *playing; /* the note sounding now, or null */
 static int32_t left_us;            /* time it still has to run */
 
+/* Only leaves a request: sound_tick may run from an interrupt, and it alone
+   touches the sequencer's state. */
 void sound_play(uint8_t sound)
 {
-    playing = sound == SOUND_EAT ? eat : sound == SOUND_GAME_OVER ? game_over : top_score;
-    left_us = (int32_t)playing->ms * 1000;
-    platform_tone(playing->hz);
+    requested = (uint8_t)(sound + 1);
 }
 
 void sound_tick(uint16_t us)
 {
+    uint8_t request = requested;
+
+    if (request) {
+        requested = 0;
+        playing = request - 1 == SOUND_EAT ? eat : request - 1 == SOUND_GAME_OVER ? game_over : top_score;
+        left_us = (int32_t)playing->ms * 1000;
+        platform_tone(playing->hz);
+        return;
+    }
     if (!playing)
         return;
     left_us -= us;

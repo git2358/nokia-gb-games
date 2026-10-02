@@ -112,6 +112,12 @@ void platform_settings_save(uint8_t game, const struct game_settings *in)
     record[3] = save_check(hi, lo, in->level);
 }
 
+/* Called once a frame by the interrupt handler in crt0.s. */
+void sound_frame(void)
+{
+    sound_tick(16743); /* a frame is 1/59.73 s */
+}
+
 /* The buzzer is pulse channel 2: a 50% square wave at full volume. Its
    frequency register is 2048 - 131072 / hz. */
 void platform_tone(uint16_t hz)

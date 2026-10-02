@@ -84,6 +84,12 @@ uint8_t staged_count;
 
 void flush_tiles(void);
 
+/* Called once a frame by the vertical-blank handler in crt0.s. */
+void sound_frame(void)
+{
+    sound_tick(16743); /* a frame is 1/59.73 s */
+}
+
 /* The buzzer is pulse channel 2: a 50% square wave at full volume. Its
    frequency register is 2048 - 131072 / hz. */
 void platform_tone(uint16_t hz)

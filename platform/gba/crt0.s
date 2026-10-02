@@ -80,5 +80,11 @@ irq_handler:
     ldr     r1, [r2]
     orr     r1, r1, r0
     str     r1, [r2]
+    @ Advance the sound in progress.
+    stmfd   sp!, {lr}
+    ldr     r0, =sound_frame
+    mov     lr, pc
+    bx      r0
+    ldmfd   sp!, {lr}
     bx      lr
     .pool

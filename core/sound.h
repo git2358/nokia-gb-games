@@ -12,9 +12,12 @@ enum {
     SOUND_TOP_SCORE  /* a six-note tune */
 };
 
+/* Starts a sound at the next sound_tick. */
 void sound_play(uint8_t sound);
 
-/* Advances the sound in progress by `us` microseconds. */
+/* Advances the sound in progress by `us` microseconds. A platform calls it
+   once a frame, from its frame interrupt, so that a sound keeps time while
+   the main loop is busy drawing. */
 void sound_tick(uint16_t us);
 
 /* The platform's buzzer: a square wave of this many hertz, 0 for silence. */

@@ -65,7 +65,7 @@ int main(void)
     if (play(SNAKE_COLS, SNAKE_ROWS))
         return 1;
     /* The full-screen board, when built with a bigger framebuffer. */
-    if (SNAKE_MAX_COLS != SNAKE_COLS && play(SNAKE_FULL_COLS, SNAKE_FULL_ROWS))
+    if (LCD_HAS_SURROUND && play(SNAKE_FULL_COLS, SNAKE_FULL_ROWS))
         return 1;
     return 0;
 }

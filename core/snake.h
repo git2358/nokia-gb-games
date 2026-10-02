@@ -18,8 +18,10 @@
    outline is always an odd number of pixels across). */
 #define SNAKE_FULL_COLS (SNAKE_MAX_COLS - 1)
 #define SNAKE_FULL_ROWS (SNAKE_MAX_ROWS - 1)
-#define SNAKE_FULL_X ((LCD_FB_WIDTH - (SNAKE_FULL_COLS * 4 + 3)) / 2)
-#define SNAKE_FULL_Y ((LCD_FB_HEIGHT - (SNAKE_FULL_ROWS * 4 + 3)) / 2)
+#define SNAKE_FULL_WIDTH (SNAKE_FULL_COLS * 4 + 3)
+#define SNAKE_FULL_HEIGHT (SNAKE_FULL_ROWS * 4 + 3)
+#define SNAKE_FULL_X ((LCD_FB_WIDTH - SNAKE_FULL_WIDTH) / 2)
+#define SNAKE_FULL_Y ((LCD_FB_HEIGHT - SNAKE_FULL_HEIGHT) / 2)
 
 enum {
     SNAKE_UP,

@@ -19,12 +19,16 @@ enum {
 #define MENU_TICKS_PER_SECOND 60
 
 void menu_init(void);
-void menu_key(uint8_t key);
+/* Returns nonzero when the screen changed and menu_draw should be called. */
+uint8_t menu_key(uint8_t key);
 /* Advances timed pages and the running game. Returns nonzero when the
    screen changed; call menu_draw before the next menu_tick, because a
    game move is drawn as a change to the previous picture. */
 uint8_t menu_tick(void);
 void menu_draw(void);
+
+/* Forgets what the LCD holds, so the next menu_draw draws everything. */
+void menu_redraw_all(void);
 
 /* Makes the running game's next move now instead of when its timer runs
    out; menu_tick normally does this. For scripted frames. */

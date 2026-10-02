@@ -62,9 +62,23 @@ irq_handler:
     orr     r3, r3, r1
     strh    r3, [r2]
     tst     r1, #1              @ vertical blank
-    ldrne   r2, =frame_count
-    ldrne   r3, [r2]
-    addne   r3, r3, #1
-    strne   r3, [r2]
+    bxeq    lr
+    ldr     r2, =frame_count
+    ldr     r3, [r2]
+    add     r3, r3, #1
+    str     r3, [r2]
+    @ Read the pad every frame and latch new presses, so none is lost or
+    @ delayed while the main loop is drawing.
+    ldr     r2, =0x04000130
+    ldrh    r3, [r2]
+    mvn     r3, r3              @ keys held now (the register is active low)
+    ldr     r2, =pad_last
+    ldr     r0, [r2]
+    str     r3, [r2]
+    bic     r0, r3, r0          @ keys newly pressed
+    ldr     r2, =pad_latch
+    ldr     r1, [r2]
+    orr     r1, r1, r0
+    str     r1, [r2]
     bx      lr
     .pool

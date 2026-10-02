@@ -57,6 +57,22 @@ void irq_handler(void);
 /* Frames since power-on, counted by the interrupt handler in crt0.s. */
 volatile uint32_t frame_count;
 
+/* The interrupt handler reads the pad once a frame: pad_last is what was
+   held then and pad_latch collects every new press until the main loop
+   takes it. */
+volatile uint32_t pad_last, pad_latch;
+
+static uint16_t take_presses(void)
+{
+    uint16_t pressed;
+
+    REG_IME = 0;
+    pressed = (uint16_t)(pad_latch & 0x03ff);
+    pad_latch = 0;
+    REG_IME = 1;
+    return pressed;
+}
+
 static uint8_t save_check(uint8_t hi, uint8_t lo, uint8_t level)
 {
     return (uint8_t)(hi + lo + level + 0x5a);
@@ -132,7 +148,8 @@ static void press_script_key(char key)
 int main(void)
 {
     uint32_t seen = 0;
-    uint16_t pad, last = 0, pressed;
+    uint16_t pressed;
+    uint8_t changed;
     const char *key;
     int i;
 
@@ -154,9 +171,30 @@ int main(void)
     for (;;) {
         uint32_t frames;
 
-        /* One menu tick per frame, catching up on frames spent drawing. */
         while (frame_count == seen)
             ;
+
+        /* Keys first, so a press takes effect before the game's next move. */
+        pressed = take_presses();
+        changed = 0;
+        if (pressed & (PAD_START | PAD_A))
+            changed |= menu_key(MENU_KEY_SELECT);
+        if (pressed & PAD_B)
+            changed |= menu_key(MENU_KEY_BACK);
+        if (pressed & PAD_UP)
+            changed |= menu_key(MENU_KEY_UP);
+        if (pressed & PAD_DOWN)
+            changed |= menu_key(MENU_KEY_DOWN);
+        if (pressed & PAD_LEFT)
+            changed |= menu_key(MENU_KEY_LEFT);
+        if (pressed & PAD_RIGHT)
+            changed |= menu_key(MENU_KEY_RIGHT);
+        if (changed) {
+            menu_draw();
+            present();
+        }
+
+        /* One menu tick per frame, catching up on frames spent drawing. */
         frames = frame_count - seen;
         seen += frames;
         while (frames--) {
@@ -164,26 +202,6 @@ int main(void)
                 menu_draw();
                 present();
             }
-        }
-
-        pad = (uint16_t)(~REG_KEYINPUT & 0x03ff);
-        pressed = (uint16_t)(pad & ~last);
-        last = pad;
-        if (pressed & (PAD_START | PAD_A))
-            menu_key(MENU_KEY_SELECT);
-        else if (pressed & PAD_B)
-            menu_key(MENU_KEY_BACK);
-        else if (pressed & PAD_UP)
-            menu_key(MENU_KEY_UP);
-        else if (pressed & PAD_DOWN)
-            menu_key(MENU_KEY_DOWN);
-        else if (pressed & PAD_LEFT)
-            menu_key(MENU_KEY_LEFT);
-        else if (pressed & PAD_RIGHT)
-            menu_key(MENU_KEY_RIGHT);
-        if (pressed) {
-            menu_draw();
-            present();
         }
     }
 }

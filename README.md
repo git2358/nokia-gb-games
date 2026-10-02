@@ -102,8 +102,8 @@ score are kept in battery-backed cartridge RAM. Rotation and Memory do
 nothing yet and there is no sound. On the Game Boy, Select on the first
 screen picks a full-screen variant instead, which is the port's own design
 and not the phone's: menus laid out for the 160x144 screen in a 12px font
-with every entry visible, and Snake on a 38x34 board of the same 4-pixel
-cells, with its own level and top score. [`docs/authenticity.md`](docs/authenticity.md)
+with every entry visible and a cursor beside the selection, and Snake on a
+38x34 board of the same 4-pixel cells, with its own level and top score. [`docs/authenticity.md`](docs/authenticity.md)
 lists where the code's structure still differs from the firmware's. See
 [`docs/handoff.md`](docs/handoff.md) for the decisions taken, the reference
 material and the work items.

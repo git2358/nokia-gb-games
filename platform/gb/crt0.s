@@ -3,7 +3,7 @@
 	.module crt0
 	.globl	_main
 	.globl	_flush_tiles
-	.globl	_frame_count
+	.globl	_frame_count, _pad_last, _pad_latch
 	.globl	_staged, _staged_at, _staged_count
 	.globl	s__INITIALIZER, s__INITIALIZED, l__INITIALIZER
 
@@ -66,30 +66,71 @@ vblank:
 	;; The top of the screen takes its tiles from 0x8000.
 	ld	hl, #0xff40
 	set	4, (hl)
+
+	;; Read the pad every frame and latch new presses, so none is lost
+	;; or delayed while the main loop is drawing. Buttons go in the low
+	;; half of the byte and directions in the high half.
+	ld	a, #0x10		; select the buttons
+	ld	(#0xff00), a
+	ld	a, (#0xff00)
+	ld	a, (#0xff00)
+	cpl
+	and	a, #0x0f
+	ld	l, a
+	ld	a, #0x20		; select the directions
+	ld	(#0xff00), a
+	ld	a, (#0xff00)
+	ld	a, (#0xff00)
+	ld	a, (#0xff00)
+	ld	a, (#0xff00)
+	cpl
+	and	a, #0x0f
+	swap	a
+	or	a, l
+	ld	l, a			; keys held now
+	ld	a, #0x30
+	ld	(#0xff00), a
+	ld	a, (#_pad_last)
+	cpl
+	and	a, l			; keys newly pressed
+	ld	h, a
+	ld	a, (#_pad_latch)
+	or	a, h
+	ld	(#_pad_latch), a
+	ld	a, l
+	ld	(#_pad_last), a
 	pop	hl
 	pop	af
 	reti
 
-;; Raised at the line where the screen's tiles continue at 0x9000.
+;; Raised on the line before the one where the screen's tiles continue at
+;; 0x9000. Waits for that line's horizontal blank, so the switch never
+;; lands in the middle of a drawn line.
 lcd_split:
+	push	af
 	push	hl
+	ld	hl, #0xff41
+1$:
+	ld	a, (hl)
+	and	a, #0x03
+	jr	nz, 1$
 	ld	hl, #0xff40
 	res	4, (hl)
 	pop	hl
+	pop	af
 	reti
 
-;; void flush_tiles(void): waits for the start of the next vertical blank,
-;; then copies staged_count 16-byte tiles from staged to the video RAM
-;; addresses in staged_at. About 180 cycles a tile; a vertical blank is 1140.
+;; void flush_tiles(void): waits for the next vertical blank, then copies
+;; staged_count 16-byte tiles from staged to the video RAM addresses in
+;; staged_at. About 180 cycles a tile; a vertical blank is 1140. It waits
+;; for the frame counter to change, not for line 144: the handler above
+;; takes longer than that one line, so a loop polling for it would miss it.
 _flush_tiles::
+	ld	hl, #_frame_count
+	ld	a, (hl)
 1$:
-	ld	a, (#0xff44)
-	cp	a, #144
+	cp	a, (hl)
 	jr	z, 1$
-2$:
-	ld	a, (#0xff44)
-	cp	a, #144
-	jr	nz, 2$
 	ld	a, (#_staged_count)
 	or	a, a
 	ret	z

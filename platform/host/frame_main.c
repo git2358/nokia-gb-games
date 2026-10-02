@@ -2,7 +2,8 @@
    Usage: frame NAME OUT.pgm
    NAME: testcard, outline, snake-start, or menu-KEYS where KEYS is the menu
    keys pressed from the first screen (u up, d down, l left, r right,
-   s select, b back, a the full-screen key, t one move of the running game). */
+   s select, b back, a the full-screen key, t one move of the running game,
+   F forget what is drawn so the next draw is a full one). */
 #include <stdio.h>
 #include <string.h>
 
@@ -53,7 +54,9 @@ int main(int argc, char **argv)
             /* Draw after every key, as a platform does, so that drawing only
                a move's changes is exercised. */
             menu_draw();
-            if (*key == 't')
+            if (*key == 'F')
+                menu_redraw_all();
+            else if (*key == 't')
                 menu_game_step();
             else
                 menu_key(*key == 'u' ? MENU_KEY_UP : *key == 'd' ? MENU_KEY_DOWN : *key == 'l' ? MENU_KEY_LEFT

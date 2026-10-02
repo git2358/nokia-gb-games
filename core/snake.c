@@ -191,18 +191,24 @@ void snake_advance_tail(void)
     snake.tail_index = (uint16_t)((snake.tail_index + 1) % snake.ring_size);
 }
 
+static void draw_food(void)
+{
+    lcd_blit_bitmap(snake.food_x * 4 + 2, snake.food_y * 4 + 2, 4, 4, snake_food_bitmap);
+}
+
 void snake_draw(void)
 {
     uint16_t index;
     int8_t x = snake.tail_x, y = snake.tail_y;
 
-    /* Border: 83x47, leaving the last column and row of the LCD clear. */
+    /* Border: on the phone 83x47, leaving the last column and row of the
+       LCD clear. */
     lcd_fill_rect(0, 0, snake.cols * 4 + 2, 1, 1);
     lcd_fill_rect(snake.cols * 4 + 2, 0, 1, snake.rows * 4 + 2, 1);
     lcd_fill_rect(0, 0, 1, snake.rows * 4 + 2, 1);
     lcd_fill_rect(0, snake.rows * 4 + 2, snake.cols * 4 + 3, 1, 1);
 
-    lcd_blit_bitmap(snake.food_x * 4 + 2, snake.food_y * 4 + 2, 4, 4, snake_food_bitmap);
+    draw_food();
 
     /* The tail is a 3x3 block; every later segment is widened by one pixel
        towards the cell it came from, so neighbours join. */
@@ -213,7 +219,7 @@ void snake_draw(void)
         x += step_x(direction);
         y += step_y(direction);
         lcd_fill_rect(x * 4 + 2 - (direction == SNAKE_RIGHT), y * 4 + 2 - (direction == SNAKE_DOWN),
-                      direction & 1 ? 4 : 3, direction & 1 ? 3 : 4, 1);
+             direction & 1 ? 4 : 3, direction & 1 ? 3 : 4, 1);
     }
 }
 
@@ -235,9 +241,8 @@ void snake_draw_step(void)
             py += 3;
         lcd_fill_rect(px, py, along_x ? 4 : 3, along_x ? 3 : 4, 0);
     }
-    lcd_fill_rect(snake.head_x * 4 + 2 - (snake.direction == SNAKE_RIGHT),
-                  snake.head_y * 4 + 2 - (snake.direction == SNAKE_DOWN),
-                  snake.direction & 1 ? 4 : 3, snake.direction & 1 ? 3 : 4, 1);
+    lcd_fill_rect(snake.head_x * 4 + 2 - (snake.direction == SNAKE_RIGHT), snake.head_y * 4 + 2 - (snake.direction == SNAKE_DOWN),
+         snake.direction & 1 ? 4 : 3, snake.direction & 1 ? 3 : 4, 1);
     if (snake.grow)
-        lcd_blit_bitmap(snake.food_x * 4 + 2, snake.food_y * 4 + 2, 4, 4, snake_food_bitmap);
+        draw_food();
 }

@@ -63,7 +63,7 @@
 /* Tiles copied to video RAM in one vertical blank with the LCD on. */
 #define TILES_PER_BLANK 4
 /* With more changed tiles than this the LCD is switched off for the copy. */
-#define MAX_LIVE_TILES 16
+#define MAX_LIVE_TILES 24
 
 /* Frames since power-on, counted by the vertical-blank handler in crt0.s. */
 volatile uint8_t frame_count;
@@ -108,10 +108,22 @@ void platform_settings_save(uint8_t game, const struct game_settings *in)
     MBC_RAM_ENABLE = 0x00;
 }
 
+/* Waits for the start of the next vertical blank. Once interrupts are on,
+   the frame counter is the signal: the handler in crt0.s takes longer than
+   line 144 lasts, so polling for that line would miss it. */
+static uint8_t interrupts_on;
+
 static void wait_vblank(void)
 {
-    while (LY != 144)
-        ;
+    uint8_t frame = frame_count;
+
+    if (interrupts_on) {
+        while (frame_count == frame)
+            ;
+    } else {
+        while (LY != 144)
+            ;
+    }
 }
 
 /* Converts one 8x8 cell of lcd_fb to tile data: a set pixel is colour 3, a
@@ -185,30 +197,31 @@ static void present(void)
         lcd_dirty[i] = 0;
 }
 
-/* Buttons currently held: A, B, Select, Start in bits 0-3, then Right,
-   Left, Up, Down in bits 4-7. */
-static uint8_t read_pad(void)
-{
-    uint8_t pad;
+/* The pad is read once a frame by the vertical-blank handler in crt0.s:
+   pad_last is what was held then (A, B, Select, Start in bits 0-3, Right,
+   Left, Up, Down in bits 4-7) and pad_latch collects every new press until
+   the main loop takes it. */
+volatile uint8_t pad_last, pad_latch;
 
-    P1 = 0x10; /* select the button keys */
-    pad = P1;
-    pad = (uint8_t)(~P1 & 0x0f);
-    P1 = 0x20; /* select the direction keys */
-    pad |= P1 & 0;
-    pad |= (uint8_t)((~P1 & 0x0f) << 4);
-    P1 = 0x30;
-    return pad;
+static uint8_t take_presses(void)
+{
+    uint8_t pressed;
+
+    __asm__("di");
+    pressed = pad_latch;
+    pad_latch = 0;
+    __asm__("ei");
+    return pressed;
 }
 
-static void press(uint8_t key)
+static uint8_t press(uint8_t key)
 {
-    menu_key(key);
+    return menu_key(key);
 }
 
 void main(void)
 {
-    uint8_t tx, ty, pad, last = 0, pressed, seen = 0;
+    uint8_t tx, ty, pressed, changed, seen = 0;
     uint16_t i;
     const char *key;
 
@@ -221,7 +234,7 @@ void main(void)
     SCX = 0;
     SCY = 0;
     BGP = 0xe4;
-    LYC = SPLIT_LINE;
+    LYC = SPLIT_LINE - 1; /* the handler switches at the end of this line */
     STAT = 0x40; /* interrupt when LY reaches LYC */
 
     /* Video RAM holds whatever the boot ROM left: write every tile once. */
@@ -245,13 +258,38 @@ void main(void)
     IF = 0;
     IE = 0x03; /* vertical blank and LCD status */
     __asm__("ei");
+    interrupts_on = 1;
 
     for (;;) {
         uint8_t frames;
 
-        /* One menu tick per frame, catching up on frames spent drawing. */
         while (frame_count == seen)
             ;
+
+        /* Keys first, so a press takes effect before the game's next move. */
+        pressed = take_presses();
+        changed = 0;
+        if (pressed & (PAD_START | PAD_A))
+            changed |= press(MENU_KEY_SELECT);
+        if (pressed & PAD_B)
+            changed |= press(MENU_KEY_BACK);
+        if (pressed & PAD_SELECT)
+            changed |= press(MENU_KEY_ALT);
+        if (pressed & PAD_UP)
+            changed |= press(MENU_KEY_UP);
+        if (pressed & PAD_DOWN)
+            changed |= press(MENU_KEY_DOWN);
+        if (pressed & PAD_LEFT)
+            changed |= press(MENU_KEY_LEFT);
+        if (pressed & PAD_RIGHT)
+            changed |= press(MENU_KEY_RIGHT);
+        /* Draw only when a key changed something, not on every press. */
+        if (changed) {
+            menu_draw();
+            present();
+        }
+
+        /* One menu tick per frame, catching up on frames spent drawing. */
         frames = (uint8_t)(frame_count - seen);
         seen += frames;
         while (frames--) {
@@ -259,28 +297,6 @@ void main(void)
                 menu_draw();
                 present();
             }
-        }
-
-        pad = read_pad();
-        pressed = (uint8_t)(pad & ~last);
-        last = pad;
-        if (pressed & (PAD_START | PAD_A))
-            press(MENU_KEY_SELECT);
-        else if (pressed & PAD_B)
-            press(MENU_KEY_BACK);
-        else if (pressed & PAD_SELECT)
-            press(MENU_KEY_ALT);
-        else if (pressed & PAD_UP)
-            press(MENU_KEY_UP);
-        else if (pressed & PAD_DOWN)
-            press(MENU_KEY_DOWN);
-        else if (pressed & PAD_LEFT)
-            press(MENU_KEY_LEFT);
-        else if (pressed & PAD_RIGHT)
-            press(MENU_KEY_RIGHT);
-        if (pressed) {
-            menu_draw();
-            present();
         }
     }
 }

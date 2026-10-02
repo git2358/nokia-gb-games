@@ -76,6 +76,10 @@ static uint16_t play_ticks;    /* phone ticks until Snake's next move */
 static uint16_t play_us;       /* time not yet turned into phone ticks */
 static uint16_t uptime;        /* menu_tick calls so far; seeds rand */
 static uint8_t board_drawn;    /* the LCD holds the running game's board */
+/* The full-screen menu the LCD holds and the selection drawn on it;
+   NO_SCREEN when it holds something else. */
+#define NO_SCREEN 0xff
+static uint8_t drawn_screen = NO_SCREEN, drawn_selection;
 static uint8_t full_screen;    /* the full-screen variant was chosen */
 static uint8_t view_mode;      /* which of the views below the LCD is set up for */
 
@@ -274,13 +278,22 @@ static void native_hint(const char *hint)
     font_draw(&font12, NATIVE_MARGIN, NATIVE_HINT_Y, hint, 1);
 }
 
+/* The selection is a cursor beside the entry, not an inverted row, so
+   moving it changes only a few cells of the screen. */
+static void native_cursor(uint8_t row, uint8_t on)
+{
+    uint8_t y = (uint8_t)(NATIVE_LIST_Y + row * NATIVE_ROW_HEIGHT + 2), i;
+
+    lcd_fill_rect(NATIVE_MARGIN, y, 5, 9, 0);
+    if (on)
+        for (i = 0; i < 5; i++)
+            lcd_fill_rect(NATIVE_MARGIN + i, y + i, 1, 9 - 2 * i, 1);
+}
+
 static void native_row(uint8_t row, const char *label, uint8_t selected)
 {
-    uint8_t y = (uint8_t)(NATIVE_LIST_Y + row * NATIVE_ROW_HEIGHT);
-
-    if (selected)
-        lcd_fill_rect(0, y, LCD_FB_WIDTH, NATIVE_ROW_HEIGHT, 1);
-    font_draw(&font12, NATIVE_MARGIN, y + 1, label, !selected);
+    font_draw(&font12, NATIVE_MARGIN + 10, NATIVE_LIST_Y + row * NATIVE_ROW_HEIGHT + 1, label, 1);
+    native_cursor(row, selected);
 }
 
 static void native_games(void)
@@ -303,22 +316,55 @@ static void native_game(void)
     native_hint(text_hint_select);
 }
 
-/* Nine bars across the screen, filled up to the chosen level. */
+/* One of nine bars across the screen, filled up to the chosen level. */
+static void native_level_bar(uint8_t i)
+{
+    uint8_t x = (uint8_t)(13 + i * 15);
+    uint8_t height = (uint8_t)(16 + i * 8);
+    uint8_t top = (uint8_t)(NATIVE_HINT_Y - 12 - height);
+
+    lcd_fill_rect(x, top, 12, height, 1);
+    if (i > level_choice)
+        lcd_fill_rect(x + 1, top + 1, 10, height - 2, 0);
+}
+
 static void native_level(void)
 {
     uint8_t i;
 
     native_title(text_level);
-    for (i = 0; i < LEVEL_COUNT; i++) {
-        uint8_t x = (uint8_t)(13 + i * 15);
-        uint8_t height = (uint8_t)(16 + i * 8);
-        uint8_t top = (uint8_t)(NATIVE_HINT_Y - 12 - height);
-
-        lcd_fill_rect(x, top, 12, height, 1);
-        if (i > level_choice)
-            lcd_fill_rect(x + 1, top + 1, 10, height - 2, 0);
-    }
+    for (i = 0; i < LEVEL_COUNT; i++)
+        native_level_bar(i);
     native_hint(text_hint_ok);
+}
+
+/* When only the selection moved on a full-screen menu, redraws just that
+   and returns nonzero. */
+static uint8_t native_update(void)
+{
+    uint8_t selection;
+
+    if (drawn_screen != screen)
+        return 0;
+    switch (screen) {
+    case SCREEN_GAMES:
+    case SCREEN_GAME:
+        selection = screen == SCREEN_GAMES ? game : item;
+        native_cursor(drawn_selection, 0);
+        native_cursor(selection, 1);
+        break;
+    case SCREEN_LEVEL:
+        selection = level_choice;
+        while (drawn_selection < selection)
+            native_level_bar(++drawn_selection);
+        while (drawn_selection > selection)
+            native_level_bar(drawn_selection--);
+        break;
+    default:
+        return 0;
+    }
+    drawn_selection = selection;
+    return 1;
 }
 
 /* A note: its lines centred on the screen; %N is the number. */
@@ -621,7 +667,7 @@ static void game_menu_move(uint8_t key)
     }
 }
 
-void menu_key(uint8_t key)
+static void handle_key(uint8_t key)
 {
     switch (screen) {
     case SCREEN_MAIN:
@@ -670,7 +716,7 @@ void menu_key(uint8_t key)
         /* Any key closes the page; all but C then act on the menu under it. */
         screen = SCREEN_GAME;
         if (key != MENU_KEY_BACK)
-            menu_key(key);
+            handle_key(key);
         break;
     case SCREEN_GAME_OVER:
     case SCREEN_LAST_VIEW:
@@ -688,6 +734,23 @@ void menu_key(uint8_t key)
             screen = SCREEN_GAMES;
         break;
     }
+}
+
+uint8_t menu_key(uint8_t key)
+{
+    uint8_t was_screen = screen, was_game = game, was_item = item, was_top = item_top;
+    uint8_t was_level = level_choice, was_resume = resume;
+    const char *was_page = help_page;
+
+    handle_key(key);
+    return screen != was_screen || game != was_game || item != was_item || item_top != was_top
+           || level_choice != was_level || resume != was_resume || help_page != was_page;
+}
+
+void menu_redraw_all(void)
+{
+    drawn_screen = NO_SCREEN;
+    board_drawn = 0;
 }
 
 uint8_t menu_tick(void)
@@ -744,7 +807,11 @@ void menu_draw(void)
     else if (mode == VIEW_NATIVE)
         lcd_view_full();
     else
-        lcd_view_set(SNAKE_FULL_X, SNAKE_FULL_Y, SNAKE_FULL_COLS * 4 + 3, SNAKE_FULL_ROWS * 4 + 3);
+        lcd_view_set(SNAKE_FULL_X, SNAKE_FULL_Y, SNAKE_FULL_WIDTH, SNAKE_FULL_HEIGHT);
+
+    if (mode == VIEW_NATIVE && native_update())
+        return;
+    drawn_screen = NO_SCREEN;
 
     if (screen != SCREEN_PLAY) {
         lcd_clear();
@@ -794,5 +861,9 @@ void menu_draw(void)
         else
             draw_game();
         break;
+    }
+    if (mode == VIEW_NATIVE) {
+        drawn_screen = screen;
+        drawn_selection = screen == SCREEN_GAMES ? game : screen == SCREEN_LEVEL ? level_choice : item;
     }
 }

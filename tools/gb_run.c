@@ -6,6 +6,8 @@
      N            run N screen frames
      +B / -B      press / release a button: a b s(elect) t(start) u d l r
      shot:FILE    write the screen as a binary PGM (160x144)
+     audio:FILE   from here on, write the sound's left channel to FILE as
+                  raw signed 16-bit samples at 32768 Hz
      peek:ADDR:N  print N bytes of memory from hexadecimal ADDR
      writes:LOW:HIGH:COUNT  print the next COUNT writes to the hexadecimal
                   address range, and the instruction that made each
@@ -30,6 +32,16 @@ static uint32_t rgb(GB_gameboy_t *gb, uint8_t r, uint8_t g, uint8_t b)
     (void)g;
     (void)b;
     return r;
+}
+
+/* For the audio step. */
+static FILE *audio;
+
+static void on_sample(GB_gameboy_t *gb, GB_sample_t *sample)
+{
+    (void)gb;
+    if (audio)
+        fwrite(&sample->left, sizeof sample->left, 1, audio);
 }
 
 /* For the writes step. */
@@ -77,6 +89,8 @@ int main(int argc, char **argv)
     }
     GB_set_pixels_output(gb, pixels);
     GB_set_rgb_encode_callback(gb, rgb);
+    GB_set_sample_rate(gb, 32768);
+    GB_apu_set_sample_callback(gb, on_sample);
     for (i = 3; i < argc; i++) {
         const char *step = argv[i];
 
@@ -94,6 +108,12 @@ int main(int argc, char **argv)
             for (p = 0; p < 160 * 144; p++)
                 fputc((int)(pixels[p] & 0xff) < 128 ? 0 : 255, out);
             fclose(out);
+        } else if (strncmp(step, "audio:", 6) == 0) {
+            audio = fopen(step + 6, "wb");
+            if (!audio) {
+                perror(step + 6);
+                return 1;
+            }
         } else if (strncmp(step, "peek:", 5) == 0) {
             unsigned addr = 0, n = 1, k;
 
@@ -158,5 +178,7 @@ int main(int argc, char **argv)
                 GB_run_frame(gb);
         }
     }
+    if (audio)
+        fclose(audio);
     return 0;
 }

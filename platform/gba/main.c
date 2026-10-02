@@ -8,12 +8,21 @@
 #include <stdint.h>
 
 #include "game.h"
+#include "games.h"
 #include "lcd.h"
 #include "menu.h"
+#include "sound.h"
 
 #define REG16(addr) (*(volatile uint16_t *)(addr))
 #define REG_DISPCNT REG16(0x04000000)
 #define REG_DISPSTAT REG16(0x04000004)
+#define REG_SOUND2CNT_L REG16(0x04000068)
+#define REG_SOUND2CNT_H REG16(0x0400006c)
+#define REG_SOUNDCNT_L REG16(0x04000080)
+#define REG_SOUNDCNT_H REG16(0x04000082)
+#define REG_SOUNDCNT_X REG16(0x04000084)
+#define REG_TM2CNT_L REG16(0x04000108)
+#define REG_TM2CNT_H REG16(0x0400010a)
 #define REG_KEYINPUT REG16(0x04000130)
 #define REG_IE REG16(0x04000200)
 #define REG_WAITCNT REG16(0x04000204)
@@ -108,15 +117,22 @@ void platform_settings_save(uint8_t game, const struct game_settings *in)
     record[3] = save_check(hi, lo, in->level);
 }
 
-/* Called once a frame by the interrupt handler in crt0.s. */
-void sound_frame(void)
-{
-}
+/* The buzzer is pulse channel 2: a 50% square wave at full volume, of
+   131072 / (2048 - its frequency register) hertz. These are eight times
+   131072 over the hertz of the twelve semitones from 440 Hz up; an octave
+   higher is half. */
+static const uint16_t tone_divider[12] = { 2383, 2249, 2123, 2004, 1891, 1785, 1685, 1591, 1501, 1417, 1337, 1262 };
 
-/* The game's sounds are not written yet. */
-void platform_sound(uint8_t sound)
+/* Called by sound_tick, from the timer interrupt. */
+void platform_tone(uint8_t note)
 {
-    (void)sound;
+    if (note == SOUND_SILENCE) {
+        REG_SOUND2CNT_L = 0; /* volume 0 */
+        REG_SOUND2CNT_H = 0x8000;
+        return;
+    }
+    REG_SOUND2CNT_L = 0xf080;
+    REG_SOUND2CNT_H = (uint16_t)(0x8000 | (2048 - (((tone_divider[note % 12] >> note / 12) + 4) >> 3)));
 }
 
 void platform_vibrate(void)
@@ -259,8 +275,16 @@ int main(void)
 
     IRQ_VECTOR = irq_handler;
     REG_DISPSTAT |= 0x0008; /* raise an interrupt at each vertical blank */
-    REG_IE = 0x0001;
+    /* Timer 2 interrupts once per unit of the phone's timers, for the
+       sounds: 510 counts of 65536 Hz. */
+    REG_TM2CNT_L = (uint16_t)(0x10000 - GAMES_UNIT_US * 65536ul / 1000000);
+    REG_TM2CNT_H = 0x00c2;
+    REG_IE = 0x0021; /* vertical blank and timer 2 */
     REG_IME = 1;
+
+    REG_SOUNDCNT_X = 0x0080; /* sound on, channel 2 to both sides at full volume */
+    REG_SOUNDCNT_L = 0x2277;
+    REG_SOUNDCNT_H = 0x0002;
 
     menu_init();
     menu_script(START_KEYS);

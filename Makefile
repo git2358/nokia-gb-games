@@ -65,7 +65,7 @@ INCLUDES := -Icore -Iplatform/host -I$(ASSETS)
 GB_ROM := $(BUILD)/nokia3310.gb
 GB_TEST_ROM := $(BUILD)/nokia3310-keys.gb
 # The four banks of the Game Boy ROM (see platform/gb/far.h).
-GB_BANK0 := platform/gb/main.c platform/gb/far.c platform/gb/strip.c core/lcd.c core/sprite.c core/games.c core/rand.c core/si_base.c $(ASSETS)/si_tables.c
+GB_BANK0 := platform/gb/main.c platform/gb/far.c platform/gb/strip.c core/lcd.c core/sprite.c core/games.c core/rand.c core/si_base.c core/sound.c $(ASSETS)/si_tables.c
 GB_BANK1 := core/menu.c core/font.c $(ASSETS)/game_assets.c
 GB_BANK2 := core/si.c
 GB_BANK3 := core/si_setup.c $(ASSETS)/si_data.c

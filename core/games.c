@@ -1,6 +1,7 @@
 #include "games.h"
 
 #include "si.h"
+#include "sound.h"
 #include "sprite.h"
 
 uint8_t games_over;
@@ -59,7 +60,7 @@ static uint8_t deliver(int event, uint8_t from)
             from = FROM_OTHER;
         break;
     case SI_RESULT_SOUND:
-        platform_sound((uint8_t)ctx.sound);
+        sound_play((uint8_t)ctx.sound);
         break;
     case SI_RESULT_REDRAW:
         break;

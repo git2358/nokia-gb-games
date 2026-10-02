@@ -49,7 +49,8 @@ reset:
 3:  b       3b
 
 @ Interrupt handler, entered from the BIOS in ARM mode with r0-r3, r12 and
-@ lr saved. Acknowledges whatever fired and counts vertical blanks.
+@ lr saved. Acknowledges whatever fired, counts vertical blanks and moves
+@ the sound in progress on at each interrupt of timer 2.
     .global irq_handler
 irq_handler:
     mov     r0, #0x04000000
@@ -62,7 +63,7 @@ irq_handler:
     orr     r3, r3, r1
     strh    r3, [r2]
     tst     r1, #1              @ vertical blank
-    bxeq    lr
+    beq     1f
     ldr     r2, =frame_count
     ldr     r3, [r2]
     add     r3, r3, #1
@@ -77,12 +78,13 @@ irq_handler:
     str     r3, [r2]
     bic     r0, r3, r0          @ keys newly pressed
     ldr     r2, =pad_latch
-    ldr     r1, [r2]
-    orr     r1, r1, r0
-    str     r1, [r2]
-    @ The platform's once-a-frame work.
+    ldr     r3, [r2]
+    orr     r3, r3, r0
+    str     r3, [r2]
+1:  tst     r1, #0x20           @ timer 2
+    bxeq    lr
     stmfd   sp!, {lr}
-    ldr     r0, =sound_frame
+    ldr     r0, =sound_tick
     mov     lr, pc
     bx      r0
     ldmfd   sp!, {lr}

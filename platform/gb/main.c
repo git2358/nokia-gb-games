@@ -19,12 +19,21 @@
 #include "menu.h"
 #include "si.h"
 #include "si_data.h"
+#include "sound.h"
 #include "strip.h"
 
 #define REG(addr) (*(volatile uint8_t *)(addr))
 #define P1 REG(0xff00)
+#define TMA REG(0xff06)
+#define TAC REG(0xff07)
 #define IF REG(0xff0f)
 #define IE REG(0xffff)
+#define NR21 REG(0xff16)
+#define NR22 REG(0xff17)
+#define NR23 REG(0xff18)
+#define NR24 REG(0xff19)
+#define NR50 REG(0xff24)
+#define NR51 REG(0xff25)
 #define NR52 REG(0xff26)
 #define LCDC REG(0xff40)
 #define STAT REG(0xff41)
@@ -96,10 +105,30 @@ const uint8_t *staged_from; /* flush_tiles' place in staged */
 
 void flush_tiles(void);
 
-/* The game's sounds are not written yet. */
-void platform_sound(uint8_t sound)
+/* The buzzer is pulse channel 2: a 50% square wave at full volume, of
+   131072 / (2048 - its frequency register) hertz. These are eight times
+   131072 over the hertz of the twelve semitones from 440 Hz up; an octave
+   higher is half. */
+static const uint16_t tone_divider[12] = { 2383, 2249, 2123, 2004, 1891, 1785, 1685, 1591, 1501, 1417, 1337, 1262 };
+
+/* Called by sound_tick, from the timer interrupt. */
+void platform_tone(uint8_t note)
 {
-    (void)sound;
+    uint8_t octave = 0;
+    uint16_t period;
+
+    if (note == SOUND_SILENCE) {
+        NR22 = 0x00; /* volume 0 switches the channel off */
+        NR24 = 0x80;
+        return;
+    }
+    for (; note >= 12; note -= 12)
+        octave++;
+    period = (uint16_t)(2048 - (((tone_divider[note] >> octave) + 4) >> 3));
+    NR21 = 0x80;
+    NR22 = 0xf0;
+    NR23 = (uint8_t)period;
+    NR24 = (uint8_t)(0x80 | (period >> 8));
 }
 
 void platform_vibrate(void)
@@ -330,7 +359,13 @@ void main(void)
     for (i = 0; i < sizeof lcd_dirty; i++)
         lcd_dirty[i] = 1;
 
-    NR52 = 0x00; /* sound off */
+    NR52 = 0x80; /* sound on, full volume, channel 2 to both sides */
+    NR50 = 0x77;
+    NR51 = 0x22;
+    /* The timer interrupts once per unit of the phone's timers, for the
+       sounds: 4096 Hz over 32 is every 7.8 ms. */
+    TMA = 0xe0;
+    TAC = 0x04;
 
     MBC_RAM_ENABLE = 0x0a;
     far_bank(BANK_SETUP);
@@ -344,7 +379,7 @@ void main(void)
     LCDC = LCDC_ON;
 
     IF = 0;
-    IE = 0x03; /* vertical blank and LCD status */
+    IE = 0x07; /* vertical blank, LCD status and timer */
     __asm__("ei");
 
     for (;;) {

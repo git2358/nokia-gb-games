@@ -20,7 +20,9 @@ What is there so far:
   movement patterns, collisions, scoring, lives and continues;
 - the bosses of all eight levels, so the game can be played to its end;
 - the top score, kept in battery-backed cartridge RAM. It starts at 4075,
-  as on the phone.
+  as on the phone;
+- the game's five buzzer sounds: the shot, the missile or wall, the beam,
+  a bonus collected and the ship destroyed.
 
 Start on the first screen picks a full-screen mode instead, as in the 3210
 project: the port's own menus laid out for the console's whole screen in
@@ -38,8 +40,8 @@ sight.
 | Start, Select | select | pause |
 
 What is not: Snake II, Bantumi, Pairs II and Settings are in the list but
-do nothing; there is no sound; and Space Impact's title animation is not
-shown. A paused game continues exactly where it stopped, where the phone
+do nothing, so the sounds cannot be switched off, and Space Impact's title
+animation is not shown. A paused game continues exactly where it stopped, where the phone
 gives the ship a second and a half of shield.
 
 ## Firmware policy
@@ -172,6 +174,31 @@ copied from the ROM to cartridge RAM at power-on, because both the game
 and the sprite code, which are in different banks, read it. The save file
 therefore holds a copy of that data next to the top score.
 
+## Sound
+
+The sounds are read from the dump with the rest: each is a short run of
+notes for the phone's buzzer, a pitch and a length in the units of the
+phone's timers, 7.8 ms. The notes are too short to be timed by screen
+frames, two units for most, so both consoles keep a timer that interrupts
+once a unit, and play the notes as a square wave on their second pulse
+channel. A sound that starts while another plays takes its place, as on
+the phone.
+
+The pitches are the phone's, 440 Hz to 4186 Hz, as near as the pulse
+channel's frequency register comes: within 3 Hz up to 1 kHz and within
+1.2% above, 4228 Hz for the highest. The notes were compared with a trace
+of the firmware's writes to the buzzer in MAME (the fork's
+`docs/games_applications_3310.md`, Sounds) by recording the ROMs:
+
+```
+build/gb_run build/nokia3310-keys.gb BOOT_ROM 400 audio:shot.raw +a 4 -a 40
+GBA_SHOT_AUDIO=shot.raw build/gba_shot build/nokia3310-keys.gba shot.bmp 360 0x1 300 304
+```
+
+Both write the left channel as raw signed 16-bit samples at 32768 Hz.
+The phone plays no sound until Sounds in the games' settings and Warning
+and game tones in the profile are both on; here they always play.
+
 ## Golden run
 
 The core is checked against the firmware itself. `make golden` plays a
@@ -196,14 +223,15 @@ ignored `golden/`.
 - `core/` is portable C: `lcd` (framebuffer), `font`, `menu` (the phone's
   menus and the full-screen ones), `sprite` (sprite list and tile layer),
   `si`, `si_setup` and `si_base` (the game), `games` (keys and timers to
-  game events), `rand`.
+  game events), `sound` (the notes of the sound in progress), `rand`.
 - `platform/host/` has the tools above; `platform/gb/` and `platform/gba/`
   are the cartridges.
-- `tools/extract_assets.py` copies the game's data region, the fonts, the
-  English text and the menus' pictures out of the dump; the game reads its
-  data by firmware address.
+- `tools/extract_assets.py` copies the game's data region, its sounds, the
+  fonts, the English text and the menus' pictures out of the dump; the
+  game reads its data by firmware address.
 - `tools/gb_run.c` runs a Game Boy ROM headlessly with scripted buttons,
-  screenshots, memory peeks and a profiler (`tools/gb_profile.py`).
+  screenshots, sound capture, memory peeks and a profiler
+  (`tools/gb_profile.py`).
 - The firmware map the core follows is `docs/games_applications_3310.md`
   in the MAME fork.
 

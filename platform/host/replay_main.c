@@ -17,11 +17,12 @@
 #include "pgm.h"
 #include "rand.h"
 #include "si.h"
+#include "sound.h"
 #include "sprite.h"
 
-void platform_sound(uint8_t sound)
+void platform_tone(uint8_t note)
 {
-    (void)sound;
+    (void)note;
 }
 
 void platform_vibrate(void)

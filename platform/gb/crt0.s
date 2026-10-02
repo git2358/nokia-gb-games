@@ -1,11 +1,13 @@
-;; Game Boy startup: interrupt vectors, RAM set-up, and a vertical-blank
-;; handler that counts frames. makebin fills in the cartridge header.
+;; Game Boy startup: interrupt vectors, RAM set-up, a vertical-blank
+;; handler that counts frames and a timer handler that keeps the sounds'
+;; time. makebin fills in the cartridge header.
 ;; Everything here is in the first 16 KiB of the ROM, which is always
 ;; mapped; the rest of the program is in banks 1 to 3 (see far.c).
 	.module crt0
 	.globl	_main
 	.globl	_flush_tiles
 	.globl	_frame_count, _pad_last, _pad_latch
+	.globl	_sound_active, _sound_tick
 	.globl	_lcd_scx, _lcd_cut
 	.globl	_staged, _staged_at, _staged_count, _staged_from
 	.globl	_lcd_column_fill, _lcd_column_blit
@@ -18,7 +20,7 @@
 	.org	0x48		; LCD status
 	jp	lcd_split
 	.org	0x50		; timer
-	reti
+	jp	timer
 	.org	0x58		; serial
 	reti
 	.org	0x60		; joypad
@@ -135,6 +137,26 @@ vblank:
 	ld	(#_pad_last), a
 
 	pop	hl
+	pop	af
+	reti
+
+;; The timer interrupts once per unit of the phone's timers. While a sound
+;; plays, the core moves it on a unit. That is C and takes a while, so
+;; other interrupts are let in first: a cut across the screen cannot wait.
+timer:
+	push	af
+	ld	a, (#_sound_active)
+	or	a, a
+	jr	z, 1$
+	ei
+	push	bc
+	push	de
+	push	hl
+	call	_sound_tick
+	pop	hl
+	pop	de
+	pop	bc
+1$:
 	pop	af
 	reti
 

@@ -38,7 +38,4 @@ uint8_t games_event(int event);
 /* Draws the game into the LCD view; with `all`, not just what changed. */
 void games_draw(uint8_t all);
 
-/* The game asks for one of its sounds (an SI_SOUND_ code). */
-void platform_sound(uint8_t sound);
-
 #endif

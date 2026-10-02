@@ -14,11 +14,12 @@
 #include "menu.h"
 #include "pgm.h"
 #include "si.h"
+#include "sound.h"
 #include "testcard.h"
 
-void platform_sound(uint8_t sound)
+void platform_tone(uint8_t note)
 {
-    (void)sound;
+    (void)note;
 }
 
 void platform_vibrate(void)

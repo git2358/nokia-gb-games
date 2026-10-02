@@ -1,6 +1,6 @@
 # Nokia 3210 games for Game Boy and Game Boy Advance
 
-![Both consoles in both modes: the first screen, Snake's menu and Snake being played, on the Game Boy and the Game Boy Advance](docs/banner.png)
+![The first screen, the list of games, and Rotation, Snake and Memory being played, on the Game Boy and the Game Boy Advance, each in the phone-sized mode and in full screen](docs/banner.png)
 
 Ports of the Nokia 3210 (NSE-8/9 v6.00) built-in games to two cartridges
 built from one portable C core:
@@ -105,8 +105,8 @@ checks. To run on hardware, pass a GBA ROM you own to copy it from:
 In progress. Both cartridges build and run the same core: they open on the
 main menu's Games entry and walk the Games list and each game's menu with
 its Level, Top score and Instructions pages, drawn with the phone's own
-fonts and text. All three of the phone's games play in the phone-sized
-mode, with the pause menu's Continue, the Game over page and Last view:
+fonts and text. All three of the phone's games play, with the pause menu's
+Continue, the Game over page and Last view:
 
 - Snake: steering, food, scoring, nine levels.
 - Memory: five board sizes from 2x2 to 10x6, the firmware's deal, the
@@ -130,11 +130,15 @@ have their buzzer sounds.
 
 Start on the first screen picks a
 full-screen mode instead, which is the port's own design and not the
-phone's, and has only Snake so far (Rotation and Memory do nothing there): menus laid out for the console's whole screen in the phone's large
+phone's: menus laid out for the console's whole screen in the phone's large
 font with every entry visible and a cursor beside the selection, and Snake
 on a bigger board of the same 4-pixel cells (38x34 on the Game Boy; 28x18
 on the GBA, which shows the board at 2x), with its own level, top score and
-speeds. [`docs/authenticity.md`](docs/authenticity.md)
+speeds. Rotation and Memory are the same games in both modes: from the
+full-screen menus they are played on the phone's screen at 2x, and share
+their level and top score with the phone-sized mode. At 2x the phone's 84
+columns are 8 pixels too wide for the Game Boy, which leaves off the two
+columns at each side. [`docs/authenticity.md`](docs/authenticity.md)
 lists where the code's structure still differs from the firmware's. See
 [`docs/handoff.md`](docs/handoff.md) for the decisions taken, the reference
 material and the work items.

@@ -4,9 +4,12 @@
 # Fully automated and headless. For each screenshot it builds the ROM with a
 # scripted key sequence, runs it in the emulator core (SameBoy's tester for
 # the Game Boy, tools/gba_shot for the GBA), and stitches the pictures into a
-# labelled grid: one row per console; columns for the first screen, Snake's
-# menu in the phone-sized and full-screen modes, and Snake being played in
-# each.
+# labelled grid: two rows per console, the phone-sized mode and under it the
+# full-screen mode; columns for the first screen, the list of games, and
+# Rotation, Snake and Memory being played. The full-screen rows leave the
+# first screen out, which is the same for both modes; only Snake has a board
+# of its own there, and Rotation and Memory are played on the phone's screen
+# at 2x.
 #
 #   ./scripts/make-banner.sh [output.png]     # default: docs/banner.png
 #
@@ -31,13 +34,28 @@ trap 'rm -rf "$TMP"' EXIT
 
 moves() { printf 't%.0s' $(seq 1 "$1"); }
 
-# Key scripts: s select, a the full-screen key, d down, u/l turn, t one move.
-MENU_PHONE="sds"
-MENU_FULL="ads"
-# Each game eats the first food, in the middle of its board, then turns left.
-PLAY_PHONE="sdss$(moves 2)u$(moves 5)l$(moves 3)"
-PLAY_FULL_GB="adss$(moves 11)u$(moves 16)l$(moves 4)"
-PLAY_FULL_GBA="adss$(moves 6)u$(moves 8)l$(moves 3)"
+# Key scripts: s select, a the full-screen key, u/d/l/r the direction
+# buttons, t one move or tick of the running game.
+GAMES_PHONE="s"
+GAMES_FULL="a"
+# From a game's menu: its third level, then New game. The full-screen menus
+# list the entries in another order.
+LEVEL_3="usuusds"
+LEVEL_3_FULL="dsuusus"
+# Rotation on a 5x5 board: the game's own ten opening turns, four ticks
+# each, then the frame moved off the corner.
+ROTATION_TURNS="$(moves 40)rd"
+ROTATION="ss${LEVEL_3}${ROTATION_TURNS}"
+ROTATION_FULL="as${LEVEL_3_FULL}${ROTATION_TURNS}"
+# Each Snake eats the first food, in the middle of its board, then turns left.
+SNAKE_PHONE="sdss$(moves 2)u$(moves 5)l$(moves 3)"
+SNAKE_FULL_GB="adss$(moves 11)u$(moves 16)l$(moves 4)"
+SNAKE_FULL_GBA="adss$(moves 6)u$(moves 8)l$(moves 3)"
+# Memory on a 6x4 board: three pairs found and one more card turned up. The
+# scripted game starts from seed 0, so the cards are where these keys expect.
+MEMORY_TRIES="srrrddsldsllsuusllusrsdd"
+MEMORY="sdds${LEVEL_3}${MEMORY_TRIES}"
+MEMORY_FULL="adds${LEVEL_3_FULL}${MEMORY_TRIES}"
 
 # gb_shot KEYS OUT: a Game Boy screenshot at 3x, in the console's own green.
 gb_shot() {
@@ -57,16 +75,24 @@ gba_shot() {
 make -C "$ROOT" build/gba_shot >/dev/null
 
 gb_shot "" "$TMP/gb-0.png"
-gb_shot "$MENU_PHONE" "$TMP/gb-1.png"
-gb_shot "$MENU_FULL" "$TMP/gb-2.png"
-gb_shot "$PLAY_PHONE" "$TMP/gb-3.png"
-gb_shot "$PLAY_FULL_GB" "$TMP/gb-4.png"
+gb_shot "$GAMES_PHONE" "$TMP/gb-1.png"
+gb_shot "$ROTATION" "$TMP/gb-2.png"
+gb_shot "$SNAKE_PHONE" "$TMP/gb-3.png"
+gb_shot "$MEMORY" "$TMP/gb-4.png"
+gb_shot "$GAMES_FULL" "$TMP/gbfull-1.png"
+gb_shot "$ROTATION_FULL" "$TMP/gbfull-2.png"
+gb_shot "$SNAKE_FULL_GB" "$TMP/gbfull-3.png"
+gb_shot "$MEMORY_FULL" "$TMP/gbfull-4.png"
 
 gba_shot "" "$TMP/gba-0.png"
-gba_shot "$MENU_PHONE" "$TMP/gba-1.png"
-gba_shot "$MENU_FULL" "$TMP/gba-2.png"
-gba_shot "$PLAY_PHONE" "$TMP/gba-3.png"
-gba_shot "$PLAY_FULL_GBA" "$TMP/gba-4.png"
+gba_shot "$GAMES_PHONE" "$TMP/gba-1.png"
+gba_shot "$ROTATION" "$TMP/gba-2.png"
+gba_shot "$SNAKE_PHONE" "$TMP/gba-3.png"
+gba_shot "$MEMORY" "$TMP/gba-4.png"
+gba_shot "$GAMES_FULL" "$TMP/gbafull-1.png"
+gba_shot "$ROTATION_FULL" "$TMP/gbafull-2.png"
+gba_shot "$SNAKE_FULL_GBA" "$TMP/gbafull-3.png"
+gba_shot "$MEMORY_FULL" "$TMP/gbafull-4.png"
 
 # Leave the default builds behind, not the last scripted ones.
 make -C "$ROOT" gb gba KEYS= >/dev/null
@@ -78,8 +104,12 @@ SIDE=56
 HEAD=44
 
 row() { # row PREFIX HEIGHT LABEL OUT
-  local prefix="$1" h="$2" label="$3" out="$4"
+  local prefix="$1" h="$2" label="$3" out="$4" i
   magick -size "${GUT}x${h}" xc:black "$TMP/gut.png"
+  # A panel with no screenshot is left blank.
+  for i in 0 1 2 3 4; do
+    [ -f "$TMP/$prefix-$i.png" ] || magick -size "${PANEL}x${h}" xc:black "$TMP/$prefix-$i.png"
+  done
   magick -size "${h}x${SIDE}" xc:black -font "$FONT" -pointsize 26 -fill "$GREEN" \
     -gravity center -annotate 0 "$label" -rotate -90 "$TMP/side.png"
   magick "$TMP/side.png" "$TMP/$prefix-0.png" "$TMP/gut.png" "$TMP/$prefix-1.png" "$TMP/gut.png" \
@@ -90,7 +120,7 @@ row() { # row PREFIX HEIGHT LABEL OUT
 header() { # header OUT
   local i=0 title
   magick -size "${SIDE}x${HEAD}" xc:black "$TMP/head.png"
-  for title in "First screen" "Menu, phone-sized" "Menu, full screen" "Snake, phone-sized" "Snake, full screen"; do
+  for title in "First screen" "Games" "Rotation" "Snake" "Memory"; do
     magick -size "${PANEL}x${HEAD}" xc:black -font "$FONT" -pointsize 24 -fill "$GREEN" \
       -gravity center -annotate 0 "$title" "$TMP/h.png"
     if [ "$i" -gt 0 ]; then
@@ -106,10 +136,13 @@ header() { # header OUT
 
 header "$TMP/header.png"
 row gb 432 "Game Boy" "$TMP/row-gb.png"
+row gbfull 432 "Game Boy, full screen" "$TMP/row-gbfull.png"
 row gba 320 "Game Boy Advance" "$TMP/row-gba.png"
+row gbafull 320 "GBA, full screen" "$TMP/row-gbafull.png"
 W="$(magick identify -format '%w' "$TMP/row-gb.png")"
 magick -size "${W}x${GUT}" xc:black "$TMP/hgut.png"
 mkdir -p "$(dirname "$OUT")"
-magick "$TMP/header.png" "$TMP/row-gb.png" "$TMP/hgut.png" "$TMP/row-gba.png" -append \
+magick "$TMP/header.png" "$TMP/row-gb.png" "$TMP/hgut.png" "$TMP/row-gbfull.png" "$TMP/hgut.png" \
+  "$TMP/row-gba.png" "$TMP/hgut.png" "$TMP/row-gbafull.png" -append \
   -bordercolor black -border "${GUT}x${GUT}" -strip "$OUT"
 echo "wrote $OUT ($(magick identify -format '%wx%h' "$OUT"))"

@@ -216,9 +216,14 @@ uint16_t rotation_tick(void)
    on a 4 px pitch. */
 static void draw_number(uint8_t number, int x, int y)
 {
-    if (number >= 10)
-        lcd_blit_bitmap(x - 6, y, 3, 5, games_digit_glyphs + number / 10 * 3);
-    lcd_blit_bitmap(x - 2, y, 3, 5, games_digit_glyphs + number % 10 * 3);
+    uint8_t tens = 0;
+
+    /* At most 36: counting the tens is quicker than dividing. */
+    for (; number >= 10; number -= 10)
+        tens++;
+    if (tens)
+        lcd_blit_bitmap(x - 6, y, 3, 5, games_digit_glyphs + (uint8_t)(tens * 3));
+    lcd_blit_bitmap(x - 2, y, 3, 5, games_digit_glyphs + (uint8_t)(number * 3));
 }
 
 /* The left and top edge of cell 0, less the number's offset in its cell. */

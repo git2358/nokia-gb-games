@@ -103,6 +103,18 @@ Differences in structure:
   eating food. Capture them in MAME.
 - The beep on eating.
 
+## Drawing speed on the Game Boy
+
+The compiler's code for the drawing primitives' innermost loops (a column of
+a bitmap, a column of a filled rectangle) was many times too slow for
+Rotation's animation on its bigger boards. `core/lcd.c` keeps those loops as
+two small functions in C, `lcd_column_fill` and `lcd_column_blit`, and the
+Game Boy ROM replaces them with assembly in `platform/gb/crt0.s`
+(`LCD_PLATFORM_COLUMNS`). The pixels are the same; the game code is not
+involved. The 2x view of the phone's screen is likewise the Game Boy
+layer's own: it keeps a copy of what is shown and converts only the tiles
+whose pixels changed.
+
 ## Screen updates on the Game Boy
 
 The phone writes to its LCD at any time and its screen changes in place. The

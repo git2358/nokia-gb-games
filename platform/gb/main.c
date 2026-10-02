@@ -82,6 +82,7 @@ volatile uint8_t frame_count;
 uint8_t staged[STAGED_TILES * 16];
 uint8_t *staged_at[STAGED_TILES];
 uint8_t staged_count;
+const uint8_t *staged_from; /* flush_tiles' place in staged */
 
 void flush_tiles(void);
 
@@ -158,13 +159,117 @@ static void render_tile(uint8_t tx, uint8_t ty, uint8_t *tile)
     }
 }
 
+/* For the magnified rectangle, in crt0.s. zoom_tile is render_tile for a
+   quarter of a cell, 4x4 pixels each drawn 2x2: `src` is the cell's byte on
+   the quarter's first row and zoom_right picks the right-hand half of the
+   bytes. zoom_take compares four rows of a cell in lcd_fb with the copy of
+   what is shown, brings the copy up to date, and returns the bits that
+   differed in any row. */
+uint8_t zoom_right;
+void zoom_tile(const uint8_t *src, uint8_t *tile);
+uint8_t zoom_take(const uint8_t *src, uint8_t *was);
+
+/* Where each row of tiles starts in video RAM. */
+static uint8_t *tile_row[TILES_Y];
+
 static uint8_t *tile_address(uint8_t tx, uint8_t ty)
 {
-    uint16_t n = (uint16_t)(ty * TILES_X + tx);
+    return tile_row[ty] + (uint16_t)(tx << 4);
+}
 
-    if (n < SPLIT_TILE)
-        return (uint8_t *)0x8000 + n * 16;
-    return (uint8_t *)0x9000 + (n - SPLIT_TILE) * 16;
+static void stage_tile(uint8_t tx, uint8_t ty, uint8_t *n)
+{
+    staged_at[*n] = tile_address(tx, ty);
+    if (++*n == STAGED_TILES) {
+        staged_count = *n;
+        flush_tiles();
+        *n = 0;
+    }
+}
+
+static uint8_t zoomed; /* the screen holds the magnified rectangle */
+
+/* The magnified rectangle is as wide as the screen at 2x and as tall as the
+   phone's LCD. What the screen holds of it is kept here, a byte for every
+   eight pixels as in lcd_fb, so that only tiles whose pixels changed are
+   converted and copied. */
+#define ZOOM_BYTES (LCD_FB_WIDTH / 2 / 8)
+#define ZOOM_ROWS LCD_HEIGHT
+static uint8_t zoom_shown[ZOOM_BYTES * ZOOM_ROWS];
+
+/* One tile to video RAM: straight there with the LCD off, which it only is
+   at power-on, otherwise by way of the staging buffer. */
+static uint8_t *tile_target(uint8_t tx, uint8_t ty, uint8_t n)
+{
+    return LCDC & 0x80 ? staged + n * 16 : tile_address(tx, ty);
+}
+
+/* The core has named a rectangle to show at 2x in the middle of the screen
+   (whole cells, ZOOM_BYTES cells wide and ZOOM_ROWS pixels tall). Every
+   cell of it is four tiles, one for each quarter; the tiles above and below
+   it are blanked when it first comes up, and cells outside it are not
+   shown. */
+static void present_zoomed(void)
+{
+    uint8_t first_row = (uint8_t)((TILES_Y - ZOOM_ROWS / 4) / 2);
+    uint8_t cx, cy, half, n = 0, i;
+    uint8_t *dirty = lcd_dirty + lcd_zoom_y / 8 * LCD_CELLS_X + lcd_zoom_x / 8;
+    const uint8_t *fb = lcd_fb + lcd_zoom_y * LCD_STRIDE + lcd_zoom_x / 8;
+    uint8_t *shown = zoom_shown;
+    const uint8_t *src;
+    uint8_t *was, *tile;
+
+    if (!zoomed) {
+        uint8_t tx, ty;
+
+        for (ty = 0; ty < TILES_Y; ty++) {
+            if ((uint8_t)(ty - first_row) < ZOOM_ROWS / 4)
+                continue;
+            for (tx = 0; tx < TILES_X; tx++) {
+                tile = tile_target(tx, ty, n);
+                for (i = 0; i < 16; i++)
+                    tile[i] = 0;
+                if (LCDC & 0x80)
+                    stage_tile(tx, ty, &n);
+            }
+        }
+    }
+    for (cy = 0; cy < ZOOM_ROWS / 8; cy++, dirty += LCD_CELLS_X, fb += 8 * LCD_STRIDE, shown += 8 * ZOOM_BYTES) {
+        for (cx = 0; cx < ZOOM_BYTES; cx++) {
+            if (!dirty[cx])
+                continue;
+            dirty[cx] = 0;
+            /* The cell's first byte in lcd_fb and in the copy of what is
+               shown; each half of it is four rows and two tiles. */
+            src = fb + cx;
+            was = shown + cx;
+            for (half = 0; half < 2; half++) {
+                uint8_t changed = zoom_take(src, was);
+
+                if (!zoomed)
+                    changed = 0xff;
+                for (i = 0; i < 2; i++) {
+                    uint8_t tx = (uint8_t)(cx * 2 + i), ty = (uint8_t)(first_row + cy * 2 + half);
+
+                    if (!(changed & (i ? 0x0f : 0xf0)))
+                        continue;
+                    zoom_right = i;
+                    zoom_tile(src, tile_target(tx, ty, n));
+                    if (LCDC & 0x80)
+                        stage_tile(tx, ty, &n);
+                }
+                src += 4 * LCD_STRIDE;
+                was += 4 * ZOOM_BYTES;
+            }
+        }
+    }
+    if (n) {
+        staged_count = n;
+        flush_tiles();
+    }
+    if (!(LCDC & 0x80))
+        LCDC = LCDC_ON;
+    zoomed = 1;
 }
 
 /* Brings video RAM up to date with the cells of lcd_fb drawn to since the
@@ -176,6 +281,11 @@ static void present(void)
     uint8_t tx, ty, n = 0;
     uint8_t *dirty = lcd_dirty;
 
+    if (lcd_zoom_w) {
+        present_zoomed();
+        return;
+    }
+    zoomed = 0;
     for (ty = 0; ty < TILES_Y; ty++) {
         for (tx = 0; tx < TILES_X; tx++, dirty++) {
             if (!*dirty)
@@ -233,6 +343,9 @@ void main(void)
 
     wait_vblank();
     LCDC = 0;
+    for (ty = 0; ty < TILES_Y; ty++)
+        tile_row[ty] = ty < SPLIT_ROW ? (uint8_t *)0x8000 + ty * (TILES_X * 16)
+                                      : (uint8_t *)0x9000 + (ty - SPLIT_ROW) * (TILES_X * 16);
     /* Every cell of the screen gets its own tile. */
     for (ty = 0; ty < TILES_Y; ty++)
         for (tx = 0; tx < TILES_X; tx++)

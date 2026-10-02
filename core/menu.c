@@ -106,6 +106,9 @@ static uint8_t drawn_screen = NO_SCREEN, drawn_selection;
 static uint8_t full_screen;    /* the full-screen variant was chosen */
 static uint8_t view_mode;      /* which of the views below the LCD is set up for */
 
+/* Columns of the phone's LCD a platform with LCD_GAME_ZOOM shows. */
+#define GAME_ZOOM_WIDTH (LCD_FB_WIDTH / LCD_GAME_ZOOM < LCD_WIDTH ? LCD_FB_WIDTH / LCD_GAME_ZOOM : LCD_WIDTH)
+
 /* The phone's LCD; the full-screen variant's own menus; its board. */
 enum {
     VIEW_PHONE,
@@ -177,10 +180,11 @@ static uint8_t sparkle_ticks; /* phone ticks it has been shown */
 static uint8_t sparkle_only;  /* nothing else on the page needs drawing */
 static const char *help_page; /* first character of the Instructions page shown */
 
-/* The two variants of Snake keep separate levels and top scores. */
+/* The two variants of Snake keep separate levels and top scores. The
+   other games are the same game in both modes. */
 static uint8_t settings_slot(void)
 {
-    return full_screen ? GAME_SNAKE_FULL : game;
+    return full_screen && game == GAME_SNAKE ? GAME_SNAKE_FULL : game;
 }
 
 static uint8_t level_count(void)
@@ -389,10 +393,11 @@ static void native_game(void)
     native_hint(text_hint_select);
 }
 
-/* One of nine bars across the screen, filled up to the chosen level. */
+/* One of the bars across the screen, one a level, filled up to the chosen
+   level. */
 static void native_level_bar(uint8_t i)
 {
-    uint8_t x = (uint8_t)((LCD_FB_WIDTH - ((MAX_LEVELS - 1) * NATIVE_BAR_PITCH + NATIVE_BAR_WIDTH)) / 2
+    uint8_t x = (uint8_t)((LCD_FB_WIDTH - ((level_count() - 1) * NATIVE_BAR_PITCH + NATIVE_BAR_WIDTH)) / 2
                           + i * NATIVE_BAR_PITCH);
     uint8_t height = (uint8_t)(NATIVE_BAR_HEIGHT + i * NATIVE_BAR_STEP);
     uint8_t top = (uint8_t)(NATIVE_HINT_Y - NATIVE_BAR_GAP - height);
@@ -869,13 +874,10 @@ static void handle_key(uint8_t key)
         } else if (key == MENU_KEY_UP) {
             game = (uint8_t)((game + GAME_COUNT - 1) % GAME_COUNT);
         } else if (key == MENU_KEY_SELECT) {
-            /* Full screen, only Snake is there so far. */
-            if (!full_screen || game == GAME_SNAKE) {
-                if (game != resume_game)
-                    resume = RESUME_NONE;
-                settings_load();
-                game_menu_open();
-            }
+            if (game != resume_game)
+                resume = RESUME_NONE;
+            settings_load();
+            game_menu_open();
         } else {
             screen = SCREEN_MAIN;
         }
@@ -1015,8 +1017,14 @@ void menu_draw(void)
        clears everything. */
     uint8_t mode = VIEW_PHONE;
 
-    if (full_screen && screen != SCREEN_MAIN)
-        mode = screen == SCREEN_PLAY || screen == SCREEN_LAST_VIEW ? VIEW_BOARD : VIEW_NATIVE;
+    /* Only Snake has a board of its own for the full-screen variant; the
+       other games are played on the phone's LCD there too. */
+    if (full_screen && screen != SCREEN_MAIN) {
+        if (screen != SCREEN_PLAY && screen != SCREEN_LAST_VIEW)
+            mode = VIEW_NATIVE;
+        else if (game == GAME_SNAKE)
+            mode = VIEW_BOARD;
+    }
     if (mode != view_mode || surround_used) {
         lcd_view_full();
         lcd_clear();
@@ -1028,7 +1036,14 @@ void menu_draw(void)
        and the full-screen menus as they are. */
     if (mode == VIEW_PHONE) {
         lcd_view_phone();
-        lcd_zoom_set(LCD_PHONE_X, LCD_PHONE_Y, LCD_ZOOM > 1 ? LCD_WIDTH : 0, LCD_HEIGHT);
+        if (LCD_ZOOM > 1)
+            lcd_zoom_set(LCD_PHONE_X, LCD_PHONE_Y, LCD_WIDTH, LCD_HEIGHT);
+        else if (LCD_GAME_ZOOM > 1 && full_screen && screen != SCREEN_MAIN)
+            /* A game on the phone's LCD in the full-screen variant: as much
+               of the LCD's middle as fits across the screen. */
+            lcd_zoom_set(LCD_PHONE_X + (LCD_WIDTH - GAME_ZOOM_WIDTH) / 2, LCD_PHONE_Y, GAME_ZOOM_WIDTH, LCD_HEIGHT);
+        else
+            lcd_zoom_set(0, 0, 0, 0);
     } else if (mode == VIEW_NATIVE) {
         lcd_view_full();
         lcd_zoom_set(0, 0, 0, 0);

@@ -13,8 +13,12 @@ CFLAGS ?= -std=c99 -O2 -Wall -Wextra -pedantic
 SDCC ?= sdcc
 MAKEBIN ?= makebin
 SDAS ?= sdasgb
-# The Game Boy gives the core a framebuffer the size of its screen.
-GB_FB := -DLCD_FB_WIDTH=160 -DLCD_FB_HEIGHT=144
+# The Game Boy gives the core a framebuffer the size of its screen, and
+# shows the games played on the phone's screen in the full-screen mode at 2x.
+GB_FB := -DLCD_FB_WIDTH=160 -DLCD_FB_HEIGHT=144 -DLCD_GAME_ZOOM=2
+# The ROM itself also takes the core's innermost drawing loops from
+# platform/gb/crt0.s (LCD_PLATFORM_COLUMNS); the host builds with this
+# framebuffer keep the C ones.
 SAMEBOY_TESTER ?= tools/SameBoy/build/bin/tester/sameboy_tester
 SAMEBOY_APP ?= /Applications/SameBoy.app
 # Emulated seconds to run before the screenshot, and its scale factor.
@@ -151,12 +155,12 @@ frames: $(BUILD)/frame_testcard.pgm $(BUILD)/frame_outline.pgm $(BUILD)/frame_sn
 
 $(BUILD)/gb/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
 	@mkdir -p $(BUILD)/gb
-	$(SDCC) -msm83 --opt-code-speed $(GB_FB) -Icore -I$(ASSETS) -c $< -o $@
+	$(SDCC) -msm83 --opt-code-speed $(GB_FB) -DLCD_PLATFORM_COLUMNS -Icore -I$(ASSETS) -c $< -o $@
 
 # Always rebuilt, so a change of KEYS takes effect.
 $(BUILD)/gb/main.rel: platform/gb/main.c $(CORE_HDR) FORCE
 	@mkdir -p $(BUILD)/gb
-	$(SDCC) -msm83 --opt-code-speed $(GB_FB) -Icore -I$(ASSETS) '-DSTART_KEYS="$(KEYS)"' -c $< -o $@
+	$(SDCC) -msm83 --opt-code-speed $(GB_FB) -DLCD_PLATFORM_COLUMNS -Icore -I$(ASSETS) '-DSTART_KEYS="$(KEYS)"' -c $< -o $@
 
 FORCE:
 

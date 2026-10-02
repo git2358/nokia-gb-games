@@ -45,12 +45,12 @@ void lcd_zoom_set(uint8_t x, uint8_t y, uint8_t w, uint8_t h)
 uint8_t lcd_screen_pixel(uint8_t x, uint8_t y)
 {
     if (lcd_zoom_w) {
-        int zx = x - (LCD_FB_WIDTH - lcd_zoom_w * LCD_ZOOM) / 2;
-        int zy = y - (LCD_FB_HEIGHT - lcd_zoom_h * LCD_ZOOM) / 2;
+        int zx = x - (LCD_FB_WIDTH - lcd_zoom_w * LCD_ZOOM_BY) / 2;
+        int zy = y - (LCD_FB_HEIGHT - lcd_zoom_h * LCD_ZOOM_BY) / 2;
 
-        if (zx >= 0 && zx < lcd_zoom_w * LCD_ZOOM && zy >= 0 && zy < lcd_zoom_h * LCD_ZOOM) {
-            x = (uint8_t)(lcd_zoom_x + zx / LCD_ZOOM);
-            y = (uint8_t)(lcd_zoom_y + zy / LCD_ZOOM);
+        if (zx >= 0 && zx < lcd_zoom_w * LCD_ZOOM_BY && zy >= 0 && zy < lcd_zoom_h * LCD_ZOOM_BY) {
+            x = (uint8_t)(lcd_zoom_x + zx / LCD_ZOOM_BY);
+            y = (uint8_t)(lcd_zoom_y + zy / LCD_ZOOM_BY);
         }
     }
     return lcd_fb_pixel(x, y);
@@ -83,6 +83,36 @@ static void put_pixel(int x, int y, uint8_t color)
         *p &= (uint8_t)~lcd_bit[x & 7];
 }
 
+uint8_t lcd_column_rows, lcd_column_color, lcd_column_bits;
+
+#ifndef LCD_PLATFORM_COLUMNS
+void lcd_column_fill(uint8_t *p, uint8_t mask)
+{
+    uint8_t rows;
+
+    for (rows = lcd_column_rows; rows; rows--, p += LCD_STRIDE) {
+        if (lcd_column_color == LCD_INVERT)
+            *p ^= mask;
+        else if (lcd_column_color)
+            *p |= mask;
+        else
+            *p &= (uint8_t)~mask;
+    }
+}
+
+void lcd_column_blit(uint8_t *p, uint8_t mask)
+{
+    uint8_t rows, bits = lcd_column_bits;
+
+    for (rows = lcd_column_rows; rows; rows--, p += LCD_STRIDE, bits >>= 1) {
+        if (bits & 1)
+            *p |= mask;
+        else
+            *p &= (uint8_t)~mask;
+    }
+}
+#endif
+
 void lcd_clear(void)
 {
     unsigned i;
@@ -102,7 +132,7 @@ void lcd_fill_rect(int x, int y, int w, int h, uint8_t color)
     /* The bits of a byte from pixel n rightwards, and up to pixel n. */
     static const uint8_t from_bit[8] = { 0xff, 0x7f, 0x3f, 0x1f, 0x0f, 0x07, 0x03, 0x01 };
     static const uint8_t up_to_bit[8] = { 0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc, 0xfe, 0xff };
-    uint8_t *row;
+    uint8_t *p;
     uint8_t first, last, count, i;
 
     /* Clip to the view. */
@@ -125,36 +155,22 @@ void lcd_fill_rect(int x, int y, int w, int h, uint8_t color)
 
     lcd_mark_dirty((uint8_t)x, (uint8_t)y, (uint8_t)w, (uint8_t)h);
 
-    /* Whole bytes at a time: the first and last byte of a row are masked,
-       the ones between are written outright. */
+    /* A column of bytes at a time: the first and last are masked, the ones
+       between are written whole. */
     first = from_bit[x & 7];
     last = up_to_bit[(x + w - 1) & 7];
     count = (uint8_t)(((x + w - 1) >> 3) - (x >> 3));
     if (!count)
         first &= last;
-    for (row = lcd_fb + y * LCD_STRIDE + (x >> 3); h; h--, row += LCD_STRIDE) {
-        uint8_t *p = row;
-
-        if (color == LCD_INVERT)
-            *p ^= first;
-        else if (color)
-            *p |= first;
-        else
-            *p &= (uint8_t)~first;
-        if (!count)
-            continue;
-        for (i = count - 1; i; i--) {
-            p++;
-            *p = color == LCD_INVERT ? (uint8_t)~*p : color ? 0xff : 0x00;
-        }
-        p++;
-        if (color == LCD_INVERT)
-            *p ^= last;
-        else if (color)
-            *p |= last;
-        else
-            *p &= (uint8_t)~last;
-    }
+    p = lcd_fb + y * LCD_STRIDE + (x >> 3);
+    lcd_column_rows = (uint8_t)h;
+    lcd_column_color = color;
+    lcd_column_fill(p, first);
+    if (!count)
+        return;
+    for (i = count - 1; i; i--)
+        lcd_column_fill(++p, 0xff);
+    lcd_column_fill(++p, last);
 }
 
 void lcd_blit_bitmap(int x, int y, int w, int h, const uint8_t *data)
@@ -162,6 +178,35 @@ void lcd_blit_bitmap(int x, int y, int w, int h, const uint8_t *data)
     int bytes_per_column = (h + 7) / 8;
     int i, j;
 
+    if (x >= 0 && y >= 0 && x + w <= lcd_view_w && y + h <= lcd_view_h) {
+        /* All of it is inside the view: a column at a time, eight rows of
+           it at once, without the checks a pixel at a time needs. */
+        uint8_t fx = (uint8_t)(x + lcd_view_x), fy = (uint8_t)(y + lcd_view_y);
+        uint8_t *top = lcd_fb + fy * LCD_STRIDE;
+        uint8_t columns, left;
+
+        lcd_mark_dirty(fx, fy, (uint8_t)w, (uint8_t)h);
+        if (h <= 8) {
+            /* The usual case: a byte of the bitmap is a whole column. */
+            lcd_column_rows = (uint8_t)h;
+            for (columns = (uint8_t)w; columns; columns--, fx++) {
+                lcd_column_bits = *data++;
+                lcd_column_blit(top + (fx >> 3), lcd_bit[fx & 7]);
+            }
+            return;
+        }
+        for (columns = (uint8_t)w; columns; columns--, fx++) {
+            uint8_t *p = top + (fx >> 3);
+            uint8_t mask = lcd_bit[fx & 7];
+
+            for (left = (uint8_t)h; left; left -= lcd_column_rows, p += 8 * LCD_STRIDE) {
+                lcd_column_rows = left > 8 ? 8 : left;
+                lcd_column_bits = *data++;
+                lcd_column_blit(p, mask);
+            }
+        }
+        return;
+    }
     for (i = 0; i < w; i++)
         for (j = 0; j < h; j++)
             put_pixel(x + i, y + j, (data[i * bytes_per_column + (j >> 3)] >> (j & 7)) & 1);

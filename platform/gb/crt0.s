@@ -5,7 +5,9 @@
 	.globl	_flush_tiles
 	.globl	_frame_count, _pad_last, _pad_latch
 	.globl	_sound_frame
-	.globl	_staged, _staged_at, _staged_count
+	.globl	_staged, _staged_at, _staged_count, _staged_from
+	.globl	_lcd_column_fill, _lcd_column_blit, _zoom_tile, _zoom_take, _zoom_right
+	.globl	_lcd_column_rows, _lcd_column_color, _lcd_column_bits
 	.globl	s__INITIALIZER, s__INITIALIZED, l__INITIALIZER
 
 	.area	_HEADER (ABS)
@@ -146,46 +148,213 @@ lcd_split:
 ;; void flush_tiles(void): copies staged_count 16-byte tiles from staged to
 ;; the video RAM addresses in staged_at, with the LCD on. Video RAM accepts
 ;; writes only outside the part of each line where the LCD controller is
-;; drawing, so each pair of bytes waits for a horizontal or vertical blank;
-;; the writes then land within the first 10 cycles after the check, inside
-;; the 20 that the following line's OAM scan still leaves. Interrupts are
-;; held off between the check and the writes.
+;; drawing, so each four bytes wait for a horizontal or vertical blank. The
+;; check takes 4 cycles after it reads the status and the writes 12, so even
+;; when the blank ends right after the read they land inside the 20 cycles
+;; of the following line's OAM scan, which still accepts them. Interrupts
+;; are held off between the check and the writes.
 _flush_tiles::
 	ld	a, (#_staged_count)
 	or	a, a
 	ret	z
-	ld	de, #_staged
+	ld	hl, #_staged
+	ld	a, l
+	ld	(#_staged_from), a
+	ld	a, h
+	ld	(#_staged_from + 1), a
 	ld	hl, #_staged_at
+	ld	a, (#_staged_count)
 1$:
 	push	af			; tiles left
 	ld	a, (hl+)
 	ld	c, a
 	ld	a, (hl+)
-	push	hl
+	push	hl			; the next address in staged_at
 	ld	h, a
 	ld	l, c			; hl = where this tile goes
 2$:
-	ld	a, (de)
-	inc	de
+	push	hl
+	ld	a, (#_staged_from)
+	ld	l, a
+	ld	a, (#_staged_from + 1)
+	ld	h, a			; hl = the next four bytes of data
+	ld	a, (hl+)
 	ld	b, a
-	ld	a, (de)
-	inc	de
+	ld	a, (hl+)
 	ld	c, a
+	ld	a, (hl+)
+	ld	d, a
+	ld	a, (hl+)
+	ld	e, a
+	ld	a, l
+	ld	(#_staged_from), a
+	ld	a, h
+	ld	(#_staged_from + 1), a
+	pop	hl
 	di
 3$:
 	ld	a, (#0xff41)
 	and	a, #0x02
 	jr	nz, 3$			; drawing, or about to: wait
 	ld	(hl), b
-	inc	hl
+	inc	l
 	ld	(hl), c
-	inc	hl
+	inc	l
+	ld	(hl), d
+	inc	l
+	ld	(hl), e
+	inc	l			; tiles start on 16-byte boundaries
 	ei
 	ld	a, l
 	and	a, #0x0f
-	jr	nz, 2$			; tiles start on 16-byte boundaries
+	jr	nz, 2$
 	pop	hl
 	pop	af
 	dec	a
 	jr	nz, 1$
 	ret
+
+;; The core's two innermost drawing loops (see core/lcd.h), which the
+;; compiler makes many times slower than this. A framebuffer row is 20
+;; bytes. Both take the first byte's address in de and the mask in a.
+
+;; void lcd_column_fill(uint8_t *p, uint8_t mask)
+_lcd_column_fill::
+	ld	c, a
+	ld	h, d
+	ld	l, e
+	ld	de, #20
+	ld	a, (#_lcd_column_rows)
+	ld	b, a
+	ld	a, (#_lcd_column_color)
+	or	a, a
+	jr	z, 3$
+	dec	a
+	jr	z, 2$
+1$:					; invert
+	ld	a, (hl)
+	xor	a, c
+	ld	(hl), a
+	add	hl, de
+	dec	b
+	jr	nz, 1$
+	ret
+2$:					; set
+	ld	a, (hl)
+	or	a, c
+	ld	(hl), a
+	add	hl, de
+	dec	b
+	jr	nz, 2$
+	ret
+3$:					; clear
+	ld	a, c
+	cpl
+	ld	c, a
+4$:
+	ld	a, (hl)
+	and	a, c
+	ld	(hl), a
+	add	hl, de
+	dec	b
+	jr	nz, 4$
+	ret
+
+;; void lcd_column_blit(uint8_t *p, uint8_t mask)
+_lcd_column_blit::
+	ld	c, a
+	ld	h, d
+	ld	l, e
+	ld	a, (#_lcd_column_rows)
+	ld	b, a
+	ld	a, (#_lcd_column_bits)
+	ld	d, a
+1$:
+	ld	a, (hl)
+	or	a, c			; set the pixel
+	srl	d
+	jr	c, 2$
+	xor	a, c			; or clear it
+2$:
+	ld	(hl), a
+	ld	a, l
+	add	a, #20
+	ld	l, a
+	jr	nc, 3$
+	inc	h
+3$:
+	dec	b
+	jr	nz, 1$
+	ret
+
+;; The magnified rectangle's two inner loops (see platform/gb/main.c).
+
+;; uint8_t zoom_take(const uint8_t *src, uint8_t *was): src in de, was in
+;; bc. Four rows: lcd_fb's are 20 bytes apart, the copy's 10.
+_zoom_take::
+	ld	h, b
+	ld	l, c
+	ld	bc, #0x0004		; b = bits that differed, c = rows left
+1$:
+	ld	a, (de)
+	xor	a, (hl)
+	or	a, b
+	ld	b, a
+	ld	a, (de)
+	ld	(hl), a
+	ld	a, e
+	add	a, #20
+	ld	e, a
+	jr	nc, 2$
+	inc	d
+2$:
+	ld	a, l
+	add	a, #10
+	ld	l, a
+	jr	nc, 3$
+	inc	h
+3$:
+	dec	c
+	jr	nz, 1$
+	ld	a, b
+	ret
+
+;; void zoom_tile(const uint8_t *src, uint8_t *tile): src in de, tile in bc.
+;; Each of four rows gives two tile rows of two bit planes: four bytes.
+_zoom_tile::
+	call	zoom_row
+	call	zoom_row
+	call	zoom_row
+zoom_row:
+	ld	a, (#_zoom_right)
+	or	a, a
+	ld	a, (de)
+	jr	nz, 1$
+	swap	a
+1$:
+	and	a, #0x0f
+	add	a, #<doubled
+	ld	l, a
+	ld	a, #0
+	adc	a, #>doubled
+	ld	h, a
+	ld	a, (hl)
+	ld	(bc), a
+	inc	bc
+	ld	(bc), a
+	inc	bc
+	ld	(bc), a
+	inc	bc
+	ld	(bc), a
+	inc	bc
+	ld	a, e
+	add	a, #20
+	ld	e, a
+	ret	nc
+	inc	d
+	ret
+
+;; A half byte with each of its pixels doubled.
+doubled:
+	.db	0x00, 0x03, 0x0c, 0x0f, 0x30, 0x33, 0x3c, 0x3f
+	.db	0xc0, 0xc3, 0xcc, 0xcf, 0xf0, 0xf3, 0xfc, 0xff

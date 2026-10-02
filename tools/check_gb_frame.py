@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Compare an emulator screenshot with a host LCD frame.
 
-Usage: check_gb_frame.py SCREENSHOT.bmp FRAME.pgm
+Usage: check_gb_frame.py SCREENSHOT.bmp FRAME.pgm [--zoom N]
 
 The screenshot is a 32-bit BMP from SameBoy's tester (160x144) or from
 tools/gba_shot (240x160). The Game Boy layer draws the 84x48 LCD 1:1 and the
 GBA layer at 2x, both centred. Every LCD pixel must match the host frame and
 everything around it must be one flat colour; a host frame the size of the
-whole screen is compared pixel for pixel.
+whole screen is compared pixel for pixel. With --zoom, the frame is the
+whole screen but the phone's LCD in its middle is expected magnified N
+times, and what the frame holds around the LCD is expected light on dark,
+where the magnified LCD does not cover it.
 """
 import struct
 import sys
@@ -44,11 +47,37 @@ def read_pgm(path):
     return width, height, [[pixels[y * width + x] == 0 for x in range(width)] for y in range(height)]
 
 
+def check_zoomed(screen, frame, width, height, zoom):
+    """Counts wrong pixels of a screen showing the frame's LCD magnified."""
+    phone_x, phone_y = (width - LCD_W) // 2, (height - LCD_H) // 2
+    zoom_x, zoom_y = (width - LCD_W * zoom) // 2, (height - LCD_H * zoom) // 2
+    wrong = 0
+    for y in range(height):
+        for x in range(width):
+            fx, fy = (x - zoom_x) // zoom, (y - zoom_y) // zoom
+            if 0 <= fx < LCD_W and 0 <= fy < LCD_H:
+                wrong += dark(screen[y][x]) != frame[phone_y + fy][phone_x + fx]
+            else:
+                wrong += dark(screen[y][x]) == frame[y][x]
+    return wrong
+
+
 def main():
-    if len(sys.argv) != 3:
+    zoom = 0
+    if len(sys.argv) == 5 and sys.argv[3] == "--zoom":
+        zoom = int(sys.argv[4])
+    elif len(sys.argv) != 3:
         sys.exit(__doc__)
     width, height, screen = read_bmp(sys.argv[1])
     frame_w, frame_h, frame = read_pgm(sys.argv[2])
+    if zoom:
+        if (frame_w, frame_h) != (width, height):
+            sys.exit(f"{sys.argv[2]}: --zoom needs a frame the size of the screen")
+        wrong = check_zoomed(screen, frame, width, height, zoom)
+        if wrong:
+            sys.exit(f"FAIL: {wrong} pixels differ from {sys.argv[2]}")
+        print(f"ok: {sys.argv[1]} matches {sys.argv[2]}")
+        return
     if (frame_w, frame_h) == (width, height):
         # A frame of the whole screen: compare every pixel. Anything but the
         # two shades the layer draws with is stray data.

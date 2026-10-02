@@ -1,6 +1,9 @@
-/* GBA layer. The 84x48 LCD is drawn at 2x (168x96), centred on the 240x160
-   screen in bitmap mode 3. Start or A is the phone's Navi key, B is its C
-   key, and the D-pad scrolls and steers. */
+/* GBA layer. The core's framebuffer is the whole 240x160 screen, shown in
+   bitmap mode 3. In the phone-sized mode the phone's 84x48 LCD, which sits
+   1:1 in the middle of the framebuffer, is shown at 2x (168x96); the
+   full-screen mode is shown as it is. A is the phone's Navi key, B is its C
+   key, the D-pad scrolls and steers, and Start on the first screen picks
+   the full-screen mode. */
 #include <stdint.h>
 
 #include "game.h"
@@ -18,17 +21,19 @@
 #define REG_SOUNDCNT_X REG16(0x04000084)
 #define REG_KEYINPUT REG16(0x04000130)
 #define REG_IE REG16(0x04000200)
+#define REG_WAITCNT REG16(0x04000204)
 #define REG_IME REG16(0x04000208)
 #define IRQ_VECTOR (*(void (*volatile *)(void))0x03007ffc)
 #define VRAM ((uint16_t *)0x06000000)
 
-#define SCREEN_W 240
-#define SCREEN_H 160
-#define SCALE 2
+#define SCREEN_W LCD_FB_WIDTH
+#define SCREEN_H LCD_FB_HEIGHT
+#define ZOOM LCD_PHONE_ZOOM
+/* Where the magnified LCD goes on the screen. */
+#define ZOOM_X ((SCREEN_W - LCD_WIDTH * ZOOM) / 2)
+#define ZOOM_Y ((SCREEN_H - LCD_HEIGHT * ZOOM) / 2)
 /* Most frames of game time made up at once after a slow draw. */
 #define MAX_CATCH_UP 6
-#define ORIGIN_X ((SCREEN_W - LCD_WIDTH * SCALE) / 2)
-#define ORIGIN_Y ((SCREEN_H - LCD_HEIGHT * SCALE) / 2)
 
 #define RGB(r, g, b) ((uint16_t)((r) | (g) << 5 | (b) << 10))
 #define COLOR_CLEAR RGB(19, 24, 15)
@@ -44,8 +49,8 @@
 #define PAD_DOWN 0x080
 
 /* Keys pressed at power-on, for scripted screenshots: u, d, l, r, s select,
-   b back, t one move of the running game, and p to start over as after a
-   power cycle (settings are read back). */
+   b back, a the full-screen key, t one move of the running game, and p to
+   start over as after a power cycle (settings are read back). */
 #ifndef START_KEYS
 #define START_KEYS ""
 #endif
@@ -125,27 +130,87 @@ void platform_tone(uint16_t hz)
     REG_SOUND2CNT_H = (uint16_t)(0x8000 | (2048 - 131072ul / hz));
 }
 
-/* Redraws the 8x8 cells of lcd_fb drawn to since the last call. */
+/* Whether the screen currently shows the phone's LCD magnified. */
+static uint8_t zoomed;
+
+/* One framebuffer pixel in the phone-sized mode: a pixel of the phone's LCD
+   becomes a ZOOM x ZOOM block in the middle of the screen, and a pixel
+   around it (the hint under the LCD) is drawn light on the dark surround,
+   unless the block covers it. */
+static void plot(int x, int y)
+{
+    uint8_t set = lcd_fb_pixel(x, y);
+    int px = x - LCD_PHONE_X, py = y - LCD_PHONE_Y;
+    uint16_t *at;
+
+    if (px >= 0 && px < LCD_WIDTH && py >= 0 && py < LCD_HEIGHT) {
+        uint16_t color = set ? COLOR_SET : COLOR_CLEAR;
+        int i, j;
+
+        at = VRAM + (ZOOM_Y + py * ZOOM) * SCREEN_W + ZOOM_X + px * ZOOM;
+        for (j = 0; j < ZOOM; j++, at += SCREEN_W)
+            for (i = 0; i < ZOOM; i++)
+                at[i] = color;
+    } else if (x < ZOOM_X || x >= ZOOM_X + LCD_WIDTH * ZOOM || y < ZOOM_Y || y >= ZOOM_Y + LCD_HEIGHT * ZOOM) {
+        VRAM[y * SCREEN_W + x] = set ? COLOR_CLEAR : COLOR_BEZEL;
+    }
+}
+
+/* An 8x8 cell at its own place, eight pixels from each framebuffer byte. */
+static void plot_cell(int cx, int cy)
+{
+    const uint8_t *src = lcd_fb + cy * 8 * LCD_STRIDE + cx;
+    uint16_t *dst = VRAM + cy * 8 * SCREEN_W + cx * 8;
+    int row, i;
+
+    for (row = 0; row < 8; row++, src += LCD_STRIDE, dst += SCREEN_W) {
+        uint8_t bits = *src;
+
+        for (i = 0; i < 8; i++, bits <<= 1)
+            dst[i] = bits & 0x80 ? COLOR_SET : COLOR_CLEAR;
+    }
+}
+
+/* Whether a cell has nothing to show in the phone-sized mode: it is clear
+   and lies outside the phone's LCD, so the surround's colour is right. */
+static uint8_t cell_is_surround(int cx, int cy)
+{
+    const uint8_t *src = lcd_fb + cy * 8 * LCD_STRIDE + cx;
+    int row;
+
+    if (cx * 8 + 7 >= LCD_PHONE_X && cx * 8 < LCD_PHONE_X + LCD_WIDTH && cy * 8 + 7 >= LCD_PHONE_Y
+        && cy * 8 < LCD_PHONE_Y + LCD_HEIGHT)
+        return 0;
+    for (row = 0; row < 8; row++, src += LCD_STRIDE)
+        if (*src)
+            return 0;
+    return 1;
+}
+
+/* Redraws the 8x8 cells of lcd_fb drawn to since the last call, or the
+   whole screen when it changes between magnified and full screen. */
 static void present(void)
 {
-    int cx, cy, x, y;
+    uint8_t all = menu_phone_view() != zoomed;
+    int cx, cy, x, y, i;
 
+    zoomed = menu_phone_view();
+    if (all && zoomed)
+        for (i = 0; i < SCREEN_W * SCREEN_H; i++)
+            VRAM[i] = COLOR_BEZEL;
     for (cy = 0; cy < LCD_CELLS_Y; cy++) {
         for (cx = 0; cx < LCD_CELLS_X; cx++) {
             uint8_t *dirty = &lcd_dirty[cx + LCD_CELLS_X * cy];
 
-            if (!*dirty)
+            if (!*dirty && !all)
                 continue;
             *dirty = 0;
-            for (y = cy * 8; y < cy * 8 + 8; y++) {
-                uint16_t *row = VRAM + (ORIGIN_Y + y * SCALE) * SCREEN_W + ORIGIN_X + cx * 8 * SCALE;
-
-                for (x = cx * 8; x < cx * 8 + 8 && x < LCD_WIDTH; x++) {
-                    uint16_t color = lcd_fb_pixel(x, y) ? COLOR_SET : COLOR_CLEAR;
-
-                    row[0] = row[1] = row[SCREEN_W] = row[SCREEN_W + 1] = color;
-                    row += SCALE;
-                }
+            if (!zoomed) {
+                plot_cell(cx, cy);
+            } else if (!all || !cell_is_surround(cx, cy)) {
+                for (y = cy * 8; y < cy * 8 + 8; y++)
+                    for (x = cx * 8; x < cx * 8 + 8; x++)
+                        plot(x, y);
             }
         }
     }
@@ -159,7 +224,8 @@ static void press_script_key(char key)
         menu_game_step();
     else
         menu_key(key == 'u' ? MENU_KEY_UP : key == 'd' ? MENU_KEY_DOWN : key == 'l' ? MENU_KEY_LEFT
-                 : key == 'r' ? MENU_KEY_RIGHT : key == 's' ? MENU_KEY_SELECT : MENU_KEY_BACK);
+                 : key == 'r' ? MENU_KEY_RIGHT : key == 's' ? MENU_KEY_SELECT : key == 'a' ? MENU_KEY_START
+                 : MENU_KEY_BACK);
 }
 
 int main(void)
@@ -170,8 +236,13 @@ int main(void)
     const char *key;
     int i;
 
+    /* The cartridge's fast timing and prefetch: the code runs from ROM, and
+       at the power-on timing it is several times slower. */
+    REG_WAITCNT = 0x4317;
+
     for (i = 0; i < SCREEN_W * SCREEN_H; i++)
         VRAM[i] = COLOR_BEZEL;
+    zoomed = 1;
     REG_DISPCNT = 0x0403; /* mode 3, BG2 on */
 
     IRQ_VECTOR = irq_handler;

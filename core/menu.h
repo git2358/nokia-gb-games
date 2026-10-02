@@ -28,6 +28,10 @@ uint8_t menu_key(uint8_t key);
 uint8_t menu_tick(void);
 void menu_draw(void);
 
+/* Whether the last menu_draw drew in the phone's LCD, which a platform may
+   show magnified, and not over the whole framebuffer. */
+uint8_t menu_phone_view(void);
+
 /* Forgets what the LCD holds, so the next menu_draw draws everything. */
 void menu_redraw_all(void);
 

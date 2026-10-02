@@ -99,7 +99,7 @@ enum {
 #define NATIVE_ROW_HEIGHT 15
 #define NATIVE_HINT_Y (LCD_FB_HEIGHT - 14)
 #define NATIVE_MARGIN 4
-#define NATIVE_HELP_LINES 7
+#define NATIVE_HELP_LINES ((NATIVE_HINT_Y - 3 - NATIVE_LIST_Y) / NATIVE_ROW_HEIGHT)
 
 /* The full-screen variant's time between moves by level, in units of 10 ms.
    The phone's table runs 66 48 38 30 23 18 14 11 9; this one starts at half
@@ -231,7 +231,7 @@ static void draw_hint(void)
 #if LCD_HAS_SURROUND
     lcd_view_full();
     font_draw(&font_small_plain, (LCD_FB_WIDTH - font_text_width(&font_small_plain, text_full_screen_hint)) / 2,
-              LCD_PHONE_Y + LCD_HEIGHT + 8, text_full_screen_hint, 1);
+              LCD_BELOW_PHONE + 8, text_full_screen_hint, 1);
     lcd_view_phone();
     surround_used = 1;
 #endif
@@ -325,7 +325,7 @@ static void native_game(void)
 /* One of nine bars across the screen, filled up to the chosen level. */
 static void native_level_bar(uint8_t i)
 {
-    uint8_t x = (uint8_t)(13 + i * 15);
+    uint8_t x = (uint8_t)((LCD_FB_WIDTH - (LEVEL_COUNT * 15 - 3)) / 2 + i * 15);
     uint8_t height = (uint8_t)(16 + i * 8);
     uint8_t top = (uint8_t)(NATIVE_HINT_Y - 12 - height);
 
@@ -758,6 +758,11 @@ uint8_t menu_key(uint8_t key)
     handle_key(key);
     return screen != was_screen || game != was_game || item != was_item || item_top != was_top
            || level_choice != was_level || resume != was_resume || help_page != was_page;
+}
+
+uint8_t menu_phone_view(void)
+{
+    return view_mode == VIEW_PHONE;
 }
 
 void menu_redraw_all(void)

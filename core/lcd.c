@@ -75,10 +75,13 @@ void lcd_clear(void)
 
 void lcd_fill_rect(int x, int y, int w, int h, uint8_t color)
 {
+    /* The bits of a byte from pixel n rightwards, and up to pixel n. */
+    static const uint8_t from_bit[8] = { 0xff, 0x7f, 0x3f, 0x1f, 0x0f, 0x07, 0x03, 0x01 };
+    static const uint8_t up_to_bit[8] = { 0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc, 0xfe, 0xff };
     uint8_t *row;
-    uint8_t first, count, i, bit;
+    uint8_t first, last, count, i;
 
-    /* Clip once, then walk the rows without a multiply per pixel. */
+    /* Clip to the view. */
     if (x < 0) {
         w += x;
         x = 0;
@@ -97,22 +100,30 @@ void lcd_fill_rect(int x, int y, int w, int h, uint8_t color)
     y += lcd_view_y;
 
     lcd_mark_dirty((uint8_t)x, (uint8_t)y, (uint8_t)w, (uint8_t)h);
-    first = (uint8_t)(x & 7);
-    count = (uint8_t)w;
+
+    /* Whole bytes at a time: the first and last byte of a row are masked,
+       the ones between are written outright. */
+    first = from_bit[x & 7];
+    last = up_to_bit[(x + w - 1) & 7];
+    count = (uint8_t)(((x + w - 1) >> 3) - (x >> 3));
+    if (!count)
+        first &= last;
     for (row = lcd_fb + y * LCD_STRIDE + (x >> 3); h; h--, row += LCD_STRIDE) {
         uint8_t *p = row;
 
-        bit = first;
-        for (i = count; i; i--) {
-            if (color)
-                *p |= lcd_bit[bit];
-            else
-                *p &= (uint8_t)~lcd_bit[bit];
-            if (++bit == 8) {
-                bit = 0;
-                p++;
-            }
-        }
+        if (color)
+            *p |= first;
+        else
+            *p &= (uint8_t)~first;
+        if (!count)
+            continue;
+        for (i = count - 1; i; i--)
+            *++p = color ? 0xff : 0x00;
+        p++;
+        if (color)
+            *p |= last;
+        else
+            *p &= (uint8_t)~last;
     }
 }
 

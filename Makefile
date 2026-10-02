@@ -21,7 +21,9 @@ SAMEBOY_APP ?= /Applications/SameBoy.app
 SHOT_SECONDS ?= 2
 SHOT_SCALE ?= 3
 
-# GBA: bare arm-none-eabi GCC, no C library.
+# GBA: bare arm-none-eabi GCC, no C library. The GBA also gives the core a
+# framebuffer the size of its screen, and shows the phone's LCD at 2x.
+GBA_FB := -DLCD_FB_WIDTH=240 -DLCD_FB_HEIGHT=160 -DLCD_PHONE_ZOOM=2
 ARM_CC ?= arm-none-eabi-gcc
 ARM_OBJCOPY ?= arm-none-eabi-objcopy
 ARM_CFLAGS ?= -std=c99 -O2 -Wall -Wextra -mcpu=arm7tdmi -mthumb -mthumb-interwork -ffreestanding
@@ -89,9 +91,13 @@ $(BUILD)/test_snake: tests/test_snake.c core/lcd.c core/rand.c core/snake.c core
 $(BUILD)/test_snake_gb: tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(CORE_HDR) $(ASSET_SRC)
 	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(ASSET_SRC)
 
-test-snake: $(BUILD)/test_snake $(BUILD)/test_snake_gb
+$(BUILD)/test_snake_gba: tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(GBA_FB) $(INCLUDES) -o $@ tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(ASSET_SRC)
+
+test-snake: $(BUILD)/test_snake $(BUILD)/test_snake_gb $(BUILD)/test_snake_gba
 	$(BUILD)/test_snake
 	$(BUILD)/test_snake_gb
+	$(BUILD)/test_snake_gba
 
 $(BUILD)/asset_sheet: platform/host/asset_sheet.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/asset_sheet.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
@@ -111,6 +117,13 @@ $(BUILD)/frame_gb: platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(
 
 $(BUILD)/gbframe_%.pgm: $(BUILD)/frame_gb
 	$(BUILD)/frame_gb $* $@
+
+# And with the GBA's.
+$(BUILD)/frame_gba: platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(GBA_FB) $(INCLUDES) -o $@ platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+
+$(BUILD)/gbaframe_%.pgm: $(BUILD)/frame_gba
+	$(BUILD)/frame_gba $* $@
 
 # Frames captured from the original firmware in MAME, named after the host
 # frame they must equal. Derived from the firmware, so the directory is ignored.
@@ -166,7 +179,7 @@ run-gb: $(GB_ROM)
 
 $(BUILD)/gba/nokia3210.elf: $(GBA_SRC) $(CORE_HDR) platform/gba/gba.ld FORCE
 	@mkdir -p $(BUILD)/gba
-	$(ARM_CC) $(ARM_CFLAGS) -Icore -I$(ASSETS) '-DSTART_KEYS="$(KEYS)"' -nostdlib -T platform/gba/gba.ld -Wl,-Map,$(BUILD)/gba/nokia3210.map -o $@ $(GBA_SRC) -lgcc
+	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(ASSETS) '-DSTART_KEYS="$(KEYS)"' -nostdlib -T platform/gba/gba.ld -Wl,-Map,$(BUILD)/gba/nokia3210.map -o $@ $(GBA_SRC) -lgcc
 
 $(GBA_ROM): $(BUILD)/gba/nokia3210.elf tools/gbafix.py FORCE
 	$(ARM_OBJCOPY) -O binary $< $@
@@ -183,9 +196,9 @@ $(BUILD)/gba_shot: tools/gba_shot.c
 	@mkdir -p $(BUILD)
 	$(CC) -O2 -I$(MGBA)/include -I$(MGBA)/build/include -o $@ $< $(MGBA)/build/libmgba.a -lm -framework CoreFoundation
 
-check-gba: $(GBA_ROM) $(BUILD)/gba_shot $(BUILD)/frame_$(GB_FRAME).pgm
+check-gba: $(GBA_ROM) $(BUILD)/gba_shot $(BUILD)/gbaframe_$(GB_FRAME).pgm
 	$(BUILD)/gba_shot $(GBA_ROM) $(BUILD)/nokia3210-gba.bmp $(SHOT_FRAMES)
-	$(PYTHON) tools/check_gb_frame.py $(BUILD)/nokia3210-gba.bmp $(BUILD)/frame_$(GB_FRAME).pgm
+	$(PYTHON) tools/check_gb_frame.py $(BUILD)/nokia3210-gba.bmp $(BUILD)/gbaframe_$(GB_FRAME).pgm $(if $(filter a%,$(KEYS)),,--zoom 2)
 
 shot-gba: $(GBA_ROM) $(BUILD)/gba_shot
 	$(BUILD)/gba_shot $(GBA_ROM) $(BUILD)/nokia3210-gba.bmp $(SHOT_FRAMES)

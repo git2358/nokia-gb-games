@@ -84,8 +84,9 @@ make gb gba                     # build/nokia3210.gb and build/nokia3210.gba
 make check-gb                   # run the .gb headlessly, compare with the host frame
 make check-gba                  # the same for the .gba
 make shot-gb KEYS=sd            # screenshot after scripted keys (u, d, l, r, s select, b back,
-                                # a the full-screen key, t one game move)
+                                # a the full-screen key or Start, t one game move)
 make check-golden               # compare host frames with MAME frames in golden/
+make test-snake test-boards     # incremental drawing against full redraws, all three games
 make assets DUMP=/path/to/3210f600a.fls
 make sheet                      # draw the extracted assets to build/sheet_*.pgm
 make fonts                      # the phone's four fonts as ASCII-art sheets in build/fonts/
@@ -102,15 +103,32 @@ checks. To run on hardware, pass a GBA ROM you own to copy it from:
 ## Status
 
 In progress. Both cartridges build and run the same core: they open on the
-main menu's Games entry and walk the Games list and Snake's menu with its
-Level, Top score and Instructions pages, drawn with the phone's own fonts
-and text. New game starts a playable Snake: steering, food, scoring, the
-pause menu with Continue, the Game over page and Last view. Menus and
-gameplay match frames captured from the firmware in MAME. Level and top
-score are kept in battery-backed cartridge RAM. Rotation and Memory do
-nothing yet. Snake has its three buzzer sounds. Start on the first screen picks a
+main menu's Games entry and walk the Games list and each game's menu with
+its Level, Top score and Instructions pages, drawn with the phone's own
+fonts and text. All three of the phone's games play in the phone-sized
+mode, with the pause menu's Continue, the Game over page and Last view:
+
+- Snake: steering, food, scoring, nine levels.
+- Memory: five board sizes from 2x2 to 10x6, the firmware's deal, the
+  blinking cursor, and the score counted from the tries used.
+- Rotation: seven levels (a 2x2 frame on boards of 3x3 to 6x6, then a 3x3
+  frame), the opening turns the game makes itself, the sliding animation,
+  the clock, and the score counted from the time taken.
+
+Menus and gameplay match frames captured from the firmware in MAME. Level
+and top score are kept per game in battery-backed cartridge RAM. The games
+have their buzzer sounds.
+
+| | Snake | Memory | Rotation |
+|---|---|---|---|
+| D-pad | steer | move the cursor | move the frame |
+| A (or Select) | | turn a card | turn with the clock |
+| Start | | jump to the next card face down | turn against the clock |
+| B | pause | pause | pause |
+
+Start on the first screen picks a
 full-screen mode instead, which is the port's own design and not the
-phone's: menus laid out for the console's whole screen in the phone's large
+phone's, and has only Snake so far (Rotation and Memory do nothing there): menus laid out for the console's whole screen in the phone's large
 font with every entry visible and a cursor beside the selection, and Snake
 on a bigger board of the same 4-pixel cells (38x34 on the Game Boy; 28x18
 on the GBA, which shows the board at 2x), with its own level, top score and

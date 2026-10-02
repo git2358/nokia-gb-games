@@ -51,11 +51,12 @@ GBA_SRC := platform/gba/crt0.s platform/gba/main.c platform/gba/libc.c $(CORE_SR
 
 vpath %.c core platform/gb
 
-.PHONY: help assets fonts test test-snake sheet frames check-golden gb gba check-gb shot-gb check-gba shot-gba run-gb run-gba clean
+.PHONY: help assets fonts test test-snake test-boards sheet frames check-golden gb gba check-gb shot-gb check-gba shot-gba run-gb run-gba clean
 
 help:
 	@echo "make test      build and run the host checks (no firmware needed)"
 	@echo "make test-snake check Snake's incremental drawing against full redraws"
+	@echo "make test-boards check Memory's and Rotation's incremental drawing the same way"
 	@echo "make assets    extract the game graphics from DUMP=$(DUMP) into $(ASSETS)/"
 	@echo "make fonts     write the phone's fonts as ASCII-art sheets to $(BUILD)/fonts/"
 	@echo "make sheet     draw the extracted assets to $(BUILD)/sheet_*.pgm"
@@ -72,6 +73,9 @@ help:
 	@echo "make clean     remove $(BUILD)/"
 
 assets: $(ASSET_SRC)
+
+$(ASSET_SRC): tools/extract_assets.py
+	$(PYTHON) tools/extract_assets.py "$(DUMP)" $(ASSETS)
 
 # The phone's fonts as ASCII-art sheets, for other projects. Derived from
 # the firmware, so they stay under the ignored build directory.
@@ -99,6 +103,14 @@ test-snake: $(BUILD)/test_snake $(BUILD)/test_snake_gb $(BUILD)/test_snake_gba
 	$(BUILD)/test_snake
 	$(BUILD)/test_snake_gb
 	$(BUILD)/test_snake_gba
+
+BOARDS_SRC := tests/test_boards.c core/lcd.c core/rand.c core/memory.c core/rotation.c core/sound.c
+
+$(BUILD)/test_boards: $(BOARDS_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $(BOARDS_SRC) $(ASSET_SRC)
+
+test-boards: $(BUILD)/test_boards
+	$(BUILD)/test_boards
 
 $(BUILD)/asset_sheet: platform/host/asset_sheet.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/asset_sheet.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)

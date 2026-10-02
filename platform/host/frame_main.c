@@ -3,7 +3,10 @@
    NAME: testcard, outline, snake-start, or menu-KEYS where KEYS is the menu
    keys pressed from the first screen (u up, d down, l left, r right,
    s select, b back, a the full-screen key, t one move of the running game,
-   F forget what is drawn so the next draw is a full one). */
+   F forget what is drawn so the next draw is a full one, k flip the phase
+   of Memory's blinking cursor, w wait for a timed page to close). A name seedXXXXXXXX-menu-KEYS starts the
+   games from that seed of rand, in hex. */
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -37,9 +40,17 @@ void platform_tone(uint16_t hz)
 
 int main(int argc, char **argv)
 {
+    unsigned long seed = 0;
+    int seeded = 0;
+
     if (argc != 3) {
         fprintf(stderr, "usage: frame NAME OUT.pgm\n");
         return 2;
+    }
+    if (strncmp(argv[1], "seed", 4) == 0 && strlen(argv[1]) > 13 && argv[1][12] == '-') {
+        seed = strtoul(argv[1] + 4, 0, 16);
+        seeded = 1;
+        argv[1] += 13;
     }
     if (strcmp(argv[1], "testcard") == 0) {
         testcard_draw();
@@ -51,14 +62,22 @@ int main(int argc, char **argv)
         snake_draw();
     } else if (strncmp(argv[1], "menu-", 5) == 0) {
         const char *key;
+        int wait;
 
         menu_init();
+        if (seeded)
+            menu_seed((uint32_t)seed);
         for (key = argv[1] + 5; *key; key++) {
             /* Draw after every key, as a platform does, so that drawing only
                a move's changes is exercised. */
             menu_draw();
             if (*key == 'F')
                 menu_redraw_all();
+            else if (*key == 'k')
+                menu_blink();
+            else if (*key == 'w')
+                for (wait = 0; wait < 10 * MENU_TICKS_PER_SECOND && !menu_tick(); wait++)
+                    ;
             else if (*key == 't')
                 menu_game_step();
             else

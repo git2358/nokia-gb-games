@@ -24,6 +24,7 @@ TABLES = [
     ("game_tile_back", 0x2D96C4, 8, "card back, 7x7 plus a pad byte"),
     ("game_tile_cursor", 0x2D96CC, 8, "cursor frame, 7x7 plus a pad byte"),
     ("games_digit_glyphs", 0x2D96EC, 10 * 3, "3x5 digits 0..9, 3 bytes each"),
+    ("memory_board_sizes", 0x2D9724, 5 * 4, "Memory's board per level: columns, rows, two unused bytes"),
     ("game_speed_table", 0x2D9738, 9, "Snake speed per level, units of 10 ms"),
     ("snake_food_bitmap", 0x2D9744, 4, "4x4"),
     ("game3_background", 0x2D9764, 504, "84x48 scene, 6 bytes per column"),

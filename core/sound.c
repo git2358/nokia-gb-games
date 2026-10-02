@@ -13,6 +13,10 @@ static const struct note top_score[] = {
     { 880, 412 }, { 0, 23 },  { 587, 117 }, { 0, 23 }, { 880, 444 }, { 0, 0 },
 };
 
+static const struct note solved[] = { { 523, 117 }, { 0, 23 }, { 784, 444 }, { 0, 0 } };
+
+static const struct note *const sounds[] = { eat, game_over, top_score, solved };
+
 static volatile uint8_t requested; /* a sound to start, plus one; 0 for none */
 static const struct note *playing; /* the note sounding now, or null */
 static int32_t left_us;            /* time it still has to run */
@@ -30,7 +34,7 @@ void sound_tick(uint16_t us)
 
     if (request) {
         requested = 0;
-        playing = request - 1 == SOUND_EAT ? eat : request - 1 == SOUND_GAME_OVER ? game_over : top_score;
+        playing = sounds[request - 1];
         left_us = (int32_t)playing->ms * 1000;
         platform_tone(playing->hz);
         return;

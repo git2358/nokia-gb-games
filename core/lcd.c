@@ -135,16 +135,22 @@ void lcd_fill_rect(int x, int y, int w, int h, uint8_t color)
     for (row = lcd_fb + y * LCD_STRIDE + (x >> 3); h; h--, row += LCD_STRIDE) {
         uint8_t *p = row;
 
-        if (color)
+        if (color == LCD_INVERT)
+            *p ^= first;
+        else if (color)
             *p |= first;
         else
             *p &= (uint8_t)~first;
         if (!count)
             continue;
-        for (i = count - 1; i; i--)
-            *++p = color ? 0xff : 0x00;
+        for (i = count - 1; i; i--) {
+            p++;
+            *p = color == LCD_INVERT ? (uint8_t)~*p : color ? 0xff : 0x00;
+        }
         p++;
-        if (color)
+        if (color == LCD_INVERT)
+            *p ^= last;
+        else if (color)
             *p |= last;
         else
             *p &= (uint8_t)~last;

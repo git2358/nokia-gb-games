@@ -75,6 +75,26 @@ firmware's widget and layout framework is not worth re-implementing.
    record shape with a check byte in the unused position.
    *To do:* nothing; note that the check byte is the port's.
 
+## Memory and Rotation
+
+Both follow the firmware's handlers (`memory_handler_24075c`,
+`rotation_handler_241fd0`) rule for rule: the deal and the shuffle draw from
+`rand` in the firmware's order, so a seed gives the firmware's board; the
+cursor and frame movement, the turn animation's steps and delays, the
+opening turns, the clock and both score formulas are the firmware's.
+Differences in structure:
+
+- Each has a `_draw_changes` beside its full `_draw`, for the same reason
+  as `snake_draw_step`; `make test-boards` proves the two agree.
+- Memory's cursor blinks because the firmware draws that card into a second
+  bit plane which the display code inverts every 64 ticks. The core has no
+  such plane: `core/menu.c` keeps the phase and `memory_draw` inverts the
+  one card.
+- The phone never seeds `rand`, so its first deal after power-on is always
+  the same. The port seeds it from the time at New game.
+- The keys `*` (Memory, previous card face down) and 7, 9 and 5 (Rotation,
+  duplicates of 1 and 3) have no button.
+
 ## Things not yet matched to the firmware
 
 - What happens when the snake fills the board (the firmware adds 100 points

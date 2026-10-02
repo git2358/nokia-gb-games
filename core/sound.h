@@ -1,4 +1,4 @@
-/* The buzzer sounds Snake makes, as traced from the firmware in MAME: the
+/* The buzzer sounds the games make, as traced from the firmware in MAME: the
    pitches are exact, the lengths are the traced ones corrected for MAME's
    slightly fast clock. */
 #ifndef CORE_SOUND_H
@@ -7,9 +7,10 @@
 #include <stdint.h>
 
 enum {
-    SOUND_EAT,       /* one short high blip */
+    SOUND_EAT,       /* one short high blip; also a pair found in Memory */
     SOUND_GAME_OVER, /* three quick low pulses */
-    SOUND_TOP_SCORE  /* a six-note tune */
+    SOUND_TOP_SCORE, /* a six-note tune */
+    SOUND_SOLVED     /* Rotation's board is in order: two rising notes */
 };
 
 /* Starts a sound at the next sound_tick. */

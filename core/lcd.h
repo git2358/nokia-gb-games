@@ -75,6 +75,8 @@ void lcd_mark_dirty(uint8_t x, uint8_t y, uint8_t w, uint8_t h);
 /* Everything below takes coordinates in the view. */
 
 void lcd_clear(void); /* clears the view */
+/* Color 0 clears, 1 sets, LCD_INVERT flips every pixel of the rectangle. */
+#define LCD_INVERT 2
 void lcd_fill_rect(int x, int y, int w, int h, uint8_t color);
 
 /* Column-major bitmap as stored in the firmware: (h + 7) / 8 bytes per

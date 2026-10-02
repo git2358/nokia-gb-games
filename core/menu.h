@@ -13,6 +13,7 @@ enum {
     MENU_KEY_LEFT,   /* only used in a game */
     MENU_KEY_RIGHT,
     MENU_KEY_START   /* on the first screen: enter the full-screen variant;
+                        in Memory and Rotation: a second action button;
                         anywhere else the same as MENU_KEY_SELECT */
 };
 
@@ -30,6 +31,12 @@ void menu_draw(void);
 
 /* Forgets what the LCD holds, so the next menu_draw draws everything. */
 void menu_redraw_all(void);
+
+/* Seeds rand now and stops new games seeding it from the time so far, so
+   that games follow one another as on the phone, which never seeds it; and
+   flips the phase of Memory's blinking cursor. For scripted frames. */
+void menu_seed(uint32_t seed);
+void menu_blink(void);
 
 /* Makes the running game's next move now instead of when its timer runs
    out; menu_tick normally does this. For scripted frames. */

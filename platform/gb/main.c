@@ -410,11 +410,18 @@ void main(void)
         changed |= menu_held(held_keys());
         /* Draw only when a key changed something, not on every press. The
            time that takes is not game time: a new game's clock starts once
-           its board is on the screen. */
+           its board is on the screen. But a key in a game under way, a
+           shot fired, draws the game again, and that time is the game's:
+           it is made up like any other draw's, or firing would slow the
+           game down. */
         if (changed) {
+            uint8_t under_way = direct;
+
             menu_draw();
+            under_way = under_way && game_shown;
             show();
-            seen = frame_count;
+            if (!under_way)
+                seen = frame_count;
         }
 
         /* One menu tick per frame that has passed, then one picture. The

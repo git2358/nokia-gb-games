@@ -438,53 +438,89 @@ void tilemap_render(struct tilemap *t, unsigned scroll)
 
 /* 1 << (n mod 8) as the phone computes it: for a negative n that is not a
    multiple of 8 the shift count is out of range and the result is 0. */
-static unsigned row_bit(int n)
+static uint8_t row_bit(int n)
 {
     if (n >= 0)
-        return 1u << (n & 7);
+        return (uint8_t)(1 << (n & 7));
     return n & 7 ? 0 : 1;
 }
 
-/* The strip's byte for a pixel. The phone does not bound the column or the
-   row and reads whatever follows its bitmap; here that reads as empty. */
-static uint8_t strip_byte(const struct tilemap *t, int x, int y)
+/* Whether the strip has anything at all under a sprite of width w at column
+   x. Most of the time it has not, and the sprite's pixels need not be gone
+   through. Only for a sprite that is wholly within the 84 columns: one
+   that is not reads the strip's bitmap from other places (see row_collide). */
+static uint8_t strip_under(const struct tilemap *t, uint8_t x, uint8_t w)
 {
-    int i = x + (y >> 3) * 84;
+    const uint8_t *p = t->bitmap + x;
+    uint8_t band, n;
 
-    return i >= 0 && i < t->rows * 84 ? t->bitmap[i] : 0;
+    for (band = t->rows; band; band--, p += 84 - w)
+        for (n = w; n; n--)
+            if (*p++)
+                return 1;
+    return 0;
+}
+
+/* One row of a sprite against one row of the strip: w of the sprite's bytes
+   from src and the bit of them in sprite_bit, the strip's from index `at`
+   of its bitmap and the bit in strip_bit. The phone does not bound the
+   column or the row and reads whatever is around the strip's bitmap; here
+   that reads as empty. */
+static uint8_t row_collide(const struct tilemap *t, const uint8_t *src, uint8_t sprite_bit, int at, uint8_t strip_bit,
+                           uint8_t w)
+{
+    int limit = t->rows * 84;
+    const uint8_t *p;
+
+    if (at < 0) {
+        if (-at >= w)
+            return 0;
+        src -= at;
+        w = (uint8_t)(w + at);
+        at = 0;
+    }
+    if (at >= limit)
+        return 0;
+    if (limit - at < w)
+        w = (uint8_t)(limit - at);
+    for (p = t->bitmap + at; w; w--, src++, p++)
+        if ((*src & sprite_bit) && (*p & strip_bit))
+            return 1;
+    return 0;
 }
 
 int tilemap_collide(const struct tilemap *t, uint16_t id, int y)
 {
     const struct sprite *s = &sprites[id], *strip = &sprites[t->sprite];
-    int w = s->image.w, h = s->image.h, col, row, strip_row;
+    int h = s->image.h, row;
+    uint8_t w = s->image.w, bit;
 
     if (t->top == 0x2b) {
         if (y > strip->image.h + strip->y)
             return 0;
+    } else if (t->top != 0 || strip->y > h + y) {
+        return 0;
+    }
+    if (s->x + w <= 84 && !strip_under(t, s->x, w))
+        return 0;
+    if (t->top == 0x2b) {
         /* Rows of the strip from the sprite's top down, against the
            sprite's rows from 0. */
-        for (row = 0; y < strip->image.h; y++, row++) {
-            for (col = 0; col < w; col++) {
-                if (row >= h)
-                    return 0;
-                if ((row_bit(row) & s->image.bitmap[col + w * (row >> 3)]) && (row_bit(y) & strip_byte(t, s->x + col, y)))
-                    return 1;
-            }
+        for (row = 0; y < strip->image.h && row < h; y++, row++) {
+            bit = row_bit(y);
+            if (bit && row_collide(t, s->image.bitmap + w * (row >> 3), (uint8_t)(1 << (row & 7)), s->x + (y >> 3) * 84, bit, w))
+                return 1;
         }
         return 0;
     }
-    if (t->top != 0 || strip->y > h + y)
-        return 0;
     /* The sprite's rows from the strip's top down, against the strip's
        rows from 0. A sprite whose top is below the strip's top starts at
        a negative row, as on the phone. */
     row = strip->y - y;
-    for (strip_row = 0; row < h; row++, strip_row++) {
-        for (col = 0; col < w; col++) {
-            if ((row_bit(row) & (s->image.bitmap + w * (row >> 3))[col]) && (row_bit(strip_row) & strip_byte(t, s->x + col, strip_row)))
-                return 1;
-        }
+    for (y = 0; row < h; row++, y++) {
+        bit = row_bit(row);
+        if (bit && row_collide(t, s->image.bitmap + w * (row >> 3), bit, s->x + (y >> 3) * 84, (uint8_t)(1 << (y & 7)), w))
+            return 1;
     }
     return 0;
 }

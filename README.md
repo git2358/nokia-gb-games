@@ -1,9 +1,21 @@
 # Nokia 3310 games for Game Boy and Game Boy Advance
 
 The Nokia 3310 (NHM-5 v6.39) follow-up to
-<https://github.com/lukesau/nokia-3210-games>. So far this holds the tooling
-carried over from that project, a reproducible firmware dump and a way to
-boot it in MAME. No game code yet.
+<https://github.com/lukesau/nokia-3210-games>: Space Impact re-implemented
+in C from a map of the firmware, with the levels, sprites and object
+tables read from your own dump at build time. It runs on the host and as a
+GBA cartridge that shows the phone's 84x48 screen at 2x.
+
+What is there so far:
+
+- the sprite and scrolling-terrain layer the 3310's games draw with;
+- the player, shots, the three special weapons, the level scripts, the
+  movement patterns, collisions, scoring, lives and continues;
+- the bosses of all eight levels, so the game can be played to its end.
+
+What is not: there is no sound, no title, menu, game-over page or top
+score (when a game ends the screen stops until Start begins another); and
+there is no Game Boy build.
 
 ## Firmware policy
 
@@ -48,9 +60,53 @@ make phone-window                            # a MAME window
 `make phone` leaves every LCD frame as PGM in the ignored `run_phone/` and
 the last one as `run_phone/latest.png`. PPM E starts in Russian.
 
-## Carried over from the 3210 project
+## Building
 
-`tools/`, `scripts/` and the `Makefile` are copies. The Game Boy and GBA
-targets in the `Makefile` expect `core/`, `platform/` and `tests/`, which
-are not here yet, and `tools/extract_assets.py` and `tools/export_fonts.py`
-still hold the 3210 v6.00 hash and addresses.
+```
+make test          # core checks, no firmware needed
+make assets        # extract the game data from the dump into build/assets/
+make sheet         # the extracted sprites and tiles as build/sheet_*.pgm
+make gba           # build/nokia3310.gba (needs arm-none-eabi-gcc)
+make run-gba       # open it in mGBA
+```
+
+On the GBA the D-pad moves the ship, A fires, B uses the special weapon and
+Start begins a new game. The phone moves the ship with 8, 0, * and #, fires
+with 1 or 3 and uses the special with 4 or 6, one key at a time; the pad
+is mapped onto those keys, so only the button pressed last counts.
+
+`make check-gba` and `make shot-gba` run the ROM headlessly in mGBA's core
+(`scripts/setup-mgba.sh` builds it; `MGBA=` names an existing build).
+
+## Golden run
+
+The core is checked against the firmware itself. `make golden` plays a
+scripted game in MAME (`GOLDEN_KEYS` in the `Makefile`), keeps every LCD
+frame and logs every event the firmware hands its Space Impact
+(`tools/mame_event_log.lua`). `make check-golden` feeds the same events to
+the core and requires every picture it draws to appear, in order, among
+MAME's.
+
+The recorded run covers the first 20 seconds of level 1: the shielded
+start, the first waves, shots, a missile, kills and score. It reaches no
+terrain, enemy fire, boss or level change, so those parts of the core
+follow the firmware's code but have not been compared with it running.
+The bosses were only checked by a bot that plays each level through on the
+host.
+
+The frames and the event log are derived from the firmware and stay in the
+ignored `golden/`.
+
+## Layout
+
+- `core/` is portable C: `lcd` (framebuffer), `sprite` (sprite list and
+  tile layer), `si` (the game), `games` (keys and timers to game events),
+  `rand`.
+- `platform/host/` has the tools above; `platform/gba/` is the cartridge.
+- `tools/extract_assets.py` copies the game's data region out of the dump;
+  the core reads it by firmware address.
+- The firmware map the core follows is `docs/games_applications_3310.md`
+  in the MAME fork.
+
+`tools/export_fonts.py`, `tools/check_golden.py` and the Game Boy tools are
+unchanged copies from the 3210 project and are not used yet.

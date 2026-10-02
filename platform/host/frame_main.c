@@ -1,0 +1,53 @@
+/* Writes a reference frame for the platform builds.
+   Usage: frame NAME OUT.pgm
+   NAME: testcard, outline, start (a new game, before any time passes), or
+   run-N (a new game after N GBA screen frames with no key pressed). */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "games.h"
+#include "lcd.h"
+#include "pgm.h"
+#include "si.h"
+#include "testcard.h"
+
+void platform_sound(uint8_t sound)
+{
+    (void)sound;
+}
+
+void platform_vibrate(void)
+{
+}
+
+int main(int argc, char **argv)
+{
+    if (argc != 3) {
+        fprintf(stderr, "usage: frame NAME OUT.pgm\n");
+        return 2;
+    }
+    lcd_view_phone();
+    lcd_zoom_set(LCD_PHONE_X, LCD_PHONE_Y, LCD_WIDTH, LCD_HEIGHT);
+    if (strcmp(argv[1], "testcard") == 0) {
+        testcard_draw();
+    } else if (strcmp(argv[1], "outline") == 0) {
+        testcard_frame();
+    } else if (strcmp(argv[1], "start") == 0 || strncmp(argv[1], "run-", 4) == 0) {
+        long frames = argv[1][0] == 'r' ? strtol(argv[1] + 4, 0, 10) : 0;
+
+        games_start();
+        while (frames-- > 0)
+            games_elapse(16743);
+        games_draw(1);
+    } else {
+        fprintf(stderr, "unknown frame %s\n", argv[1]);
+        return 2;
+    }
+    if (pgm_write_lcd(argv[2]) != 0) {
+        perror(argv[2]);
+        return 1;
+    }
+    printf("wrote %s\n", argv[2]);
+    return 0;
+}

@@ -1,4 +1,4 @@
-# Builds the portable core for the host, the Game Boy and the GBA. Everything
+# Builds the portable core for the host and the GBA. Everything
 # generated lands in the ignored build/ directory; the assets in it are
 # derived from your firmware dump.
 
@@ -23,16 +23,7 @@ PYTHON ?= python3
 CC ?= cc
 CFLAGS ?= -std=c99 -O2 -Wall -Wextra -pedantic
 
-# Game Boy: SDCC (sm83 port) and its makebin.
-SDCC ?= sdcc
-MAKEBIN ?= makebin
-SDAS ?= sdasgb
-# The Game Boy gives the core a framebuffer the size of its screen.
-GB_FB := -DLCD_FB_WIDTH=160 -DLCD_FB_HEIGHT=144
-SAMEBOY_TESTER ?= tools/SameBoy/build/bin/tester/sameboy_tester
-SAMEBOY_APP ?= /Applications/SameBoy.app
-# Emulated seconds to run before the screenshot, and its scale factor.
-SHOT_SECONDS ?= 2
+# Scale factor of the screenshot.
 SHOT_SCALE ?= 3
 
 # GBA: bare arm-none-eabi GCC, no C library. The GBA gives the core a
@@ -53,38 +44,33 @@ CORE_SRC := $(wildcard core/*.c)
 CORE_HDR := $(wildcard core/*.h)
 INCLUDES := -Icore -Iplatform/host -I$(ASSETS)
 
-GB_ROM := $(BUILD)/nokia3310.gb
 GBA_ROM := $(BUILD)/nokia3310.gba
-# Keys the Game Boy ROM presses at power-on (see platform/gb/main.c), for scripted
-# screenshots; check-gb compares the result with the host's frame for them.
-KEYS ?=
-GB_FRAME := menu-$(KEYS)
-GB_SRC := $(CORE_SRC) platform/gb/main.c
-GB_REL := $(patsubst %.c,$(BUILD)/gb/%.rel,$(notdir $(GB_SRC))) $(BUILD)/gb/game_assets.rel
 GBA_SRC := platform/gba/crt0.s platform/gba/main.c platform/gba/libc.c $(CORE_SRC) $(ASSET_SRC)
+HOST_CORE := core/lcd.c core/rand.c core/sprite.c core/si.c core/games.c
 
-vpath %.c core platform/gb
+# The recorded Space Impact run the core is checked against: the keys, the
+# seed the title animation leaves the games' random generator with, and
+# where its frames and events are kept. See "Golden run" in README.md.
+GOLDEN ?= golden/space-impact-events1
+GOLDEN_SEED := a335
+GOLDEN_SECONDS := 40
+GOLDEN_KEYS := enter,wait1000,enter,wait1200,up,up,up,up,up,wait800,enter,wait1500,down,wait600,enter,wait2500,enter,wait4000,1,wait400,1,wait400,8,8,8,1,wait400,0,0,0,0,1,wait300,3,wait300,4,wait2000,1,wait500,1,wait6000
 
-.PHONY: help dump install-roms phone phone-window assets fonts test test-snake sheet frames check-golden gb gba check-gb shot-gb check-gba shot-gba run-gb run-gba clean
+.PHONY: help dump install-roms phone phone-window assets test sheet frames golden check-golden gba check-gba shot-gba run-gba clean
 
 help:
 	@echo "make dump      rebuild $(DUMP) from the Wintesla files in FLASH_FILES=$(FLASH_FILES)"
 	@echo "make phone     boot the dump headlessly in MAME; LCD frames land in $(PHONE_RUN)/"
 	@echo "make phone-window open the dump in a MAME window"
 	@echo "make test      build and run the host checks (no firmware needed)"
-	@echo "make test-snake check Snake's incremental drawing against full redraws"
-	@echo "make assets    extract the game graphics from DUMP=$(DUMP) into $(ASSETS)/"
-	@echo "make fonts     write the phone's fonts as ASCII-art sheets to $(BUILD)/fonts/"
-	@echo "make sheet     draw the extracted assets to $(BUILD)/sheet_*.pgm"
+	@echo "make assets    extract the game data from DUMP=$(DUMP) into $(ASSETS)/"
+	@echo "make sheet     draw the extracted sprites and tiles to $(BUILD)/sheet_*.pgm"
 	@echo "make frames    write the host reference frames to $(BUILD)/frame_*.pgm"
-	@echo "make check-golden compare host frames with MAME frames in $(GOLDEN)/"
-	@echo "make gb        build $(GB_ROM)"
+	@echo "make golden    record the reference Space Impact run in MAME into $(GOLDEN)/"
+	@echo "make check-golden replay that run through the core and compare every frame"
 	@echo "make gba       build $(GBA_ROM)"
-	@echo "make check-gb  run the Game Boy ROM headlessly and compare its frame with the host's"
-	@echo "make shot-gb   run the Game Boy ROM headlessly and write $(BUILD)/nokia3310-gb.png"
-	@echo "make check-gba run the GBA ROM headlessly and compare its frame with the host's"
+	@echo "make check-gba run the GBA ROM headlessly and compare its screen with the host's"
 	@echo "make shot-gba  run the GBA ROM headlessly and write $(BUILD)/nokia3310-gba.png"
-	@echo "make run-gb    open the Game Boy ROM in SameBoy"
 	@echo "make run-gba   open the GBA ROM in mGBA"
 	@echo "make clean     remove $(BUILD)/"
 
@@ -124,35 +110,15 @@ assets: $(ASSET_SRC)
 $(ASSET_SRC): tools/extract_assets.py
 	$(PYTHON) tools/extract_assets.py "$(DUMP)" $(ASSETS)
 
-# The phone's fonts as ASCII-art sheets, for other projects. Derived from
-# the firmware, so they stay under the ignored build directory.
-fonts:
-	$(PYTHON) tools/export_fonts.py "$(DUMP)" $(BUILD)/fonts
-
-$(BUILD)/test_core: tests/test_core.c core/lcd.c core/rand.c $(CORE_HDR)
+$(BUILD)/test_core: tests/test_core.c core/lcd.c core/rand.c core/sprite.c $(CORE_HDR)
 	@mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ tests/test_core.c core/lcd.c core/rand.c
+	$(CC) $(CFLAGS) -Icore -o $@ tests/test_core.c core/lcd.c core/rand.c core/sprite.c
 
 test: $(BUILD)/test_core
 	$(BUILD)/test_core
 
-# Needs the extracted assets, unlike `test`.
-$(BUILD)/test_snake: tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(ASSET_SRC)
-
-$(BUILD)/test_snake_gb: tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(ASSET_SRC)
-
-$(BUILD)/test_snake_gba: tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(GBA_FB) $(INCLUDES) -o $@ tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(ASSET_SRC)
-
-test-snake: $(BUILD)/test_snake $(BUILD)/test_snake_gb $(BUILD)/test_snake_gba
-	$(BUILD)/test_snake
-	$(BUILD)/test_snake_gb
-	$(BUILD)/test_snake_gba
-
-$(BUILD)/asset_sheet: platform/host/asset_sheet.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/asset_sheet.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/asset_sheet: platform/host/asset_sheet.c core/si.c core/sprite.c core/lcd.c core/rand.c $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/asset_sheet.c core/si.c core/sprite.c core/lcd.c core/rand.c $(ASSET_SRC)
 
 sheet: $(BUILD)/asset_sheet
 	$(BUILD)/asset_sheet $(BUILD)
@@ -163,81 +129,45 @@ $(BUILD)/frame: platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(COR
 $(BUILD)/frame_%.pgm: $(BUILD)/frame
 	$(BUILD)/frame $* $@
 
-# The same tool with the Game Boy's framebuffer, for comparing its screen.
-$(BUILD)/frame_gb: platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
-
-$(BUILD)/gbframe_%.pgm: $(BUILD)/frame_gb
-	$(BUILD)/frame_gb $* $@
-
-# And with the GBA's.
+# The same tool with the GBA's framebuffer, for comparing its screen.
 $(BUILD)/frame_gba: platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
 	$(CC) $(CFLAGS) $(GBA_FB) $(INCLUDES) -o $@ platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
 
 $(BUILD)/gbaframe_%.pgm: $(BUILD)/frame_gba
 	$(BUILD)/frame_gba $* $@
 
-# Frames captured from the original firmware in MAME, named after the host
-# frame they must equal. Derived from the firmware, so the directory is ignored.
-GOLDEN ?= golden
+frames: $(BUILD)/frame_testcard.pgm $(BUILD)/frame_start.pgm $(BUILD)/frame_run-300.pgm
 
-check-golden: $(BUILD)/frame
-	$(PYTHON) tools/check_golden.py $(BUILD)/frame $(GOLDEN)
+# The reference run: the firmware playing Space Impact in MAME with scripted
+# keys, every LCD frame kept and every event the game was handed logged.
+# Derived from the firmware, so the directory is ignored. The MAME fork is
+# asked for GAMES_PRODUCT=3310; see its docs/games_applications_3310.md.
+golden:
+	@test -x $(DCT3_RE)/mame/mame || { echo "Missing $(DCT3_RE)/mame/mame: build the fork first"; exit 1; }
+	@mkdir -p $(GOLDEN) run_golden
+	DCT3_RE=$(abspath $(DCT3_RE)) $(MAKE) -C $(DCT3_RE) run-keys GAMES_PRODUCT=3310 RUN_DIR=$(abspath run_golden) \
+		SECONDS=$(GOLDEN_SECONDS) KEYS=$(GOLDEN_KEYS) FRAME_PNG=$(abspath run_golden)/latest.png \
+		RUN_EXTRA_ARGS='-autoboot_script $(abspath tools/mame_event_log.lua) -debug -debugger none'
+	cp run_golden/nokia_dct3_lcdmirror_*.pgm $(GOLDEN)/
+	awk '/^GEV 1 2b/{on=1} on && /^GEV 1 /{print $$3}' run_golden/error.log | tr '\n' ' ' > $(GOLDEN)/events.txt
 
-frames: $(BUILD)/frame_testcard.pgm $(BUILD)/frame_outline.pgm $(BUILD)/frame_snake-start.pgm
+$(BUILD)/replay: platform/host/replay_main.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/replay_main.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
 
-# Game Boy
-
-$(BUILD)/gb/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
-	@mkdir -p $(BUILD)/gb
-	$(SDCC) -msm83 --opt-code-speed $(GB_FB) -Icore -I$(ASSETS) -c $< -o $@
-
-# Always rebuilt, so a change of KEYS takes effect.
-$(BUILD)/gb/main.rel: platform/gb/main.c $(CORE_HDR) FORCE
-	@mkdir -p $(BUILD)/gb
-	$(SDCC) -msm83 --opt-code-speed $(GB_FB) -Icore -I$(ASSETS) '-DSTART_KEYS="$(KEYS)"' -c $< -o $@
-
-FORCE:
-
-$(BUILD)/gb/game_assets.rel: $(ASSETS)/game_assets.c
-	@mkdir -p $(BUILD)/gb
-	$(SDCC) -msm83 -Icore -I$(ASSETS) -c $< -o $@
-
-$(BUILD)/gb/crt0.rel: platform/gb/crt0.s
-	@mkdir -p $(BUILD)/gb
-	$(SDAS) -o $@ $<
-
-$(GB_ROM): $(BUILD)/gb/crt0.rel $(GB_REL) FORCE
-	$(SDCC) -msm83 --no-std-crt0 -o $(BUILD)/gb/nokia3310.ihx $(BUILD)/gb/crt0.rel $(GB_REL)
-	$(MAKEBIN) -Z -yn NOKIA3310 -yt 0x03 -ya 1 $(BUILD)/gb/nokia3310.ihx $@
-
-gb: $(GB_ROM)
-
-check-gb: $(GB_ROM) $(BUILD)/gbframe_$(GB_FRAME).pgm
-	@test -x "$(SAMEBOY_TESTER)" || { echo "Missing $(SAMEBOY_TESTER): run scripts/setup-sameboy.sh"; exit 1; }
-	$(SAMEBOY_TESTER) --dmg --length $(SHOT_SECONDS) $(GB_ROM)
-	$(PYTHON) tools/check_gb_frame.py $(BUILD)/nokia3310.bmp $(BUILD)/gbframe_$(GB_FRAME).pgm
-
-# Headless screenshot of the Game Boy ROM as a PNG.
-shot-gb: $(GB_ROM)
-	@test -x "$(SAMEBOY_TESTER)" || { echo "Missing $(SAMEBOY_TESTER): run scripts/setup-sameboy.sh"; exit 1; }
-	$(SAMEBOY_TESTER) --dmg --length $(SHOT_SECONDS) $(GB_ROM)
-	$(PYTHON) tools/bmp_to_png.py $(BUILD)/nokia3310.bmp $(BUILD)/nokia3310-gb.png $(SHOT_SCALE)
-
-# Headless Game Boy sound capture; needs `make -C tools/SameBoy lib`.
-$(BUILD)/gb_audio: tools/gb_audio.c
-	@test -f tools/SameBoy/build/lib/libsameboy.a || { echo "Missing SameBoy's library: run make -C tools/SameBoy lib"; exit 1; }
-	@mkdir -p $(BUILD)
-	$(CC) -O2 -Itools/SameBoy -DGB_VERSION='"x"' -o $@ $< tools/SameBoy/build/lib/libsameboy.a -lm
-
-run-gb: $(GB_ROM)
-	open -a "$(SAMEBOY_APP)" $(GB_ROM)
+# Skipped when the reference run has not been recorded.
+check-golden: $(BUILD)/replay
+	@if [ -f $(GOLDEN)/events.txt ]; then \
+		out=$$(mktemp -d) && $(BUILD)/replay $(GOLDEN)/events.txt $$out $(GOLDEN_SEED) && \
+		$(PYTHON) tools/check_replay.py $$out $(GOLDEN); \
+	else echo "no $(GOLDEN)/events.txt: run make golden; skipped"; fi
 
 # GBA
 
+FORCE:
+
 $(BUILD)/gba/nokia3310.elf: $(GBA_SRC) $(CORE_HDR) platform/gba/gba.ld FORCE
 	@mkdir -p $(BUILD)/gba
-	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(ASSETS) '-DSTART_KEYS="$(KEYS)"' -nostdlib -T platform/gba/gba.ld -Wl,-Map,$(BUILD)/gba/nokia3310.map -o $@ $(GBA_SRC) -lgcc
+	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(ASSETS) -Iplatform/gba/include -nostdlib -T platform/gba/gba.ld -Wl,-Map,$(BUILD)/gba/nokia3310.map -o $@ $(GBA_SRC) -lgcc
 
 $(GBA_ROM): $(BUILD)/gba/nokia3310.elf tools/gbafix.py FORCE
 	$(ARM_OBJCOPY) -O binary $< $@
@@ -247,20 +177,30 @@ gba: $(GBA_ROM)
 
 # Headless GBA runs use mGBA's core library; scripts/setup-mgba.sh builds it.
 MGBA ?= tools/mgba
-SHOT_FRAMES ?= 60
+# Screen frames to run before the screenshot; the game starts at power-on.
+SHOT_FRAMES ?= 300
 
 $(BUILD)/gba_shot: tools/gba_shot.c
 	@test -f "$(MGBA)/build/libmgba.a" || { echo "Missing $(MGBA)/build/libmgba.a: run scripts/setup-mgba.sh"; exit 1; }
 	@mkdir -p $(BUILD)
 	$(CC) -O2 -I$(MGBA)/include -I$(MGBA)/build/include -o $@ $< $(MGBA)/build/libmgba.a -lm -framework CoreFoundation
 
-check-gba: $(GBA_ROM) $(BUILD)/gba_shot $(BUILD)/gbaframe_$(GB_FRAME).pgm
+# The ROM's screen after SHOT_FRAMES frames must be the host's picture of the
+# game after about as much time. The ROM takes some 35 frames to put up its
+# first picture and starts the game's clock then, so the host's frames up
+# to 48 earlier are accepted; a tick is 5 or 6 frames, so that is one
+# picture out of nine.
+check-gba: $(GBA_ROM) $(BUILD)/gba_shot $(BUILD)/frame_gba
 	$(BUILD)/gba_shot $(GBA_ROM) $(BUILD)/nokia3310-gba.bmp $(SHOT_FRAMES)
-	$(PYTHON) tools/check_gb_frame.py $(BUILD)/nokia3310-gba.bmp $(BUILD)/gbaframe_$(GB_FRAME).pgm
+	@for back in $$(seq 0 48); do \
+		n=$$(($(SHOT_FRAMES) - back)); $(BUILD)/frame_gba run-$$n $(BUILD)/gbaframe_run-$$n.pgm >/dev/null; \
+		if $(PYTHON) tools/check_gb_frame.py $(BUILD)/nokia3310-gba.bmp $(BUILD)/gbaframe_run-$$n.pgm >/dev/null 2>&1; then \
+			echo "ok: the ROM's screen after $(SHOT_FRAMES) frames is the host's after $$n"; exit 0; fi; \
+	done; echo "FAIL: the ROM's screen after $(SHOT_FRAMES) frames matches no host frame near it"; exit 1
 
 shot-gba: $(GBA_ROM) $(BUILD)/gba_shot
 	$(BUILD)/gba_shot $(GBA_ROM) $(BUILD)/nokia3310-gba.bmp $(SHOT_FRAMES)
-	$(PYTHON) tools/bmp_to_png.py $(BUILD)/nokia3310-gba.bmp $(BUILD)/nokia3310-gba.png 2
+	$(PYTHON) tools/bmp_to_png.py $(BUILD)/nokia3310-gba.bmp $(BUILD)/nokia3310-gba.png $(SHOT_SCALE)
 
 run-gba: $(GBA_ROM)
 	open -a "$(MGBA_APP)" $(GBA_ROM)

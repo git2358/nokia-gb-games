@@ -31,7 +31,7 @@ GBA_LOGO_FROM ?=
 
 BUILD := build
 ASSETS := $(BUILD)/assets
-ASSET_SRC := $(ASSETS)/game_assets.c $(ASSETS)/font12.c
+ASSET_SRC := $(ASSETS)/game_assets.c
 CORE_SRC := $(wildcard core/*.c)
 CORE_HDR := $(wildcard core/*.h)
 INCLUDES := -Icore -Iplatform/host -I$(ASSETS)
@@ -43,17 +43,18 @@ GBA_ROM := $(BUILD)/nokia3210.gba
 KEYS ?=
 GB_FRAME := menu-$(KEYS)
 GB_SRC := $(CORE_SRC) platform/gb/main.c
-GB_REL := $(patsubst %.c,$(BUILD)/gb/%.rel,$(notdir $(GB_SRC))) $(BUILD)/gb/game_assets.rel $(BUILD)/gb/font12.rel
+GB_REL := $(patsubst %.c,$(BUILD)/gb/%.rel,$(notdir $(GB_SRC))) $(BUILD)/gb/game_assets.rel
 GBA_SRC := platform/gba/crt0.s platform/gba/main.c platform/gba/libc.c $(CORE_SRC) $(ASSET_SRC)
 
 vpath %.c core platform/gb
 
-.PHONY: help assets test test-snake sheet frames check-golden gb gba check-gb shot-gb check-gba shot-gba run-gb run-gba clean
+.PHONY: help assets fonts test test-snake sheet frames check-golden gb gba check-gb shot-gb check-gba shot-gba run-gb run-gba clean
 
 help:
 	@echo "make test      build and run the host checks (no firmware needed)"
 	@echo "make test-snake check Snake's incremental drawing against full redraws"
 	@echo "make assets    extract the game graphics from DUMP=$(DUMP) into $(ASSETS)/"
+	@echo "make fonts     write the phone's fonts as ASCII-art sheets to $(BUILD)/fonts/"
 	@echo "make sheet     draw the extracted assets to $(BUILD)/sheet_*.pgm"
 	@echo "make frames    write the host reference frames to $(BUILD)/frame_*.pgm"
 	@echo "make check-golden compare host frames with MAME frames in $(GOLDEN)/"
@@ -69,13 +70,10 @@ help:
 
 assets: $(ASSET_SRC)
 
-# The full-screen menus' font is the port's own, kept as an ASCII-art sheet.
-$(ASSETS)/font12.c: tools/font12_to_c.py assets/font12.txt
-	$(PYTHON) tools/font12_to_c.py assets/font12.txt $(ASSETS)
-
-$(ASSETS)/game_assets.c: tools/extract_assets.py
-	@test -f "$(DUMP)" || { echo "Missing $(DUMP): pass DUMP=/path/to/3210f600a.fls (see README.md)"; exit 1; }
-	$(PYTHON) tools/extract_assets.py "$(DUMP)" $(ASSETS)
+# The phone's fonts as ASCII-art sheets, for other projects. Derived from
+# the firmware, so they stay under the ignored build directory.
+fonts:
+	$(PYTHON) tools/export_fonts.py "$(DUMP)" $(BUILD)/fonts
 
 $(BUILD)/test_core: tests/test_core.c core/lcd.c core/rand.c $(CORE_HDR)
 	@mkdir -p $(BUILD)
@@ -135,10 +133,6 @@ $(BUILD)/gb/main.rel: platform/gb/main.c $(CORE_HDR) FORCE
 	$(SDCC) -msm83 --opt-code-speed $(GB_FB) -Icore -I$(ASSETS) '-DSTART_KEYS="$(KEYS)"' -c $< -o $@
 
 FORCE:
-
-$(BUILD)/gb/font12.rel: $(ASSETS)/font12.c
-	@mkdir -p $(BUILD)/gb
-	$(SDCC) -msm83 -Icore -I$(ASSETS) -c $< -o $@
 
 $(BUILD)/gb/game_assets.rel: $(ASSETS)/game_assets.c
 	@mkdir -p $(BUILD)/gb

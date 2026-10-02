@@ -1,7 +1,6 @@
 #include "menu.h"
 
 #include "font.h"
-#include "font12.h"
 #include "game.h"
 #include "game_assets.h"
 #include "lcd.h"
@@ -91,12 +90,13 @@ enum {
 };
 
 /* The full-screen variant's menus: a title bar, a list with every entry
-   visible, and a line of button hints, all in the 12px font. The port's own
-   design and words; the entries and their text are the phone's. */
-#define NATIVE_TITLE_HEIGHT 14
-#define NATIVE_LIST_Y 20
-#define NATIVE_ROW_HEIGHT 14
-#define NATIVE_HINT_Y (LCD_FB_HEIGHT - 13)
+   visible, and a line of button hints, all in the phone's large font (13
+   rows: 10 above the baseline, 3 below). The port's own design and words;
+   the entries and their text are the phone's. */
+#define NATIVE_TITLE_HEIGHT 15
+#define NATIVE_LIST_Y 21
+#define NATIVE_ROW_HEIGHT 15
+#define NATIVE_HINT_Y (LCD_FB_HEIGHT - 14)
 #define NATIVE_MARGIN 4
 #define NATIVE_HELP_LINES 7
 
@@ -274,13 +274,13 @@ static void draw_game(void)
 static void native_title(const char *title)
 {
     lcd_fill_rect(0, 0, LCD_FB_WIDTH, NATIVE_TITLE_HEIGHT, 1);
-    font_draw(&font12, NATIVE_MARGIN, 1, title, 0);
+    font_draw(&font_large_bold, NATIVE_MARGIN, 1, title, 0);
 }
 
 static void native_hint(const char *hint)
 {
     lcd_fill_rect(0, NATIVE_HINT_Y - 3, LCD_FB_WIDTH, 1, 1);
-    font_draw(&font12, NATIVE_MARGIN, NATIVE_HINT_Y, hint, 1);
+    font_draw(&font_large_bold, NATIVE_MARGIN, NATIVE_HINT_Y, hint, 1);
 }
 
 /* The selection is a cursor beside the entry, not an inverted row, so
@@ -297,7 +297,7 @@ static void native_cursor(uint8_t row, uint8_t on)
 
 static void native_row(uint8_t row, const char *label, uint8_t selected)
 {
-    font_draw(&font12, NATIVE_MARGIN + 10, NATIVE_LIST_Y + row * NATIVE_ROW_HEIGHT + 1, label, 1);
+    font_draw(&font_large_bold, NATIVE_MARGIN + 10, NATIVE_LIST_Y + row * NATIVE_ROW_HEIGHT + 1, label, 1);
     native_cursor(row, selected);
 }
 
@@ -390,9 +390,9 @@ static void native_note(const char *title, const char *text, uint16_t number)
                 digits[--n] = (char)('0' + value % 10);
                 value /= 10;
             } while (value);
-            font_draw(&font12, (LCD_FB_WIDTH - font_text_width(&font12, digits + n)) / 2, y, digits + n, 1);
+            font_draw(&font_large_bold, (LCD_FB_WIDTH - font_text_width(&font_large_bold, digits + n)) / 2, y, digits + n, 1);
         } else {
-            font_draw(&font12, (LCD_FB_WIDTH - font_text_width(&font12, text)) / 2, y, text, 1);
+            font_draw(&font_large_bold, (LCD_FB_WIDTH - font_text_width(&font_large_bold, text)) / 2, y, text, 1);
         }
         while (*text && *text != '\n')
             text++;
@@ -466,7 +466,7 @@ static void draw_play(void)
 
 static const struct font *help_font(void)
 {
-    return full_screen ? &font12 : &font_small_plain;
+    return full_screen ? &font_large_bold : &font_small_plain;
 }
 
 static uint8_t help_lines(void)

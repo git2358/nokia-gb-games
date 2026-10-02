@@ -80,6 +80,7 @@ make shot-gb KEYS=sd            # screenshot after scripted keys (u, d, l, r, s 
 make check-golden               # compare host frames with MAME frames in golden/
 make assets DUMP=/path/to/3210f600a.fls
 make sheet                      # draw the extracted assets to build/sheet_*.pgm
+make fonts                      # the phone's four fonts as ASCII-art sheets in build/fonts/
 ```
 
 `DUMP` defaults to `../nokia-dct3-re/roms/3210f600a.fls`. The dump must be
@@ -101,7 +102,7 @@ gameplay match frames captured from the firmware in MAME. Level and top
 score are kept in battery-backed cartridge RAM. Rotation and Memory do
 nothing yet and there is no sound. On the Game Boy, Start on the first
 screen picks a full-screen variant instead, which is the port's own design
-and not the phone's: menus laid out for the 160x144 screen in a 12px font
+and not the phone's: menus laid out for the 160x144 screen in the phone's large font
 with every entry visible and a cursor beside the selection, and Snake on a
 38x34 board of the same 4-pixel cells, with its own level and top score. [`docs/authenticity.md`](docs/authenticity.md)
 lists where the code's structure still differs from the firmware's. See

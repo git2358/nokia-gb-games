@@ -20,7 +20,7 @@ static int play(uint8_t cols, uint8_t rows)
 
     lcd_view_full();
     game_srand(1);
-    snake_init(0, cols, rows);
+    snake_init(0, 66, cols, rows);
     lcd_clear();
     snake_draw();
     for (step = 0; step < 20000; step++) {
@@ -37,7 +37,7 @@ static int play(uint8_t cols, uint8_t rows)
 
         if (!snake_step() ) {
             games++;
-            snake_init(0, cols, rows);
+            snake_init(0, 66, cols, rows);
             lcd_clear();
             snake_draw();
             continue;

@@ -100,6 +100,11 @@ enum {
 #define NATIVE_MARGIN 4
 #define NATIVE_HELP_LINES 7
 
+/* The full-screen variant's time between moves by level, in units of 10 ms.
+   The phone's table runs 66 48 38 30 23 18 14 11 9; this one starts at half
+   the phone's level 1 and ends a little under its level 9, in even ratios. */
+static const uint8_t full_screen_speed[LEVEL_COUNT] = { 33, 28, 23, 19, 16, 14, 11, 10, 8 };
+
 static const char text_hint_select[] = "B back   A select";
 static const char text_hint_ok[] = "B back   A OK";
 static const char text_hint_more[] = "B back   A more";
@@ -560,12 +565,12 @@ static void play_start(void)
 {
     game_srand(uptime);
     if (full_screen)
-        snake_init(settings.level, SNAKE_FULL_COLS, SNAKE_FULL_ROWS);
+        snake_init(settings.level, full_screen_speed[settings.level], SNAKE_FULL_COLS, SNAKE_FULL_ROWS);
     else
-        snake_init(settings.level, SNAKE_COLS, SNAKE_ROWS);
+        snake_init(settings.level, game_speed_table[settings.level], SNAKE_COLS, SNAKE_ROWS);
     screen = SCREEN_PLAY;
     play_us = 0;
-    play_schedule((uint8_t)((uint16_t)game_speed_table[settings.level] * 320 / 249));
+    play_schedule(snake_move_ticks());
 }
 
 static void play_over(void)
@@ -625,7 +630,7 @@ static void game_menu_select(void)
         if (resume == RESUME_CONTINUE) {
             screen = SCREEN_PLAY;
             play_us = 0;
-            play_schedule((uint8_t)((uint16_t)game_speed_table[snake.level] * 320 / 249));
+            play_schedule(snake_move_ticks());
         } else {
             screen = SCREEN_LAST_VIEW;
         }

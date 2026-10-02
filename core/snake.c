@@ -41,10 +41,11 @@ static uint8_t is_occupied(int8_t x, int8_t y)
     return (snake.occupied[x + snake.cols * (y / 8)] >> (y & 7)) & 1;
 }
 
-void snake_init(uint8_t level, uint8_t cols, uint8_t rows)
+void snake_init(uint8_t level, uint8_t speed, uint8_t cols, uint8_t rows)
 {
     unsigned i;
 
+    snake.speed = speed;
     snake.cols = cols;
     snake.rows = rows;
     snake.ring_size = (uint16_t)(cols * rows / 4 * 4);
@@ -161,8 +162,13 @@ uint8_t snake_step(void)
         snake.score += snake.level + 1;
         place_food();
     }
-    /* speed is in units of 10 ms; a tick is 7.78125 ms (249/32). */
-    return (uint8_t)((uint16_t)game_speed_table[snake.level] * 320 / 249);
+    return snake_move_ticks();
+}
+
+/* speed is in units of 10 ms; a tick is 7.78125 ms (249/32). */
+uint8_t snake_move_ticks(void)
+{
+    return (uint8_t)((uint16_t)snake.speed * 320 / 249);
 }
 
 /* The firmware also scores a filled board here; that is not done yet. */

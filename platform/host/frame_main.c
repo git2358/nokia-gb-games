@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "game.h"
+#include "game_assets.h"
 #include "lcd.h"
 #include "menu.h"
 #include "pgm.h"
@@ -44,7 +45,7 @@ int main(int argc, char **argv)
         testcard_frame();
     } else if (strcmp(argv[1], "snake-start") == 0) {
         lcd_clear();
-        snake_init(0, SNAKE_COLS, SNAKE_ROWS);
+        snake_init(0, game_speed_table[0], SNAKE_COLS, SNAKE_ROWS);
         snake_draw();
     } else if (strncmp(argv[1], "menu-", 5) == 0) {
         const char *key;

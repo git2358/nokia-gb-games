@@ -42,6 +42,7 @@ struct snake {
     uint8_t grow;      /* the last move ate, so the tail stays for one move */
     uint8_t hit;       /* the last move was blocked; one more ends the game */
     uint8_t level;     /* 0..8 */
+    uint8_t speed;     /* time between moves, in units of 10 ms */
     uint16_t score;
     uint8_t ring[SNAKE_MAX_COLS * SNAKE_MAX_ROWS / 4];
     /* One bit per cell: byte x + cols * (y / 8), bit y & 7. */
@@ -55,8 +56,13 @@ struct snake {
 extern struct snake snake;
 
 /* New one-player game on a board of cols x rows cells: nine cells along the
-   bottom row heading right, and the first food in the middle of the board. */
-void snake_init(uint8_t level, uint8_t cols, uint8_t rows);
+   bottom row heading right, and the first food in the middle of the board.
+   `speed` is the time between moves in units of 10 ms; the phone takes it
+   from its speed table by level. */
+void snake_init(uint8_t level, uint8_t speed, uint8_t cols, uint8_t rows);
+
+/* The time between moves in scheduler ticks of 7.78125 ms. */
+uint8_t snake_move_ticks(void);
 
 /* A phone key, '1' to '9': 2/4/6/8 steer, and the corner keys turn towards
    whichever of their two directions is a turn. A reversal is ignored. */

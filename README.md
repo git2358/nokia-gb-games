@@ -100,6 +100,13 @@ The GBA ROM is built without the boot logo, which a real console's BIOS
 checks. To run on hardware, pass a GBA ROM you own to copy it from:
 `make gba GBA_LOGO_FROM=/path/to/some.gba`.
 
+`make cards` (`scripts/copy-to-cards.sh`) copies the ROMs to the root of
+the flash carts' SD cards: the `.gb` to `/Volumes/EZGB_FW4` and
+`/Volumes/EZGB_FW5`, the `.gba` to `/Volumes/OMEGADE`. It skips a card
+that is not mounted, refuses a `.gba` without the boot logo, checks each
+copy and ejects nothing. The checks and screenshots run separate test
+ROMs (`build/nokia3210-keys.*`), which it leaves alone.
+
 ## Status
 
 In progress. Both cartridges build and run the same core: they open on the

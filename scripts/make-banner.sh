@@ -60,16 +60,16 @@ MEMORY_FULL="adds$(level_full 4)${MEMORY_TRIES}"
 
 # gb_shot KEYS OUT: a Game Boy screenshot at 3x, in the console's own green.
 gb_shot() {
-  make -C "$ROOT" gb KEYS="$1" >/dev/null
-  "$TESTER" --dmg --length 2 "$BUILD/nokia3210.gb" >/dev/null 2>&1
-  python3 "$ROOT/tools/bmp_to_png.py" "$BUILD/nokia3210.bmp" "$TMP/raw.png" 3 >/dev/null
+  make -C "$ROOT" build/nokia3210-keys.gb KEYS="$1" >/dev/null
+  "$TESTER" --dmg --length 2 "$BUILD/nokia3210-keys.gb" >/dev/null 2>&1
+  python3 "$ROOT/tools/bmp_to_png.py" "$BUILD/nokia3210-keys.bmp" "$TMP/raw.png" 3 >/dev/null
   magick "$TMP/raw.png" +level-colors "$DARK","$GREEN" "$2"
 }
 
 # gba_shot KEYS OUT: a GBA screenshot at 2x.
 gba_shot() {
-  make -C "$ROOT" gba KEYS="$1" >/dev/null
-  "$BUILD/gba_shot" "$BUILD/nokia3210.gba" "$BUILD/nokia3210-gba.bmp" 14
+  make -C "$ROOT" build/nokia3210-keys.gba KEYS="$1" >/dev/null
+  "$BUILD/gba_shot" "$BUILD/nokia3210-keys.gba" "$BUILD/nokia3210-gba.bmp" 14
   python3 "$ROOT/tools/bmp_to_png.py" "$BUILD/nokia3210-gba.bmp" "$2" 2 >/dev/null
 }
 
@@ -94,9 +94,6 @@ gba_shot "$GAMES_FULL" "$TMP/gbafull-1.png"
 gba_shot "$ROTATION_FULL" "$TMP/gbafull-2.png"
 gba_shot "$SNAKE_FULL_GBA" "$TMP/gbafull-3.png"
 gba_shot "$MEMORY_FULL" "$TMP/gbafull-4.png"
-
-# Leave the default builds behind, not the last scripted ones.
-make -C "$ROOT" gb gba KEYS= >/dev/null
 
 # --- layout: 480 px panels, a label column on the left, headers on top ------
 PANEL=480

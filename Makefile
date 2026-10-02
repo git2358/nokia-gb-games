@@ -45,17 +45,19 @@ INCLUDES := -Icore -Iplatform/host -I$(ASSETS)
 
 GB_ROM := $(BUILD)/nokia3210.gb
 GBA_ROM := $(BUILD)/nokia3210.gba
-# Keys the Game Boy ROM presses at power-on (see platform/gb/main.c), for scripted
-# screenshots; check-gb compares the result with the host's frame for them.
+# The ROMs the checks and screenshots run: the same, pressing KEYS at
+# power-on (see platform/gb/main.c). The ROMs `make gb` and `make gba`
+# build press none, whatever KEYS is.
+GB_TEST_ROM := $(BUILD)/nokia3210-keys.gb
+GBA_TEST_ROM := $(BUILD)/nokia3210-keys.gba
 KEYS ?=
 GB_FRAME := menu-$(KEYS)
-GB_SRC := $(CORE_SRC) platform/gb/main.c
-GB_REL := $(patsubst %.c,$(BUILD)/gb/%.rel,$(notdir $(GB_SRC))) $(BUILD)/gb/game_assets.rel
+GB_REL := $(patsubst %.c,$(BUILD)/gb/%.rel,$(notdir $(CORE_SRC))) $(BUILD)/gb/game_assets.rel
 GBA_SRC := platform/gba/crt0.s platform/gba/main.c platform/gba/libc.c $(CORE_SRC) $(ASSET_SRC)
 
 vpath %.c core platform/gb
 
-.PHONY: help assets fonts test test-snake test-boards sheet frames check-golden gb gba check-gb shot-gb check-gba shot-gba run-gb run-gba clean
+.PHONY: help assets fonts test test-snake test-boards sheet frames check-golden gb gba check-gb shot-gb check-gba shot-gba run-gb run-gba cards clean
 
 help:
 	@echo "make test      build and run the host checks (no firmware needed)"
@@ -74,6 +76,7 @@ help:
 	@echo "make shot-gba  run the GBA ROM headlessly and write $(BUILD)/nokia3210-gba.png"
 	@echo "make run-gb    open the Game Boy ROM in SameBoy"
 	@echo "make run-gba   open the GBA ROM in mGBA"
+	@echo "make cards     copy the built ROMs to the flash carts' SD cards"
 	@echo "make clean     remove $(BUILD)/"
 
 assets: $(ASSET_SRC)
@@ -157,10 +160,11 @@ $(BUILD)/gb/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
 	@mkdir -p $(BUILD)/gb
 	$(SDCC) -msm83 --opt-code-speed $(GB_FB) -DLCD_PLATFORM_COLUMNS -Icore -I$(ASSETS) -c $< -o $@
 
-# Always rebuilt, so a change of KEYS takes effect.
-$(BUILD)/gb/main.rel: platform/gb/main.c $(CORE_HDR) FORCE
+# The layer itself twice: once pressing no keys, once pressing KEYS. Always
+# rebuilt, so a change of KEYS takes effect.
+$(BUILD)/gb/main.rel $(BUILD)/gb/main-keys.rel: platform/gb/main.c $(CORE_HDR) $(ASSET_SRC) FORCE
 	@mkdir -p $(BUILD)/gb
-	$(SDCC) -msm83 --opt-code-speed $(GB_FB) -DLCD_PLATFORM_COLUMNS -Icore -I$(ASSETS) '-DSTART_KEYS="$(KEYS)"' -c $< -o $@
+	$(SDCC) -msm83 --opt-code-speed $(GB_FB) -DLCD_PLATFORM_COLUMNS -Icore -I$(ASSETS) '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -c $< -o $@
 
 FORCE:
 
@@ -172,22 +176,24 @@ $(BUILD)/gb/crt0.rel: platform/gb/crt0.s
 	@mkdir -p $(BUILD)/gb
 	$(SDAS) -o $@ $<
 
-$(GB_ROM): $(BUILD)/gb/crt0.rel $(GB_REL) FORCE
-	$(SDCC) -msm83 --no-std-crt0 -o $(BUILD)/gb/nokia3210.ihx $(BUILD)/gb/crt0.rel $(GB_REL)
-	$(MAKEBIN) -Z -yn NOKIA3210 -yt 0x03 -ya 1 $(BUILD)/gb/nokia3210.ihx $@
+$(BUILD)/nokia3210%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/main%rel $(GB_REL)
+	$(SDCC) -msm83 --no-std-crt0 -o $(BUILD)/gb/$(basename $(notdir $@)).ihx $^
+	$(MAKEBIN) -Z -yn NOKIA3210 -yt 0x03 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
+
+.SECONDARY: $(GB_REL) $(BUILD)/gb/crt0.rel
 
 gb: $(GB_ROM)
 
-check-gb: $(GB_ROM) $(BUILD)/gbframe_$(GB_FRAME).pgm
+check-gb: $(GB_TEST_ROM) $(BUILD)/gbframe_$(GB_FRAME).pgm
 	@test -x "$(SAMEBOY_TESTER)" || { echo "Missing $(SAMEBOY_TESTER): run scripts/setup-sameboy.sh"; exit 1; }
-	$(SAMEBOY_TESTER) --dmg --length $(SHOT_SECONDS) $(GB_ROM)
-	$(PYTHON) tools/check_gb_frame.py $(BUILD)/nokia3210.bmp $(BUILD)/gbframe_$(GB_FRAME).pgm
+	$(SAMEBOY_TESTER) --dmg --length $(SHOT_SECONDS) $(GB_TEST_ROM)
+	$(PYTHON) tools/check_gb_frame.py $(BUILD)/nokia3210-keys.bmp $(BUILD)/gbframe_$(GB_FRAME).pgm
 
 # Headless screenshot of the Game Boy ROM as a PNG.
-shot-gb: $(GB_ROM)
+shot-gb: $(GB_TEST_ROM)
 	@test -x "$(SAMEBOY_TESTER)" || { echo "Missing $(SAMEBOY_TESTER): run scripts/setup-sameboy.sh"; exit 1; }
-	$(SAMEBOY_TESTER) --dmg --length $(SHOT_SECONDS) $(GB_ROM)
-	$(PYTHON) tools/bmp_to_png.py $(BUILD)/nokia3210.bmp $(BUILD)/nokia3210-gb.png $(SHOT_SCALE)
+	$(SAMEBOY_TESTER) --dmg --length $(SHOT_SECONDS) $(GB_TEST_ROM)
+	$(PYTHON) tools/bmp_to_png.py $(BUILD)/nokia3210-keys.bmp $(BUILD)/nokia3210-gb.png $(SHOT_SCALE)
 
 # Headless Game Boy sound capture; needs `make -C tools/SameBoy lib`.
 $(BUILD)/gb_audio: tools/gb_audio.c
@@ -200,13 +206,17 @@ run-gb: $(GB_ROM)
 
 # GBA
 
-$(BUILD)/gba/nokia3210.elf: $(GBA_SRC) $(CORE_HDR) platform/gba/gba.ld FORCE
+$(BUILD)/gba/nokia3210.elf $(BUILD)/gba/nokia3210-keys.elf: $(GBA_SRC) $(CORE_HDR) platform/gba/gba.ld FORCE
 	@mkdir -p $(BUILD)/gba
-	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(ASSETS) '-DSTART_KEYS="$(KEYS)"' -nostdlib -T platform/gba/gba.ld -Wl,-Map,$(BUILD)/gba/nokia3210.map -o $@ $(GBA_SRC) -lgcc
+	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(ASSETS) '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -nostdlib -T platform/gba/gba.ld -Wl,-Map,$(basename $@).map -o $@ $(GBA_SRC) -lgcc
 
 $(GBA_ROM): $(BUILD)/gba/nokia3210.elf tools/gbafix.py FORCE
 	$(ARM_OBJCOPY) -O binary $< $@
 	$(PYTHON) tools/gbafix.py $@ $(if $(GBA_LOGO_FROM),--logo-from "$(GBA_LOGO_FROM)")
+
+$(GBA_TEST_ROM): $(BUILD)/gba/nokia3210-keys.elf tools/gbafix.py FORCE
+	$(ARM_OBJCOPY) -O binary $< $@
+	$(PYTHON) tools/gbafix.py $@
 
 gba: $(GBA_ROM)
 
@@ -219,16 +229,20 @@ $(BUILD)/gba_shot: tools/gba_shot.c
 	@mkdir -p $(BUILD)
 	$(CC) -O2 -I$(MGBA)/include -I$(MGBA)/build/include -o $@ $< $(MGBA)/build/libmgba.a -lm -framework CoreFoundation
 
-check-gba: $(GBA_ROM) $(BUILD)/gba_shot $(BUILD)/gbaframe_$(GB_FRAME).pgm
-	$(BUILD)/gba_shot $(GBA_ROM) $(BUILD)/nokia3210-gba.bmp $(SHOT_FRAMES)
+check-gba: $(GBA_TEST_ROM) $(BUILD)/gba_shot $(BUILD)/gbaframe_$(GB_FRAME).pgm
+	$(BUILD)/gba_shot $(GBA_TEST_ROM) $(BUILD)/nokia3210-gba.bmp $(SHOT_FRAMES)
 	$(PYTHON) tools/check_gb_frame.py $(BUILD)/nokia3210-gba.bmp $(BUILD)/gbaframe_$(GB_FRAME).pgm
 
-shot-gba: $(GBA_ROM) $(BUILD)/gba_shot
-	$(BUILD)/gba_shot $(GBA_ROM) $(BUILD)/nokia3210-gba.bmp $(SHOT_FRAMES)
+shot-gba: $(GBA_TEST_ROM) $(BUILD)/gba_shot
+	$(BUILD)/gba_shot $(GBA_TEST_ROM) $(BUILD)/nokia3210-gba.bmp $(SHOT_FRAMES)
 	$(PYTHON) tools/bmp_to_png.py $(BUILD)/nokia3210-gba.bmp $(BUILD)/nokia3210-gba.png 2
 
 run-gba: $(GBA_ROM)
 	open -a "$(MGBA_APP)" $(GBA_ROM)
+
+# The ROMs to the root of the flash carts' SD cards; see the script.
+cards:
+	scripts/copy-to-cards.sh
 
 clean:
 	rm -rf $(BUILD)

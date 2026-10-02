@@ -47,7 +47,7 @@ int main(int argc, char **argv)
         return 2;
     }
     lcd_view_phone();
-    lcd_zoom_set(LCD_PHONE_X, LCD_PHONE_Y, LCD_WIDTH, LCD_HEIGHT);
+    lcd_zoom_set(LCD_PHONE_X, LCD_PHONE_Y, LCD_WIDTH, LCD_HEIGHT, LCD_ZOOM);
     if (strcmp(argv[1], "testcard") == 0) {
         testcard_draw();
     } else if (strcmp(argv[1], "outline") == 0) {

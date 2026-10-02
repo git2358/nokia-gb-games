@@ -1,6 +1,8 @@
 /* GBA layer. The core's framebuffer is the whole 240x160 screen, shown in
    bitmap mode 3. The core names a part of it to magnify: the phone's 84x48
-   LCD is shown at 2x in the middle of the screen; the full-screen menus are
+   LCD is shown at 2x in the middle of the screen, and the game in the
+   full-screen mode at 3x by the display hardware's scaling, which fills the
+   screen's width with the LCD's first 80 columns; the full-screen menus are
    shown as they are. In the menus A is the phone's Navi key, B is its C
    key and the D-pad scrolls; Start on the first screen picks the
    full-screen mode. In the game the D-pad moves the ship, A fires, B uses
@@ -27,6 +29,13 @@
 #define REG_IE REG16(0x04000200)
 #define REG_WAITCNT REG16(0x04000204)
 #define REG_IME REG16(0x04000208)
+#define REG32(addr) (*(volatile uint32_t *)(addr))
+#define REG_BG2PA REG16(0x04000020)
+#define REG_BG2PB REG16(0x04000022)
+#define REG_BG2PC REG16(0x04000024)
+#define REG_BG2PD REG16(0x04000026)
+#define REG_BG2X REG32(0x04000028)
+#define REG_BG2Y REG32(0x0400002c)
 #define IRQ_VECTOR (*(void (*volatile *)(void))0x03007ffc)
 #define VRAM ((uint16_t *)0x06000000)
 
@@ -34,6 +43,20 @@
 #define SCREEN_H LCD_FB_HEIGHT
 /* Most frames of game time made up at once after a slow draw. */
 #define MAX_CATCH_UP 6
+
+/* The games on the phone's LCD in the full-screen variant are magnified by
+   the display hardware: mode 3's one layer, BG2, can be scaled, so the
+   framebuffer is drawn as it is and BG2 is set to step a third of a pixel
+   per screen pixel. The step is in 8.8 fixed point, where a third is not
+   exact: 85/256 falls 0.94 of a pixel short over the 80 columns and 48
+   rows shown, which a start 82/256 into the first pixel absorbs, so that
+   every pixel is a 3x3 block on the screen. The bars above and below the
+   picture sample the cleared framebuffer around the LCD. */
+#if LCD_GAME_ZOOM != 3
+#error "ZOOM_STEP and ZOOM_START are for 3x"
+#endif
+#define ZOOM_STEP 85
+#define ZOOM_START 82
 
 #define RGB(r, g, b) ((uint16_t)((r) | (g) << 5 | (b) << 10))
 #define COLOR_CLEAR RGB(19, 24, 15)
@@ -139,8 +162,9 @@ void platform_vibrate(void)
 {
 }
 
-/* The magnified rectangle the screen currently shows. */
-static uint8_t shown_x, shown_y, shown_w, shown_h;
+/* The magnified rectangle the screen currently shows, and by how much:
+   LCD_ZOOM is done here, pixel by pixel; LCD_GAME_ZOOM by the hardware. */
+static uint8_t shown_x, shown_y, shown_w, shown_h, shown_by;
 
 /* One framebuffer pixel that changed: inside the magnified rectangle it is
    a block in the middle of the screen; outside, it goes where it is unless
@@ -207,17 +231,44 @@ static int cell_magnified(int cx, int cy)
     return x + 8 > shown_x && x < shown_x + shown_w && y + 8 > shown_y && y < shown_y + shown_h;
 }
 
+/* Sets BG2 to show the magnified rectangle LCD_GAME_ZOOM times bigger in
+   the middle of the screen, or the framebuffer as it is. */
+static void zoom_hardware(uint8_t on)
+{
+    int zx = (SCREEN_W - shown_w * LCD_GAME_ZOOM) / 2, zy = (SCREEN_H - shown_h * LCD_GAME_ZOOM) / 2;
+
+    REG_BG2PB = 0;
+    REG_BG2PC = 0;
+    if (!on) {
+        REG_BG2PA = 0x100;
+        REG_BG2PD = 0x100;
+        REG_BG2X = 0;
+        REG_BG2Y = 0;
+        return;
+    }
+    REG_BG2PA = ZOOM_STEP;
+    REG_BG2PD = ZOOM_STEP;
+    /* Where in the framebuffer the screen's top-left pixel samples, in 20.8
+       fixed point: the rectangle's corner less the bars, which lie before it. */
+    REG_BG2X = (uint32_t)((shown_x << 8) + ZOOM_START - zx * ZOOM_STEP) & 0x0fffffff;
+    REG_BG2Y = (uint32_t)((shown_y << 8) + ZOOM_START - zy * ZOOM_STEP) & 0x0fffffff;
+}
+
 /* Redraws the 8x8 cells of lcd_fb drawn to since the last call, or the
    whole screen when what is magnified changes. */
 static void present(void)
 {
-    uint8_t all = lcd_zoom_x != shown_x || lcd_zoom_y != shown_y || lcd_zoom_w != shown_w || lcd_zoom_h != shown_h;
+    uint8_t all = lcd_zoom_x != shown_x || lcd_zoom_y != shown_y || lcd_zoom_w != shown_w || lcd_zoom_h != shown_h
+                  || lcd_zoom_by != shown_by;
+    uint8_t hardware;
     int cx, cy, x, y, cover;
 
     shown_x = lcd_zoom_x;
     shown_y = lcd_zoom_y;
     shown_w = lcd_zoom_w;
     shown_h = lcd_zoom_h;
+    shown_by = lcd_zoom_by;
+    hardware = shown_w && shown_by == LCD_GAME_ZOOM;
     for (cy = 0; cy < LCD_CELLS_Y; cy++) {
         for (cx = 0; cx < LCD_CELLS_X; cx++) {
             uint8_t *dirty = &lcd_dirty[cx + LCD_CELLS_X * cy];
@@ -225,7 +276,7 @@ static void present(void)
             if (!*dirty && !all)
                 continue;
             *dirty = 0;
-            if (!shown_w) {
+            if (!shown_w || hardware) {
                 plot_cell(cx, cy);
                 continue;
             }
@@ -245,6 +296,9 @@ static void present(void)
                     plot(x, y);
         }
     }
+    /* After the picture, so that what the hardware magnifies is in place. */
+    if (all)
+        zoom_hardware(hardware);
 }
 
 /* The buttons down, as menu_held wants them. */

@@ -25,11 +25,12 @@ What is there so far:
 
 Start on the first screen picks a full-screen mode instead, as in the 3210
 project: the port's own menus laid out for the console's whole screen in
-the phone's large font. On the Game Boy that mode shows the game at 2x.
-At 2x the phone's 84 columns are 8 pixels too wide for the Game Boy, which
-leaves off the last four: nothing of the score, which ends at column 75,
-but enemies come on four columns late and the ship can fly its nose out of
-sight.
+the phone's large font. In that mode the game is shown at 2x on the Game
+Boy and at 3x on the GBA, where the display hardware does the scaling.
+Either way the phone's 84 columns are four too many for the screen's
+width, so the last four are left off: nothing of the score, which ends at
+column 75, but enemies come on four columns late and the ship can fly its
+nose out of sight.
 
 | | Menus | Space Impact |
 |---|---|---|

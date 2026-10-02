@@ -5,10 +5,9 @@ Usage: check_gb_frame.py SCREENSHOT.bmp FRAME.pgm
 
 The screenshot is a 32-bit BMP from SameBoy's tester (160x144) or from
 tools/gba_shot (240x160). The frame is the core's framebuffer as the host
-drew it: the same size as the screen for the Game Boy, and half the size
-each way for the GBA, which shows every pixel as a 2x2 block. Every pixel
-must match, and the screen must hold only the two shades the layers draw
-with.
+drew it, the size of the screen, with any magnification applied. Every
+pixel must match, and the screen must hold only the two shades the layers
+draw with.
 """
 import struct
 import sys

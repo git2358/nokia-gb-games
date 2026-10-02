@@ -40,8 +40,8 @@ your own legally obtained dump at build time into an ignored directory.
 - `platform/host/`: host layer used for verification; writes LCD frames as
   PGM in the layout of the fork's MAME frames.
 - `platform/gb/`: Game Boy layer (84x48 drawn 1:1 as background tiles).
-- `platform/gba/`: GBA layer (bitmap mode 3; the phone-sized mode is shown
-  at 2x), with its own startup code and linker script.
+- `platform/gba/`: GBA layer (bitmap mode 3, everything shown at 2x), with
+  its own startup code and linker script.
 - `tools/`: `extract_assets.py` reads the game graphics from your dump into
   C arrays under the ignored `build/assets/`; `gbafix.py` finishes the GBA
   header; `check_gb_frame.py` compares an emulator screenshot with a host
@@ -104,8 +104,9 @@ nothing yet. Snake has its three buzzer sounds. Start on the first screen picks 
 full-screen mode instead, which is the port's own design and not the
 phone's: menus laid out for the console's whole screen in the phone's large
 font with every entry visible and a cursor beside the selection, and Snake
-on a bigger board of the same 4-pixel cells (38x34 on the Game Boy, 58x38
-on the GBA), with its own level, top score and speeds. [`docs/authenticity.md`](docs/authenticity.md)
+on a bigger board of the same 4-pixel cells (38x34 on the Game Boy, 28x18
+on the GBA, which shows everything at 2x), with its own level, top score
+and speeds. [`docs/authenticity.md`](docs/authenticity.md)
 lists where the code's structure still differs from the firmware's. See
 [`docs/handoff.md`](docs/handoff.md) for the decisions taken, the reference
 material and the work items.

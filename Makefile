@@ -21,9 +21,9 @@ SAMEBOY_APP ?= /Applications/SameBoy.app
 SHOT_SECONDS ?= 2
 SHOT_SCALE ?= 3
 
-# GBA: bare arm-none-eabi GCC, no C library. The GBA also gives the core a
-# framebuffer the size of its screen, and shows the phone's LCD at 2x.
-GBA_FB := -DLCD_FB_WIDTH=240 -DLCD_FB_HEIGHT=160 -DLCD_PHONE_ZOOM=2
+# GBA: bare arm-none-eabi GCC, no C library. The GBA shows everything at 2x,
+# so its framebuffer is half the size of its screen each way.
+GBA_FB := -DLCD_FB_WIDTH=120 -DLCD_FB_HEIGHT=80
 ARM_CC ?= arm-none-eabi-gcc
 ARM_OBJCOPY ?= arm-none-eabi-objcopy
 ARM_CFLAGS ?= -std=c99 -O2 -Wall -Wextra -mcpu=arm7tdmi -mthumb -mthumb-interwork -ffreestanding
@@ -198,7 +198,7 @@ $(BUILD)/gba_shot: tools/gba_shot.c
 
 check-gba: $(GBA_ROM) $(BUILD)/gba_shot $(BUILD)/gbaframe_$(GB_FRAME).pgm
 	$(BUILD)/gba_shot $(GBA_ROM) $(BUILD)/nokia3210-gba.bmp $(SHOT_FRAMES)
-	$(PYTHON) tools/check_gb_frame.py $(BUILD)/nokia3210-gba.bmp $(BUILD)/gbaframe_$(GB_FRAME).pgm $(if $(filter a%,$(KEYS)),,--zoom 2)
+	$(PYTHON) tools/check_gb_frame.py $(BUILD)/nokia3210-gba.bmp $(BUILD)/gbaframe_$(GB_FRAME).pgm
 
 shot-gba: $(GBA_ROM) $(BUILD)/gba_shot
 	$(BUILD)/gba_shot $(GBA_ROM) $(BUILD)/nokia3210-gba.bmp $(SHOT_FRAMES)

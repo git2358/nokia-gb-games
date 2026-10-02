@@ -25,13 +25,6 @@
 /* Where the phone's LCD sits in the framebuffer. */
 #define LCD_PHONE_X ((LCD_FB_WIDTH - LCD_WIDTH) / 2)
 #define LCD_PHONE_Y ((LCD_FB_HEIGHT - LCD_HEIGHT) / 2)
-/* A platform may show the phone's LCD magnified by this much while the view
-   is the phone's; the framebuffer still holds it 1:1. */
-#ifndef LCD_PHONE_ZOOM
-#define LCD_PHONE_ZOOM 1
-#endif
-/* The first framebuffer row below the phone's LCD as shown. */
-#define LCD_BELOW_PHONE (LCD_FB_HEIGHT / 2 + LCD_HEIGHT * LCD_PHONE_ZOOM / 2)
 /* Whether there is room around the phone's LCD. */
 #define LCD_HAS_SURROUND (LCD_FB_WIDTH > LCD_WIDTH)
 

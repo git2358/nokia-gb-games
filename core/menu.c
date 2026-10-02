@@ -91,14 +91,45 @@ enum {
 };
 
 /* The full-screen variant's menus: a title bar, a list with every entry
-   visible, and a line of button hints, all in the phone's large font (13
-   rows: 10 above the baseline, 3 below). The port's own design and words;
-   the entries and their text are the phone's. */
+   visible, and a line of button hints. The port's own design and words; the
+   entries and their text are the phone's. A screen with room uses the
+   phone's large font (13 rows: 10 above the baseline, 3 below); a small
+   one, shown magnified by its platform, uses the phone's menu fonts. */
+#if LCD_FB_HEIGHT >= 120
+#define NATIVE_FONT font_large_bold
+#define NATIVE_BODY_FONT font_large_bold
 #define NATIVE_TITLE_HEIGHT 15
 #define NATIVE_LIST_Y 21
 #define NATIVE_ROW_HEIGHT 15
 #define NATIVE_HINT_Y (LCD_FB_HEIGHT - 14)
 #define NATIVE_MARGIN 4
+#define NATIVE_CURSOR_HEIGHT 9
+#define NATIVE_BAR_WIDTH 12
+#define NATIVE_BAR_PITCH 15
+#define NATIVE_BAR_HEIGHT 16
+#define NATIVE_BAR_STEP 8
+#define NATIVE_BAR_GAP 12
+#define NATIVE_NOTE_Y 48
+#define NATIVE_NOTE_PITCH 16
+#else
+#define NATIVE_FONT font_small_bold
+#define NATIVE_BODY_FONT font_small_plain
+#define NATIVE_TITLE_HEIGHT 9
+#define NATIVE_LIST_Y 12
+#define NATIVE_ROW_HEIGHT 10
+#define NATIVE_HINT_Y (LCD_FB_HEIGHT - 9)
+#define NATIVE_MARGIN 2
+#define NATIVE_CURSOR_HEIGHT 7
+#define NATIVE_BAR_WIDTH 8
+#define NATIVE_BAR_PITCH 12
+#define NATIVE_BAR_HEIGHT 8
+#define NATIVE_BAR_STEP 4
+#define NATIVE_BAR_GAP 6
+#define NATIVE_NOTE_Y 24
+#define NATIVE_NOTE_PITCH 11
+#endif
+#define NATIVE_CURSOR_WIDTH ((NATIVE_CURSOR_HEIGHT + 1) / 2)
+#define NATIVE_TEXT_X (NATIVE_MARGIN + NATIVE_CURSOR_WIDTH + 5)
 #define NATIVE_HELP_LINES ((NATIVE_HINT_Y - 3 - NATIVE_LIST_Y) / NATIVE_ROW_HEIGHT)
 
 /* The full-screen variant's time between moves by level, in units of 10 ms.
@@ -231,7 +262,7 @@ static void draw_hint(void)
 #if LCD_HAS_SURROUND
     lcd_view_full();
     font_draw(&font_small_plain, (LCD_FB_WIDTH - font_text_width(&font_small_plain, text_full_screen_hint)) / 2,
-              LCD_BELOW_PHONE + 8, text_full_screen_hint, 1);
+              LCD_PHONE_Y + LCD_HEIGHT + 8, text_full_screen_hint, 1);
     lcd_view_phone();
     surround_used = 1;
 #endif
@@ -275,13 +306,13 @@ static void draw_game(void)
 static void native_title(const char *title)
 {
     lcd_fill_rect(0, 0, LCD_FB_WIDTH, NATIVE_TITLE_HEIGHT, 1);
-    font_draw(&font_large_bold, NATIVE_MARGIN, 1, title, 0);
+    font_draw(&NATIVE_FONT, NATIVE_MARGIN, 1, title, 0);
 }
 
 static void native_hint(const char *hint)
 {
     lcd_fill_rect(0, NATIVE_HINT_Y - 3, LCD_FB_WIDTH, 1, 1);
-    font_draw(&font_large_bold, NATIVE_MARGIN, NATIVE_HINT_Y, hint, 1);
+    font_draw(&NATIVE_FONT, NATIVE_MARGIN, NATIVE_HINT_Y, hint, 1);
 }
 
 /* The selection is a cursor beside the entry, not an inverted row, so
@@ -290,15 +321,15 @@ static void native_cursor(uint8_t row, uint8_t on)
 {
     uint8_t y = (uint8_t)(NATIVE_LIST_Y + row * NATIVE_ROW_HEIGHT + 2), i;
 
-    lcd_fill_rect(NATIVE_MARGIN, y, 5, 9, 0);
+    lcd_fill_rect(NATIVE_MARGIN, y, NATIVE_CURSOR_WIDTH, NATIVE_CURSOR_HEIGHT, 0);
     if (on)
-        for (i = 0; i < 5; i++)
-            lcd_fill_rect(NATIVE_MARGIN + i, y + i, 1, 9 - 2 * i, 1);
+        for (i = 0; i < NATIVE_CURSOR_WIDTH; i++)
+            lcd_fill_rect(NATIVE_MARGIN + i, y + i, 1, NATIVE_CURSOR_HEIGHT - 2 * i, 1);
 }
 
 static void native_row(uint8_t row, const char *label, uint8_t selected)
 {
-    font_draw(&font_large_bold, NATIVE_MARGIN + 10, NATIVE_LIST_Y + row * NATIVE_ROW_HEIGHT + 1, label, 1);
+    font_draw(&NATIVE_FONT, NATIVE_TEXT_X, NATIVE_LIST_Y + row * NATIVE_ROW_HEIGHT + 1, label, 1);
     native_cursor(row, selected);
 }
 
@@ -325,13 +356,14 @@ static void native_game(void)
 /* One of nine bars across the screen, filled up to the chosen level. */
 static void native_level_bar(uint8_t i)
 {
-    uint8_t x = (uint8_t)((LCD_FB_WIDTH - (LEVEL_COUNT * 15 - 3)) / 2 + i * 15);
-    uint8_t height = (uint8_t)(16 + i * 8);
-    uint8_t top = (uint8_t)(NATIVE_HINT_Y - 12 - height);
+    uint8_t x = (uint8_t)((LCD_FB_WIDTH - ((LEVEL_COUNT - 1) * NATIVE_BAR_PITCH + NATIVE_BAR_WIDTH)) / 2
+                          + i * NATIVE_BAR_PITCH);
+    uint8_t height = (uint8_t)(NATIVE_BAR_HEIGHT + i * NATIVE_BAR_STEP);
+    uint8_t top = (uint8_t)(NATIVE_HINT_Y - NATIVE_BAR_GAP - height);
 
-    lcd_fill_rect(x, top, 12, height, 1);
+    lcd_fill_rect(x, top, NATIVE_BAR_WIDTH, height, 1);
     if (i > level_choice)
-        lcd_fill_rect(x + 1, top + 1, 10, height - 2, 0);
+        lcd_fill_rect(x + 1, top + 1, NATIVE_BAR_WIDTH - 2, height - 2, 0);
 }
 
 static void native_level(void)
@@ -376,7 +408,7 @@ static uint8_t native_update(void)
 /* A note: its lines centred on the screen; %N is the number. */
 static void native_note(const char *title, const char *text, uint16_t number)
 {
-    uint8_t y = 48;
+    uint8_t y = NATIVE_NOTE_Y;
 
     if (title)
         native_title(title);
@@ -391,15 +423,15 @@ static void native_note(const char *title, const char *text, uint16_t number)
                 digits[--n] = (char)('0' + value % 10);
                 value /= 10;
             } while (value);
-            font_draw(&font_large_bold, (LCD_FB_WIDTH - font_text_width(&font_large_bold, digits + n)) / 2, y, digits + n, 1);
+            font_draw(&NATIVE_FONT, (LCD_FB_WIDTH - font_text_width(&NATIVE_FONT, digits + n)) / 2, y, digits + n, 1);
         } else {
-            font_draw(&font_large_bold, (LCD_FB_WIDTH - font_text_width(&font_large_bold, text)) / 2, y, text, 1);
+            font_draw(&NATIVE_FONT, (LCD_FB_WIDTH - font_text_width(&NATIVE_FONT, text)) / 2, y, text, 1);
         }
         while (*text && *text != '\n')
             text++;
         if (!*text++)
             break;
-        y += 16;
+        y += NATIVE_NOTE_PITCH;
     }
 }
 
@@ -467,7 +499,7 @@ static void draw_play(void)
 
 static const struct font *help_font(void)
 {
-    return full_screen ? &font_large_bold : &font_small_plain;
+    return full_screen ? &NATIVE_BODY_FONT : &font_small_plain;
 }
 
 static uint8_t help_lines(void)
@@ -758,11 +790,6 @@ uint8_t menu_key(uint8_t key)
     handle_key(key);
     return screen != was_screen || game != was_game || item != was_item || item_top != was_top
            || level_choice != was_level || resume != was_resume || help_page != was_page;
-}
-
-uint8_t menu_phone_view(void)
-{
-    return view_mode == VIEW_PHONE;
 }
 
 void menu_redraw_all(void)

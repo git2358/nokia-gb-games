@@ -1,9 +1,8 @@
-/* GBA layer. The core's framebuffer is the whole 240x160 screen, shown in
-   bitmap mode 3. In the phone-sized mode the phone's 84x48 LCD, which sits
-   1:1 in the middle of the framebuffer, is shown at 2x (168x96); the
-   full-screen mode is shown as it is. A is the phone's Navi key, B is its C
-   key, the D-pad scrolls and steers, and Start on the first screen picks
-   the full-screen mode. */
+/* GBA layer. The core's framebuffer is 120x80 and every pixel of it is
+   shown as a 2x2 block, filling the 240x160 screen in bitmap mode 3; the
+   phone's 84x48 LCD sits in the middle of it. A is the phone's Navi key, B
+   is its C key, the D-pad scrolls and steers, and Start on the first screen
+   picks the full-screen mode. */
 #include <stdint.h>
 
 #include "game.h"
@@ -26,19 +25,15 @@
 #define IRQ_VECTOR (*(void (*volatile *)(void))0x03007ffc)
 #define VRAM ((uint16_t *)0x06000000)
 
-#define SCREEN_W LCD_FB_WIDTH
-#define SCREEN_H LCD_FB_HEIGHT
-#define ZOOM LCD_PHONE_ZOOM
-/* Where the magnified LCD goes on the screen. */
-#define ZOOM_X ((SCREEN_W - LCD_WIDTH * ZOOM) / 2)
-#define ZOOM_Y ((SCREEN_H - LCD_HEIGHT * ZOOM) / 2)
+#define SCALE 2
+#define SCREEN_W (LCD_FB_WIDTH * SCALE)
+#define SCREEN_H (LCD_FB_HEIGHT * SCALE)
 /* Most frames of game time made up at once after a slow draw. */
 #define MAX_CATCH_UP 6
 
 #define RGB(r, g, b) ((uint16_t)((r) | (g) << 5 | (b) << 10))
 #define COLOR_CLEAR RGB(19, 24, 15)
 #define COLOR_SET RGB(4, 6, 3)
-#define COLOR_BEZEL RGB(3, 4, 6)
 
 #define PAD_A 0x001
 #define PAD_B 0x002
@@ -130,87 +125,29 @@ void platform_tone(uint16_t hz)
     REG_SOUND2CNT_H = (uint16_t)(0x8000 | (2048 - 131072ul / hz));
 }
 
-/* Whether the screen currently shows the phone's LCD magnified. */
-static uint8_t zoomed;
-
-/* One framebuffer pixel in the phone-sized mode: a pixel of the phone's LCD
-   becomes a ZOOM x ZOOM block in the middle of the screen, and a pixel
-   around it (the hint under the LCD) is drawn light on the dark surround,
-   unless the block covers it. */
-static void plot(int x, int y)
-{
-    uint8_t set = lcd_fb_pixel(x, y);
-    int px = x - LCD_PHONE_X, py = y - LCD_PHONE_Y;
-    uint16_t *at;
-
-    if (px >= 0 && px < LCD_WIDTH && py >= 0 && py < LCD_HEIGHT) {
-        uint16_t color = set ? COLOR_SET : COLOR_CLEAR;
-        int i, j;
-
-        at = VRAM + (ZOOM_Y + py * ZOOM) * SCREEN_W + ZOOM_X + px * ZOOM;
-        for (j = 0; j < ZOOM; j++, at += SCREEN_W)
-            for (i = 0; i < ZOOM; i++)
-                at[i] = color;
-    } else if (x < ZOOM_X || x >= ZOOM_X + LCD_WIDTH * ZOOM || y < ZOOM_Y || y >= ZOOM_Y + LCD_HEIGHT * ZOOM) {
-        VRAM[y * SCREEN_W + x] = set ? COLOR_CLEAR : COLOR_BEZEL;
-    }
-}
-
-/* An 8x8 cell at its own place, eight pixels from each framebuffer byte. */
-static void plot_cell(int cx, int cy)
-{
-    const uint8_t *src = lcd_fb + cy * 8 * LCD_STRIDE + cx;
-    uint16_t *dst = VRAM + cy * 8 * SCREEN_W + cx * 8;
-    int row, i;
-
-    for (row = 0; row < 8; row++, src += LCD_STRIDE, dst += SCREEN_W) {
-        uint8_t bits = *src;
-
-        for (i = 0; i < 8; i++, bits <<= 1)
-            dst[i] = bits & 0x80 ? COLOR_SET : COLOR_CLEAR;
-    }
-}
-
-/* Whether a cell has nothing to show in the phone-sized mode: it is clear
-   and lies outside the phone's LCD, so the surround's colour is right. */
-static uint8_t cell_is_surround(int cx, int cy)
-{
-    const uint8_t *src = lcd_fb + cy * 8 * LCD_STRIDE + cx;
-    int row;
-
-    if (cx * 8 + 7 >= LCD_PHONE_X && cx * 8 < LCD_PHONE_X + LCD_WIDTH && cy * 8 + 7 >= LCD_PHONE_Y
-        && cy * 8 < LCD_PHONE_Y + LCD_HEIGHT)
-        return 0;
-    for (row = 0; row < 8; row++, src += LCD_STRIDE)
-        if (*src)
-            return 0;
-    return 1;
-}
-
-/* Redraws the 8x8 cells of lcd_fb drawn to since the last call, or the
-   whole screen when it changes between magnified and full screen. */
+/* Redraws the 8x8 cells of lcd_fb drawn to since the last call, each
+   pixel as a 2x2 block taken from the framebuffer's bytes. */
 static void present(void)
 {
-    uint8_t all = menu_phone_view() != zoomed;
-    int cx, cy, x, y, i;
+    int cx, cy, row, i;
 
-    zoomed = menu_phone_view();
-    if (all && zoomed)
-        for (i = 0; i < SCREEN_W * SCREEN_H; i++)
-            VRAM[i] = COLOR_BEZEL;
     for (cy = 0; cy < LCD_CELLS_Y; cy++) {
         for (cx = 0; cx < LCD_CELLS_X; cx++) {
             uint8_t *dirty = &lcd_dirty[cx + LCD_CELLS_X * cy];
+            const uint8_t *src = lcd_fb + cy * 8 * LCD_STRIDE + cx;
+            uint16_t *dst = VRAM + cy * 8 * SCALE * SCREEN_W + cx * 8 * SCALE;
 
-            if (!*dirty && !all)
+            if (!*dirty)
                 continue;
             *dirty = 0;
-            if (!zoomed) {
-                plot_cell(cx, cy);
-            } else if (!all || !cell_is_surround(cx, cy)) {
-                for (y = cy * 8; y < cy * 8 + 8; y++)
-                    for (x = cx * 8; x < cx * 8 + 8; x++)
-                        plot(x, y);
+            for (row = 0; row < 8; row++, src += LCD_STRIDE, dst += SCALE * SCREEN_W) {
+                uint8_t bits = *src;
+
+                for (i = 0; i < 8 * SCALE; i += SCALE, bits <<= 1) {
+                    uint16_t color = bits & 0x80 ? COLOR_SET : COLOR_CLEAR;
+
+                    dst[i] = dst[i + 1] = dst[i + SCREEN_W] = dst[i + SCREEN_W + 1] = color;
+                }
             }
         }
     }
@@ -241,8 +178,9 @@ int main(void)
     REG_WAITCNT = 0x4317;
 
     for (i = 0; i < SCREEN_W * SCREEN_H; i++)
-        VRAM[i] = COLOR_BEZEL;
-    zoomed = 1;
+        VRAM[i] = COLOR_CLEAR;
+    for (i = 0; i < (int)sizeof lcd_dirty; i++)
+        lcd_dirty[i] = 1;
     REG_DISPCNT = 0x0403; /* mode 3, BG2 on */
 
     IRQ_VECTOR = irq_handler;

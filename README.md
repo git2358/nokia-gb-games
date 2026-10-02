@@ -1,5 +1,7 @@
 # Nokia 3210 games for Game Boy and Game Boy Advance
 
+![Both consoles in both modes: the first screen, Snake's menu and Snake being played, on the Game Boy and the Game Boy Advance](docs/banner.png)
+
 Ports of the Nokia 3210 (NSE-8/9 v6.00) built-in games to two cartridges
 built from one portable C core:
 
@@ -46,6 +48,8 @@ your own legally obtained dump at build time into an ignored directory.
   C arrays under the ignored `build/assets/`; `gbafix.py` finishes the GBA
   header; `check_gb_frame.py` compares an emulator screenshot with a host
   frame.
+- `scripts/make-banner.sh`: regenerates the banner above from headless
+  emulator runs of both ROMs (needs ImageMagick).
 - `scripts/setup-sameboy.sh`: clones upstream SameBoy at a pinned commit
   into the ignored `tools/SameBoy/` and builds its headless tester.
 - `tests/`: host checks that need no firmware.

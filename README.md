@@ -11,6 +11,9 @@ No Nokia firmware, no extracted code or data from it, and nothing derived
 from a firmware image is committed here. `roms/`, run output and build
 output are ignored.
 
+That being said I got my firmware at firmware center
+<https://firmware.center/firmware/Nokia/3310%20(NHM-5)/Flash%20Files/NHM-5%20v.06.39%203310.rar>
+
 ## Dump
 
 Put the Wintesla flash files of NHM-5 v6.39 in `roms/3310-nhm5-v639/`:

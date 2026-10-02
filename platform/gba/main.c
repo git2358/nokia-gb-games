@@ -37,6 +37,7 @@
 
 #define PAD_A 0x001
 #define PAD_B 0x002
+#define PAD_SELECT 0x004
 #define PAD_START 0x008
 #define PAD_RIGHT 0x010
 #define PAD_LEFT 0x020
@@ -292,7 +293,7 @@ int main(void)
         /* Keys first, so a press takes effect before the game's next move. */
         pressed = take_presses();
         changed = 0;
-        if (pressed & PAD_A)
+        if (pressed & (PAD_A | PAD_SELECT))
             changed |= menu_key(MENU_KEY_SELECT);
         if (pressed & PAD_START)
             changed |= menu_key(MENU_KEY_START);

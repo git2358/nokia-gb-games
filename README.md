@@ -46,7 +46,8 @@ That being said I got my firmware at firmware center
   PGM in the layout of the fork's MAME frames.
 - `platform/gb/`: Game Boy layer (84x48 drawn 1:1 as background tiles).
 - `platform/gba/`: GBA layer (bitmap mode 3; the phone's screen and the
-  full-screen board are shown at 2x, the full-screen menus as they are),
+  full-screen board are shown at 2x, Rotation and Memory in the full-screen
+  mode at 3x by the hardware's scaling, the full-screen menus as they are),
   with its own startup code and linker script.
 - `tools/`: `extract_assets.py` reads the game graphics from your dump into
   C arrays under the ignored `build/assets/`; `gbafix.py` finishes the GBA
@@ -142,10 +143,11 @@ font with every entry visible and a cursor beside the selection, and Snake
 on a bigger board of the same 4-pixel cells (38x34 on the Game Boy; 28x18
 on the GBA, which shows the board at 2x), with its own level, top score and
 speeds. Rotation and Memory are the same games in both modes: from the
-full-screen menus they are played on the phone's screen at 2x, and share
-their level and top score with the phone-sized mode. At 2x the phone's 84
-columns are 8 pixels too wide for the Game Boy, which leaves off the last
-four; Memory's biggest board still fits whole. [`docs/authenticity.md`](docs/authenticity.md)
+full-screen menus they are played on the phone's screen at 2x on the Game
+Boy and at 3x on the GBA, where the display hardware does the scaling, and
+share their level and top score with the phone-sized mode. Either way the
+phone's 84 columns are four too many for the screen's width, so the last
+four are left off; Memory's biggest board still fits whole. [`docs/authenticity.md`](docs/authenticity.md)
 lists where the code's structure still differs from the firmware's. See
 [`docs/handoff.md`](docs/handoff.md) for the decisions taken, the reference
 material and the work items.

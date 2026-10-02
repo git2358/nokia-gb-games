@@ -8,8 +8,8 @@
 # full-screen mode; columns for the first screen, the list of games, and
 # Rotation, Snake and Memory being played. The full-screen rows leave the
 # first screen out, which is the same for both modes; only Snake has a board
-# of its own there, and Rotation and Memory are played on the phone's screen
-# at 2x.
+# of its own there, and Rotation and Memory are played on the phone's screen,
+# at 2x on the Game Boy and 3x on the GBA.
 #
 #   ./scripts/make-banner.sh [output.png]     # default: docs/banner.png
 #

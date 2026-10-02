@@ -31,14 +31,12 @@
 #ifndef LCD_ZOOM
 #define LCD_ZOOM 1
 #endif
-/* A platform that shows the phone's LCD as it is may still magnify it by
-   this much for the games played on it in the full-screen variant, cutting
-   off what does not fit at the sides. */
+/* A platform may magnify the games played on the phone's LCD in the
+   full-screen variant by this much instead, when it is more than LCD_ZOOM,
+   cutting off on the right what does not fit across its screen. */
 #ifndef LCD_GAME_ZOOM
 #define LCD_GAME_ZOOM LCD_ZOOM
 #endif
-/* How much bigger the rectangle named with lcd_zoom_set is shown. */
-#define LCD_ZOOM_BY (LCD_ZOOM > 1 ? LCD_ZOOM : LCD_GAME_ZOOM)
 /* The first screen row below the phone's LCD when it is the one magnified. */
 #define LCD_BELOW_PHONE (LCD_FB_HEIGHT / 2 + LCD_HEIGHT * LCD_ZOOM / 2)
 /* Whether there is room around the phone's LCD. */
@@ -63,11 +61,12 @@ void lcd_view_phone(void);
 void lcd_view_full(void);
 void lcd_view_set(uint8_t x, uint8_t y, uint8_t w, uint8_t h);
 
-/* The magnified rectangle, in framebuffer coordinates; none when lcd_zoom_w
-   is 0. */
-extern uint8_t lcd_zoom_x, lcd_zoom_y, lcd_zoom_w, lcd_zoom_h;
+/* The magnified rectangle, in framebuffer coordinates, and how many times
+   bigger it is shown, LCD_ZOOM or LCD_GAME_ZOOM; none when lcd_zoom_w is
+   0. */
+extern uint8_t lcd_zoom_x, lcd_zoom_y, lcd_zoom_w, lcd_zoom_h, lcd_zoom_by;
 
-void lcd_zoom_set(uint8_t x, uint8_t y, uint8_t w, uint8_t h);
+void lcd_zoom_set(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t by);
 
 /* The pixel shown at a position on the screen, magnification applied. */
 uint8_t lcd_screen_pixel(uint8_t x, uint8_t y);

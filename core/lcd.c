@@ -32,25 +32,26 @@ void lcd_view_set(uint8_t x, uint8_t y, uint8_t w, uint8_t h)
     lcd_view_h = h;
 }
 
-uint8_t lcd_zoom_x, lcd_zoom_y, lcd_zoom_w, lcd_zoom_h;
+uint8_t lcd_zoom_x, lcd_zoom_y, lcd_zoom_w, lcd_zoom_h, lcd_zoom_by = 1;
 
-void lcd_zoom_set(uint8_t x, uint8_t y, uint8_t w, uint8_t h)
+void lcd_zoom_set(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t by)
 {
     lcd_zoom_x = x;
     lcd_zoom_y = y;
     lcd_zoom_w = w;
     lcd_zoom_h = h;
+    lcd_zoom_by = by;
 }
 
 uint8_t lcd_screen_pixel(uint8_t x, uint8_t y)
 {
     if (lcd_zoom_w) {
-        int zx = x - (LCD_FB_WIDTH - lcd_zoom_w * LCD_ZOOM_BY) / 2;
-        int zy = y - (LCD_FB_HEIGHT - lcd_zoom_h * LCD_ZOOM_BY) / 2;
+        int zx = x - (LCD_FB_WIDTH - lcd_zoom_w * lcd_zoom_by) / 2;
+        int zy = y - (LCD_FB_HEIGHT - lcd_zoom_h * lcd_zoom_by) / 2;
 
-        if (zx >= 0 && zx < lcd_zoom_w * LCD_ZOOM_BY && zy >= 0 && zy < lcd_zoom_h * LCD_ZOOM_BY) {
-            x = (uint8_t)(lcd_zoom_x + zx / LCD_ZOOM_BY);
-            y = (uint8_t)(lcd_zoom_y + zy / LCD_ZOOM_BY);
+        if (zx >= 0 && zx < lcd_zoom_w * lcd_zoom_by && zy >= 0 && zy < lcd_zoom_h * lcd_zoom_by) {
+            x = (uint8_t)(lcd_zoom_x + zx / lcd_zoom_by);
+            y = (uint8_t)(lcd_zoom_y + zy / lcd_zoom_by);
         }
     }
     return lcd_fb_pixel(x, y);

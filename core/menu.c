@@ -1040,25 +1040,26 @@ void menu_draw(void)
         board_drawn = 0;
     }
     /* A platform that magnifies shows the phone's LCD and the board bigger,
-       and the full-screen menus as they are. */
+       a game on the LCD in the full-screen variant bigger still where it
+       can, and the full-screen menus as they are. */
     if (mode == VIEW_PHONE) {
         lcd_view_phone();
-        if (LCD_ZOOM > 1)
-            lcd_zoom_set(LCD_PHONE_X, LCD_PHONE_Y, LCD_WIDTH, LCD_HEIGHT);
-        else if (LCD_GAME_ZOOM > 1 && full_screen && screen != SCREEN_MAIN) {
+        if (LCD_GAME_ZOOM > LCD_ZOOM && full_screen && screen != SCREEN_MAIN) {
             /* A game on the phone's LCD in the full-screen variant: as much
                of the LCD as fits across the screen. */
             lcd_view_set(GAME_ZOOM_X - GAME_ZOOM_CUT_LEFT, LCD_PHONE_Y, LCD_WIDTH, LCD_HEIGHT);
-            lcd_zoom_set(GAME_ZOOM_X, LCD_PHONE_Y, GAME_ZOOM_WIDTH, LCD_HEIGHT);
+            lcd_zoom_set(GAME_ZOOM_X, LCD_PHONE_Y, GAME_ZOOM_WIDTH, LCD_HEIGHT, LCD_GAME_ZOOM);
+        } else if (LCD_ZOOM > 1) {
+            lcd_zoom_set(LCD_PHONE_X, LCD_PHONE_Y, LCD_WIDTH, LCD_HEIGHT, LCD_ZOOM);
         } else {
-            lcd_zoom_set(0, 0, 0, 0);
+            lcd_zoom_set(0, 0, 0, 0, 1);
         }
     } else if (mode == VIEW_NATIVE) {
         lcd_view_full();
-        lcd_zoom_set(0, 0, 0, 0);
+        lcd_zoom_set(0, 0, 0, 0, 1);
     } else {
         lcd_view_set(SNAKE_FULL_X, SNAKE_FULL_Y, SNAKE_FULL_WIDTH, SNAKE_FULL_HEIGHT);
-        lcd_zoom_set(SNAKE_AREA_X, SNAKE_AREA_Y, LCD_ZOOM > 1 ? SNAKE_AREA_WIDTH : 0, SNAKE_AREA_HEIGHT);
+        lcd_zoom_set(SNAKE_AREA_X, SNAKE_AREA_Y, LCD_ZOOM > 1 ? SNAKE_AREA_WIDTH : 0, SNAKE_AREA_HEIGHT, LCD_ZOOM);
     }
 
     if (mode == VIEW_NATIVE && native_update())

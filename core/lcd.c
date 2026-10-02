@@ -32,6 +32,30 @@ void lcd_view_set(uint8_t x, uint8_t y, uint8_t w, uint8_t h)
     lcd_view_h = h;
 }
 
+uint8_t lcd_zoom_x, lcd_zoom_y, lcd_zoom_w, lcd_zoom_h;
+
+void lcd_zoom_set(uint8_t x, uint8_t y, uint8_t w, uint8_t h)
+{
+    lcd_zoom_x = x;
+    lcd_zoom_y = y;
+    lcd_zoom_w = w;
+    lcd_zoom_h = h;
+}
+
+uint8_t lcd_screen_pixel(uint8_t x, uint8_t y)
+{
+    if (lcd_zoom_w) {
+        int zx = x - (LCD_FB_WIDTH - lcd_zoom_w * LCD_ZOOM) / 2;
+        int zy = y - (LCD_FB_HEIGHT - lcd_zoom_h * LCD_ZOOM) / 2;
+
+        if (zx >= 0 && zx < lcd_zoom_w * LCD_ZOOM && zy >= 0 && zy < lcd_zoom_h * LCD_ZOOM) {
+            x = (uint8_t)(lcd_zoom_x + zx / LCD_ZOOM);
+            y = (uint8_t)(lcd_zoom_y + zy / LCD_ZOOM);
+        }
+    }
+    return lcd_fb_pixel(x, y);
+}
+
 void lcd_mark_dirty(uint8_t x, uint8_t y, uint8_t w, uint8_t h)
 {
     uint8_t first = x >> 3, last = (uint8_t)((x + w - 1) >> 3);

@@ -25,6 +25,14 @@
 /* Where the phone's LCD sits in the framebuffer. */
 #define LCD_PHONE_X ((LCD_FB_WIDTH - LCD_WIDTH) / 2)
 #define LCD_PHONE_Y ((LCD_FB_HEIGHT - LCD_HEIGHT) / 2)
+/* A platform may show part of the framebuffer magnified by this much: the
+   core names a rectangle, and the platform shows it LCD_ZOOM times bigger
+   in the middle of the screen, over whatever lies under it. */
+#ifndef LCD_ZOOM
+#define LCD_ZOOM 1
+#endif
+/* The first screen row below the phone's LCD when it is the one magnified. */
+#define LCD_BELOW_PHONE (LCD_FB_HEIGHT / 2 + LCD_HEIGHT * LCD_ZOOM / 2)
 /* Whether there is room around the phone's LCD. */
 #define LCD_HAS_SURROUND (LCD_FB_WIDTH > LCD_WIDTH)
 
@@ -46,6 +54,15 @@ extern uint8_t lcd_view_x, lcd_view_y, lcd_view_w, lcd_view_h;
 void lcd_view_phone(void);
 void lcd_view_full(void);
 void lcd_view_set(uint8_t x, uint8_t y, uint8_t w, uint8_t h);
+
+/* The magnified rectangle, in framebuffer coordinates; none when lcd_zoom_w
+   is 0. */
+extern uint8_t lcd_zoom_x, lcd_zoom_y, lcd_zoom_w, lcd_zoom_h;
+
+void lcd_zoom_set(uint8_t x, uint8_t y, uint8_t w, uint8_t h);
+
+/* The pixel shown at a position on the screen, magnification applied. */
+uint8_t lcd_screen_pixel(uint8_t x, uint8_t y);
 
 /* A pixel by framebuffer position, and by position in the view. */
 #define lcd_fb_pixel(x, y) ((lcd_fb[(y) * LCD_STRIDE + ((x) >> 3)] & lcd_bit[(x) & 7]) != 0)

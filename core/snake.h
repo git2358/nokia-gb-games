@@ -13,15 +13,21 @@
 /* The biggest board the framebuffer holds: 4 px a cell plus the border. */
 #define SNAKE_MAX_COLS ((LCD_FB_WIDTH - 3) / 4)
 #define SNAKE_MAX_ROWS ((LCD_FB_HEIGHT - 3) / 4)
-/* The full-screen board is one cell smaller each way, which leaves room to
-   put the same margin on every side (to within the odd pixel: the board's
-   outline is always an odd number of pixels across). */
-#define SNAKE_FULL_COLS (SNAKE_MAX_COLS - 1)
-#define SNAKE_FULL_ROWS (SNAKE_MAX_ROWS - 1)
+/* The full-screen board fills the part of the framebuffer the platform
+   shows for it: all of it, or the middle 1/LCD_ZOOM of it magnified (cut to
+   whole 8x8 cells). It is one cell smaller each way than would fit, which
+   leaves room to put the same margin on every side (to within the odd
+   pixel: the board's outline is always an odd number of pixels across). */
+#define SNAKE_AREA_WIDTH (LCD_FB_WIDTH / LCD_ZOOM)
+#define SNAKE_AREA_HEIGHT (LCD_FB_HEIGHT / LCD_ZOOM)
+#define SNAKE_AREA_X ((LCD_FB_WIDTH - SNAKE_AREA_WIDTH) / 2 / 8 * 8)
+#define SNAKE_AREA_Y ((LCD_FB_HEIGHT - SNAKE_AREA_HEIGHT) / 2 / 8 * 8)
+#define SNAKE_FULL_COLS ((SNAKE_AREA_WIDTH - 3) / 4 - 1)
+#define SNAKE_FULL_ROWS ((SNAKE_AREA_HEIGHT - 3) / 4 - 1)
 #define SNAKE_FULL_WIDTH (SNAKE_FULL_COLS * 4 + 3)
 #define SNAKE_FULL_HEIGHT (SNAKE_FULL_ROWS * 4 + 3)
-#define SNAKE_FULL_X ((LCD_FB_WIDTH - SNAKE_FULL_WIDTH) / 2)
-#define SNAKE_FULL_Y ((LCD_FB_HEIGHT - SNAKE_FULL_HEIGHT) / 2)
+#define SNAKE_FULL_X (SNAKE_AREA_X + (SNAKE_AREA_WIDTH - SNAKE_FULL_WIDTH) / 2)
+#define SNAKE_FULL_Y (SNAKE_AREA_Y + (SNAKE_AREA_HEIGHT - SNAKE_FULL_HEIGHT) / 2)
 
 enum {
     SNAKE_UP,

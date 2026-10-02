@@ -262,7 +262,7 @@ static void draw_hint(void)
 #if LCD_HAS_SURROUND
     lcd_view_full();
     font_draw(&font_small_plain, (LCD_FB_WIDTH - font_text_width(&font_small_plain, text_full_screen_hint)) / 2,
-              LCD_PHONE_Y + LCD_HEIGHT + 8, text_full_screen_hint, 1);
+              LCD_BELOW_PHONE + 8, text_full_screen_hint, 1);
     lcd_view_phone();
     surround_used = 1;
 #endif
@@ -847,12 +847,18 @@ void menu_draw(void)
         surround_used = 0;
         board_drawn = 0;
     }
-    if (mode == VIEW_PHONE)
+    /* A platform that magnifies shows the phone's LCD and the board bigger,
+       and the full-screen menus as they are. */
+    if (mode == VIEW_PHONE) {
         lcd_view_phone();
-    else if (mode == VIEW_NATIVE)
+        lcd_zoom_set(LCD_PHONE_X, LCD_PHONE_Y, LCD_ZOOM > 1 ? LCD_WIDTH : 0, LCD_HEIGHT);
+    } else if (mode == VIEW_NATIVE) {
         lcd_view_full();
-    else
+        lcd_zoom_set(0, 0, 0, 0);
+    } else {
         lcd_view_set(SNAKE_FULL_X, SNAKE_FULL_Y, SNAKE_FULL_WIDTH, SNAKE_FULL_HEIGHT);
+        lcd_zoom_set(SNAKE_AREA_X, SNAKE_AREA_Y, LCD_ZOOM > 1 ? SNAKE_AREA_WIDTH : 0, SNAKE_AREA_HEIGHT);
+    }
 
     if (mode == VIEW_NATIVE && native_update())
         return;

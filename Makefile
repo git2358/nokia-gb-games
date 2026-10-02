@@ -21,9 +21,10 @@ SAMEBOY_APP ?= /Applications/SameBoy.app
 SHOT_SECONDS ?= 2
 SHOT_SCALE ?= 3
 
-# GBA: bare arm-none-eabi GCC, no C library. The GBA shows everything at 2x,
-# so its framebuffer is half the size of its screen each way.
-GBA_FB := -DLCD_FB_WIDTH=120 -DLCD_FB_HEIGHT=80
+# GBA: bare arm-none-eabi GCC, no C library. The GBA gives the core a
+# framebuffer the size of its screen and shows the phone's LCD and the
+# full-screen board at 2x.
+GBA_FB := -DLCD_FB_WIDTH=240 -DLCD_FB_HEIGHT=160 -DLCD_ZOOM=2
 ARM_CC ?= arm-none-eabi-gcc
 ARM_OBJCOPY ?= arm-none-eabi-objcopy
 ARM_CFLAGS ?= -std=c99 -O2 -Wall -Wextra -mcpu=arm7tdmi -mthumb -mthumb-interwork -ffreestanding

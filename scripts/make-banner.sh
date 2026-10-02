@@ -50,7 +50,7 @@ gb_shot() {
 # gba_shot KEYS OUT: a GBA screenshot at 2x.
 gba_shot() {
   make -C "$ROOT" gba KEYS="$1" >/dev/null
-  "$BUILD/gba_shot" "$BUILD/nokia3210.gba" "$BUILD/nokia3210-gba.bmp" 10
+  "$BUILD/gba_shot" "$BUILD/nokia3210.gba" "$BUILD/nokia3210-gba.bmp" 14
   python3 "$ROOT/tools/bmp_to_png.py" "$BUILD/nokia3210-gba.bmp" "$2" 2 >/dev/null
 }
 

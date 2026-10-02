@@ -1,8 +1,9 @@
-/* GBA layer. The core's framebuffer is 120x80 and every pixel of it is
-   shown as a 2x2 block, filling the 240x160 screen in bitmap mode 3; the
-   phone's 84x48 LCD sits in the middle of it. A is the phone's Navi key, B
-   is its C key, the D-pad scrolls and steers, and Start on the first screen
-   picks the full-screen mode. */
+/* GBA layer. The core's framebuffer is the whole 240x160 screen, shown in
+   bitmap mode 3. The core names a part of it to magnify: the phone's 84x48
+   LCD in the phone-sized mode and the board in the full-screen one are
+   shown at 2x in the middle of the screen; the full-screen menus are shown
+   as they are. A is the phone's Navi key, B is its C key, the D-pad scrolls
+   and steers, and Start on the first screen picks the full-screen mode. */
 #include <stdint.h>
 
 #include "game.h"
@@ -25,9 +26,8 @@
 #define IRQ_VECTOR (*(void (*volatile *)(void))0x03007ffc)
 #define VRAM ((uint16_t *)0x06000000)
 
-#define SCALE 2
-#define SCREEN_W (LCD_FB_WIDTH * SCALE)
-#define SCREEN_H (LCD_FB_HEIGHT * SCALE)
+#define SCREEN_W LCD_FB_WIDTH
+#define SCREEN_H LCD_FB_HEIGHT
 /* Most frames of game time made up at once after a slow draw. */
 #define MAX_CATCH_UP 6
 
@@ -131,30 +131,110 @@ void platform_tone(uint16_t hz)
     REG_SOUND2CNT_H = (uint16_t)(0x8000 | (2048 - 131072ul / hz));
 }
 
-/* Redraws the 8x8 cells of lcd_fb drawn to since the last call, each
-   pixel as a 2x2 block taken from the framebuffer's bytes. */
+/* The magnified rectangle the screen currently shows. */
+static uint8_t shown_x, shown_y, shown_w, shown_h;
+
+/* One framebuffer pixel that changed: inside the magnified rectangle it is
+   a block in the middle of the screen; outside, it goes where it is unless
+   the magnified picture covers that spot. */
+static void plot(int x, int y)
+{
+    uint16_t color = lcd_fb_pixel(x, y) ? COLOR_SET : COLOR_CLEAR;
+    int zw = shown_w * LCD_ZOOM, zh = shown_h * LCD_ZOOM;
+    int zx = (SCREEN_W - zw) / 2, zy = (SCREEN_H - zh) / 2;
+    int px = x - shown_x, py = y - shown_y, i, j;
+
+    if (px >= 0 && px < shown_w && py >= 0 && py < shown_h) {
+        uint16_t *at = VRAM + (zy + py * LCD_ZOOM) * SCREEN_W + zx + px * LCD_ZOOM;
+
+        for (j = 0; j < LCD_ZOOM; j++, at += SCREEN_W)
+            for (i = 0; i < LCD_ZOOM; i++)
+                at[i] = color;
+    } else if (x < zx || x >= zx + zw || y < zy || y >= zy + zh) {
+        VRAM[y * SCREEN_W + x] = color;
+    }
+}
+
+/* An 8x8 cell at its own place, eight pixels from each framebuffer byte. */
+static void plot_cell(int cx, int cy)
+{
+    const uint8_t *src = lcd_fb + cy * 8 * LCD_STRIDE + cx;
+    uint16_t *dst = VRAM + cy * 8 * SCREEN_W + cx * 8;
+    int row, i;
+
+    for (row = 0; row < 8; row++, src += LCD_STRIDE, dst += SCREEN_W) {
+        uint8_t bits = *src;
+
+        for (i = 0; i < 8; i++, bits <<= 1)
+            dst[i] = bits & 0x80 ? COLOR_SET : COLOR_CLEAR;
+    }
+}
+
+/* How a cell's own place on the screen relates to the magnified picture:
+   clear of it, under it, or partly both. */
+enum {
+    CELL_CLEAR,
+    CELL_COVERED,
+    CELL_PARTLY
+};
+
+static int cell_cover(int cx, int cy)
+{
+    int zw = shown_w * LCD_ZOOM, zh = shown_h * LCD_ZOOM;
+    int zx = (SCREEN_W - zw) / 2, zy = (SCREEN_H - zh) / 2;
+    int x = cx * 8, y = cy * 8;
+
+    if (x + 8 <= zx || x >= zx + zw || y + 8 <= zy || y >= zy + zh)
+        return CELL_CLEAR;
+    if (x >= zx && x + 8 <= zx + zw && y >= zy && y + 8 <= zy + zh)
+        return CELL_COVERED;
+    return CELL_PARTLY;
+}
+
+/* Whether any of a cell lies in the magnified rectangle of the framebuffer. */
+static int cell_magnified(int cx, int cy)
+{
+    int x = cx * 8, y = cy * 8;
+
+    return x + 8 > shown_x && x < shown_x + shown_w && y + 8 > shown_y && y < shown_y + shown_h;
+}
+
+/* Redraws the 8x8 cells of lcd_fb drawn to since the last call, or the
+   whole screen when what is magnified changes. */
 static void present(void)
 {
-    int cx, cy, row, i;
+    uint8_t all = lcd_zoom_x != shown_x || lcd_zoom_y != shown_y || lcd_zoom_w != shown_w || lcd_zoom_h != shown_h;
+    int cx, cy, x, y, cover;
 
+    shown_x = lcd_zoom_x;
+    shown_y = lcd_zoom_y;
+    shown_w = lcd_zoom_w;
+    shown_h = lcd_zoom_h;
     for (cy = 0; cy < LCD_CELLS_Y; cy++) {
         for (cx = 0; cx < LCD_CELLS_X; cx++) {
             uint8_t *dirty = &lcd_dirty[cx + LCD_CELLS_X * cy];
-            const uint8_t *src = lcd_fb + cy * 8 * LCD_STRIDE + cx;
-            uint16_t *dst = VRAM + cy * 8 * SCALE * SCREEN_W + cx * 8 * SCALE;
 
-            if (!*dirty)
+            if (!*dirty && !all)
                 continue;
             *dirty = 0;
-            for (row = 0; row < 8; row++, src += LCD_STRIDE, dst += SCALE * SCREEN_W) {
-                uint8_t bits = *src;
-
-                for (i = 0; i < 8 * SCALE; i += SCALE, bits <<= 1) {
-                    uint16_t color = bits & 0x80 ? COLOR_SET : COLOR_CLEAR;
-
-                    dst[i] = dst[i + 1] = dst[i + SCREEN_W] = dst[i + SCREEN_W + 1] = color;
-                }
+            if (!shown_w) {
+                plot_cell(cx, cy);
+                continue;
             }
+            /* A cell clear of the magnified picture and not part of it is
+               drawn whole; one under it and not part of it is not seen. */
+            cover = cell_cover(cx, cy);
+            if (!cell_magnified(cx, cy)) {
+                if (cover == CELL_CLEAR) {
+                    plot_cell(cx, cy);
+                    continue;
+                }
+                if (cover == CELL_COVERED)
+                    continue;
+            }
+            for (y = cy * 8; y < cy * 8 + 8; y++)
+                for (x = cx * 8; x < cx * 8 + 8; x++)
+                    plot(x, y);
         }
     }
 }
@@ -185,8 +265,7 @@ int main(void)
 
     for (i = 0; i < SCREEN_W * SCREEN_H; i++)
         VRAM[i] = COLOR_CLEAR;
-    for (i = 0; i < (int)sizeof lcd_dirty; i++)
-        lcd_dirty[i] = 1;
+    shown_w = 0xff; /* nothing is shown yet: the first present draws it all */
     REG_DISPCNT = 0x0403; /* mode 3, BG2 on */
 
     IRQ_VECTOR = irq_handler;

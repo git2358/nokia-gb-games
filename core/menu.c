@@ -43,12 +43,24 @@ enum {
 #define HELP_LINE_HEIGHT 9
 #define HELP_LINES 3
 
-/* The Top score and Game over pages close by themselves after this long. */
-#define NOTE_TICKS (5 * MENU_TICKS_PER_SECOND)
-
 /* Microseconds per menu_tick call and per scheduler tick of the phone. */
 #define FRAME_US (1000000ul / MENU_TICKS_PER_SECOND)
 #define PHONE_TICK_US 7781
+
+/* The Top score and Game over pages close by themselves: after 768 and
+   385 phone ticks, about six and three seconds. In menu_tick calls. */
+#define TOP_SCORE_TICKS ((uint16_t)(768ul * PHONE_TICK_US / FRAME_US))
+#define GAME_OVER_TICKS ((uint16_t)(385ul * PHONE_TICK_US / FRAME_US))
+
+/* The Top score page's animation in its top right corner: stars gather
+   into a cup, which then flashes. A new picture every 25 phone ticks; the
+   last one stays. */
+#define SPARKLE_X 64
+#define SPARKLE_WIDTH 21
+#define SPARKLE_HEIGHT 24
+#define SPARKLE_FRAME_BYTES 84
+#define SPARKLE_TICKS 25
+static const uint8_t sparkle_frames[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 10, 10, 9, 9, 10, 10, 9, 10 };
 
 /* Memory's cursor changes between plain and inverted this often, in phone
    ticks. */
@@ -160,6 +172,9 @@ static const char text_full_screen_hint[] = "START: full screen";
 static struct game_settings settings; /* the chosen game's level and top score */
 static uint8_t level_choice;  /* level shown on the Level page */
 static uint16_t page_ticks;   /* ticks left on a timed page */
+static uint8_t sparkle_step;  /* picture of the Top score page's animation */
+static uint8_t sparkle_ticks; /* phone ticks it has been shown */
+static uint8_t sparkle_only;  /* nothing else on the page needs drawing */
 static const char *help_page; /* first character of the Instructions page shown */
 
 /* The two variants of Snake keep separate levels and top scores. */
@@ -475,6 +490,12 @@ static void draw_level(void)
     draw_softkey(text_ok);
 }
 
+static void draw_sparkle(void)
+{
+    lcd_blit_strips(SPARKLE_X, 0, SPARKLE_WIDTH, SPARKLE_HEIGHT,
+                    top_score_sparkle + sparkle_frames[sparkle_step] * SPARKLE_FRAME_BYTES);
+}
+
 static void draw_number(const struct font *font, int x, int y, uint16_t value)
 {
     char digits[6];
@@ -697,7 +718,7 @@ static void play_over(uint16_t score)
     resume = RESUME_LAST_VIEW;
     resume_game = game;
     screen = SCREEN_GAME_OVER;
-    page_ticks = NOTE_TICKS;
+    page_ticks = GAME_OVER_TICKS;
 }
 
 void menu_game_step(void)
@@ -721,12 +742,13 @@ void menu_game_step(void)
     }
 }
 
-/* The phone key a button stands for in the running game, or 0. The
-   direction buttons are 2, 4, 6 and 8 in every game. Memory turns a card
-   with the Navi button and jumps to the next one face down with Start;
-   Rotation turns with the clock on the Navi button and against it on
-   Start. */
-static char play_phone_key(uint8_t key, uint8_t start)
+/* The phone key a button stands for in the running game, or 0: `key` with
+   Start and the console's Select folded into the Navi key, `button` as it
+   was pressed. The direction buttons are 2, 4, 6 and 8 in every game.
+   Memory turns a card with the Navi button and jumps to the next one face
+   down with Start, to the previous one with Select; Rotation turns with
+   the clock on the Navi button and against it on Start. */
+static char play_phone_key(uint8_t key, uint8_t button)
 {
     switch (key) {
     case MENU_KEY_UP:
@@ -739,18 +761,18 @@ static char play_phone_key(uint8_t key, uint8_t start)
         return '6';
     case MENU_KEY_SELECT:
         if (game == GAME_MEMORY)
-            return start ? '#' : '5';
+            return button == MENU_KEY_START ? '#' : button == MENU_KEY_ALT ? '*' : '5';
         if (game == GAME_ROTATION)
-            return start ? '1' : '3';
+            return button == MENU_KEY_START ? '1' : '3';
         return 0;
     default:
         return 0;
     }
 }
 
-static void play_key(uint8_t key, uint8_t start)
+static void play_key(uint8_t key, uint8_t button)
 {
-    char phone_key = play_phone_key(key, start);
+    char phone_key = play_phone_key(key, button);
     uint16_t delay;
 
     if (key == MENU_KEY_BACK) {
@@ -794,7 +816,9 @@ static void game_menu_select(void)
         break;
     case ITEM_TOP_SCORE:
         screen = SCREEN_TOP_SCORE;
-        page_ticks = NOTE_TICKS;
+        page_ticks = TOP_SCORE_TICKS;
+        play_us = 0;
+        sparkle_step = sparkle_ticks = 0;
         break;
     case ITEM_INSTRUCTIONS:
         screen = SCREEN_HELP;
@@ -824,10 +848,11 @@ static void game_menu_move(uint8_t key)
 static void handle_key(uint8_t key)
 {
     /* Start picks the full-screen variant on the first screen, where there
-       is one; otherwise it is another Navi key. */
-    uint8_t start = key == MENU_KEY_START;
+       is one. Outside a game it and the console's Select button are more
+       Navi keys. */
+    uint8_t button = key, start = key == MENU_KEY_START;
 
-    if (start)
+    if (start || key == MENU_KEY_ALT)
         key = MENU_KEY_SELECT;
     switch (screen) {
     case SCREEN_MAIN:
@@ -887,7 +912,7 @@ static void handle_key(uint8_t key)
         game_menu_return();
         break;
     case SCREEN_PLAY:
-        play_key(key, start);
+        play_key(key, button);
         break;
     default:
         if (key == MENU_KEY_DOWN || key == MENU_KEY_UP)
@@ -907,6 +932,7 @@ uint8_t menu_key(uint8_t key)
     const char *was_page = help_page;
 
     play_changed = 0;
+    sparkle_only = 0;
     handle_key(key);
     return play_changed || screen != was_screen || game != was_game || item != was_item || item_top != was_top
            || level_choice != was_level || resume != was_resume || help_page != was_page;
@@ -925,6 +951,7 @@ void menu_blink(void)
 
 void menu_redraw_all(void)
 {
+    sparkle_only = 0;
     drawn_screen = NO_SCREEN;
     board_drawn = 0;
 }
@@ -939,6 +966,18 @@ uint8_t menu_tick(void)
         if (--page_ticks == 0) {
             screen = SCREEN_GAME;
             return 1;
+        }
+        play_us += FRAME_US;
+        while (play_us >= PHONE_TICK_US) {
+            play_us -= PHONE_TICK_US;
+            if (++sparkle_ticks == SPARKLE_TICKS) {
+                sparkle_ticks = 0;
+                if (!full_screen && sparkle_step < sizeof sparkle_frames - 1) {
+                    sparkle_step++;
+                    sparkle_only = 1;
+                    changed = 1;
+                }
+            }
         }
         break;
     case SCREEN_GAME_OVER:
@@ -1000,6 +1039,14 @@ void menu_draw(void)
 
     if (mode == VIEW_NATIVE && native_update())
         return;
+    /* A step of the Top score page's animation leaves the rest as it is. */
+    if (sparkle_only) {
+        sparkle_only = 0;
+        if (screen == SCREEN_TOP_SCORE && !full_screen) {
+            draw_sparkle();
+            return;
+        }
+    }
     drawn_screen = NO_SCREEN;
 
     if (screen != SCREEN_PLAY) {
@@ -1023,10 +1070,12 @@ void menu_draw(void)
             draw_level();
         break;
     case SCREEN_TOP_SCORE:
-        if (full_screen)
+        if (full_screen) {
             native_note(text_top_score, "%N", settings.top_score);
-        else
+        } else {
             draw_note(text_top_score_value, settings.top_score);
+            draw_sparkle();
+        }
         break;
     case SCREEN_GAME_OVER:
         if (full_screen)

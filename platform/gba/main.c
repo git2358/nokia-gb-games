@@ -45,8 +45,9 @@
 #define PAD_DOWN 0x080
 
 /* Keys pressed at power-on, for scripted screenshots: u, d, l, r, s select,
-   b back, a the full-screen key, t one move of the running game, and p to
-   start over as after a power cycle (settings are read back). */
+   e the Select button, b back, a the full-screen key, t one move of the
+   running game, and p to start over as after a power cycle (settings are
+   read back). */
 #ifndef START_KEYS
 #define START_KEYS ""
 #endif
@@ -248,7 +249,8 @@ static void press_script_key(char key)
         menu_game_step();
     else
         menu_key(key == 'u' ? MENU_KEY_UP : key == 'd' ? MENU_KEY_DOWN : key == 'l' ? MENU_KEY_LEFT
-                 : key == 'r' ? MENU_KEY_RIGHT : key == 's' ? MENU_KEY_SELECT : key == 'a' ? MENU_KEY_START
+                 : key == 'r' ? MENU_KEY_RIGHT : key == 's' ? MENU_KEY_SELECT
+                 : key == 'a' ? MENU_KEY_START : key == 'e' ? MENU_KEY_ALT
                  : MENU_KEY_BACK);
 }
 
@@ -293,8 +295,10 @@ int main(void)
         /* Keys first, so a press takes effect before the game's next move. */
         pressed = take_presses();
         changed = 0;
-        if (pressed & (PAD_A | PAD_SELECT))
+        if (pressed & PAD_A)
             changed |= menu_key(MENU_KEY_SELECT);
+        if (pressed & PAD_SELECT)
+            changed |= menu_key(MENU_KEY_ALT);
         if (pressed & PAD_START)
             changed |= menu_key(MENU_KEY_START);
         if (pressed & PAD_B)

@@ -2,7 +2,7 @@
    Usage: frame NAME OUT.pgm
    NAME: testcard, outline, snake-start, or menu-KEYS where KEYS is the menu
    keys pressed from the first screen (u up, d down, l left, r right,
-   s select, b back, a the full-screen key, t one move of the running game,
+   s select, e the console's Select button, b back, a the full-screen key, t one move of the running game,
    F forget what is drawn so the next draw is a full one, k flip the phase
    of Memory's blinking cursor, w wait for a timed page to close). A name seedXXXXXXXX-menu-KEYS starts the
    games from that seed of rand, in hex. */
@@ -82,7 +82,8 @@ int main(int argc, char **argv)
                 menu_game_step();
             else
                 menu_key(*key == 'u' ? MENU_KEY_UP : *key == 'd' ? MENU_KEY_DOWN : *key == 'l' ? MENU_KEY_LEFT
-                         : *key == 'r' ? MENU_KEY_RIGHT : *key == 's' ? MENU_KEY_SELECT : *key == 'a' ? MENU_KEY_START
+                         : *key == 'r' ? MENU_KEY_RIGHT : *key == 's' ? MENU_KEY_SELECT
+                         : *key == 'a' ? MENU_KEY_START : *key == 'e' ? MENU_KEY_ALT
                          : MENU_KEY_BACK);
         }
         menu_draw();

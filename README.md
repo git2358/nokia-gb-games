@@ -83,7 +83,7 @@ make test                       # host checks, no firmware needed
 make gb gba                     # build/nokia3210.gb and build/nokia3210.gba
 make check-gb                   # run the .gb headlessly, compare with the host frame
 make check-gba                  # the same for the .gba
-make shot-gb KEYS=sd            # screenshot after scripted keys (u, d, l, r, s select, b back,
+make shot-gb KEYS=sd            # screenshot after scripted keys (u, d, l, r, s select, e Select, b back,
                                 # a the full-screen key or Start, t one game move)
 make check-golden               # compare host frames with MAME frames in golden/
 make test-snake test-boards     # incremental drawing against full redraws, all three games
@@ -115,15 +115,17 @@ mode, with the pause menu's Continue, the Game over page and Last view:
   frame), the opening turns the game makes itself, the sliding animation,
   the clock, and the score counted from the time taken.
 
-Menus and gameplay match frames captured from the firmware in MAME. Level
+The Top score page has the phone's animation of stars gathering into a
+cup. Menus and gameplay match frames captured from the firmware in MAME. Level
 and top score are kept per game in battery-backed cartridge RAM. The games
 have their buzzer sounds.
 
 | | Snake | Memory | Rotation |
 |---|---|---|---|
 | D-pad | steer | move the cursor | move the frame |
-| A (or Select) | | turn a card | turn with the clock |
+| A | | turn a card | turn with the clock |
 | Start | | jump to the next card face down | turn against the clock |
+| Select | | jump to the previous card face down | turn with the clock |
 | B | pause | pause | pause |
 
 Start on the first screen picks a

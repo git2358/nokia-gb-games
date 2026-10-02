@@ -62,7 +62,7 @@ firmware's widget and layout framework is not worth re-implementing.
 5. **Menus.** The firmware builds them from widgets and a layout pass. Ours
    draws the same pixels directly.
    *To do:* nothing structural. Keep adding golden frames. Known gaps: the
-   main menu's Games icon animation, the sparkle on the Top score page, and
+   main menu's Games icon animation and
    the transitions the phone shows part-drawn.
 
 6. **Timing.** The firmware counts scheduler ticks of 7.78125 ms. The core
@@ -92,8 +92,7 @@ Differences in structure:
   one card.
 - The phone never seeds `rand`, so its first deal after power-on is always
   the same. The port seeds it from the time at New game.
-- The keys `*` (Memory, previous card face down) and 7, 9 and 5 (Rotation,
-  duplicates of 1 and 3) have no button.
+- Rotation's keys 7, 9 and 5, duplicates of 1 and 3, have no button.
 
 ## Things not yet matched to the firmware
 

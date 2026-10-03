@@ -103,6 +103,14 @@ brew install sdcc arm-none-eabi-gcc imagemagick
   (`scripts/setup-mgba.sh`, needs cmake). `SAMEBOY=` and `MGBA=` name
   existing builds, such as the 3210 project's.
 
+## Version
+
+The first screen shows the port's version in its bottom right corner, and
+the full-screen variant's list of games ends with an About entry that
+shows it with this repository's address. Both come from `GAME_VERSION` in
+`core/version.h`, set by hand; change the string there when a release
+deserves a new number.
+
 ## Building
 
 ```

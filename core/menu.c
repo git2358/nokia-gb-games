@@ -7,6 +7,7 @@
 #include "lcd.h"
 #include "rand.h"
 #include "si.h"
+#include "version.h"
 
 /* Screen geometry shared by the phone's menu pages. */
 #define CONTENT_WIDTH 78 /* left of the scrollbar */
@@ -25,6 +26,7 @@
 enum {
     SCREEN_MAIN,
     SCREEN_GAMES,
+    SCREEN_ABOUT, /* the full-screen list's last entry: version and repository */
     SCREEN_GAME,
     SCREEN_TOP_SCORE,
     SCREEN_HELP,
@@ -141,6 +143,10 @@ enum {
 
 static const char text_hint_select[] = "B back   A select";
 static const char text_hint_more[] = "B back   A more";
+static const char text_hint_back[] = "B back";
+/* The full-screen list's extra entry and its page. The port's own words. */
+static const char text_about[] = "About";
+static const char text_about_body[] = "Nokia 3310 games " GAME_VERSION "\ngithub.com/lukesau/\nnokia-3310-games";
 static uint8_t surround_used;  /* something is drawn around the phone's LCD */
 
 #if LCD_HAS_SURROUND
@@ -250,13 +256,16 @@ static void draw_row(uint8_t row, const char *label, uint8_t selected)
     font_draw(&font_small_bold, 2, y + 1, label, !selected);
 }
 
-/* The hint for the full-screen variant, in the space under the phone's LCD. */
+/* The hint for the full-screen variant, in the space under the phone's LCD,
+   and the port's version in the bottom right corner of the screen. */
 static void draw_hint(void)
 {
 #if LCD_HAS_SURROUND
     lcd_view_full();
     font_draw(&font_small_plain, (LCD_FB_WIDTH - font_text_width(&font_small_plain, text_full_screen_hint)) / 2,
               LCD_BELOW_PHONE + 8, text_full_screen_hint, 1);
+    font_draw(&font_small_plain, LCD_FB_WIDTH - font_text_width(&font_small_plain, GAME_VERSION) - 2,
+              LCD_FB_HEIGHT - font_small_plain.height - 2, GAME_VERSION, 1);
     lcd_view_phone();
     surround_used = 1;
 #endif
@@ -330,6 +339,12 @@ static void native_row(uint8_t row, const char *label, uint8_t selected)
     native_cursor(row, selected);
 }
 
+/* The full-screen list has an About entry after the phone's entries. */
+static uint8_t list_count(void)
+{
+    return full_screen ? LIST_COUNT + 1 : LIST_COUNT;
+}
+
 static void native_games(void)
 {
     uint8_t i;
@@ -337,7 +352,16 @@ static void native_games(void)
     native_title(text_games);
     for (i = 0; i < LIST_COUNT; i++)
         native_row(i, list_name(i), i == game);
+    native_row(LIST_COUNT, text_about, game == LIST_COUNT);
     native_hint(text_hint_select);
+}
+
+static void native_note(const char *title, const char *text, uint16_t number);
+
+static void native_about(void)
+{
+    native_note(text_about, text_about_body, 0);
+    native_hint(text_hint_back);
 }
 
 static void native_game(void)
@@ -668,14 +692,19 @@ static uint8_t handle_key(uint8_t key)
         break;
     case SCREEN_GAMES:
         if (key == MENU_KEY_DOWN || key == MENU_KEY_UP) {
-            list_move(key, LIST_COUNT, &game, &game_top);
+            list_move(key, list_count(), &game, &game_top);
         } else if (key == MENU_KEY_SELECT) {
             /* Only Space Impact is here so far. */
             if (game == GAME_SPACE_IMPACT)
                 game_menu_open();
+            else if (game == LIST_COUNT)
+                screen = SCREEN_ABOUT;
         } else if (key == MENU_KEY_BACK) {
             screen = SCREEN_MAIN;
         }
+        break;
+    case SCREEN_ABOUT:
+        screen = SCREEN_GAMES;
         break;
     case SCREEN_HELP:
         if (key == MENU_KEY_SELECT)
@@ -852,6 +881,9 @@ void menu_draw(void)
         break;
     case SCREEN_HELP:
         draw_help();
+        break;
+    case SCREEN_ABOUT:
+        native_about();
         break;
     default:
         if (full_screen)

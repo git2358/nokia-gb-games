@@ -75,18 +75,17 @@
 #define START_KEYS ""
 #endif
 
-/* Cartridge RAM (MBC1, 8 KiB, battery-backed), which stays enabled. It
-   starts with the settings: a two-byte signature, then one four-byte record
-   per game laid out as the phone stores them: top score high byte, low
-   byte, level, and a check byte. From SI_DATA_AT on it holds Space Impact's
-   data, copied there from bank 3 at every power-on: that is 7 KiB the game
-   and the sprite code both read, more than the always-mapped part of the
-   ROM or work RAM has room for. */
+/* Cartridge RAM (MBC5, 8 KiB, battery-backed), which stays enabled. Its
+   layout is in save.c; from SI_DATA_AT on it holds Space Impact's data,
+   copied there from bank 3 at every power-on: that is 7 KiB the game and
+   the sprite code both read, more than the always-mapped part of the ROM
+   or work RAM has room for. */
 #define MBC_RAM_ENABLE REG(0x0000)
-#define SAVE ((uint8_t *)0xa000)
-#define SAVE_SIGNATURE_0 'N'
-#define SAVE_SIGNATURE_1 '3'
-#define SAVE_CHECK(r) ((uint8_t)((r)[0] + (r)[1] + (r)[2] + 0x5a))
+
+/* The MBC5's RAM bank register: bit 3 is the motor of a rumble cartridge.
+   The RAM bank stays 0. */
+#define MBC_RAM_BANK REG(0x4000)
+#define MBC_RUMBLE 0x08
 
 /* Tiles converted at a time before being copied to video RAM. */
 #define STAGED_TILES 4
@@ -131,34 +130,9 @@ void platform_tone(uint8_t note)
     NR24 = (uint8_t)(0x80 | (period >> 8));
 }
 
-void platform_vibrate(void)
+void platform_rumble(uint8_t on)
 {
-}
-
-uint8_t platform_settings_load(uint8_t game, struct game_settings *out)
-{
-    const uint8_t *record = SAVE + 2 + game * 4;
-
-    out->top_score = 0;
-    out->level = 0;
-    if (SAVE[0] == SAVE_SIGNATURE_0 && SAVE[1] == SAVE_SIGNATURE_1 && record[3] == SAVE_CHECK(record)) {
-        out->top_score = (uint16_t)(record[0] << 8 | record[1]);
-        out->level = record[2];
-        return 1;
-    }
-    return 0;
-}
-
-void platform_settings_save(uint8_t game, const struct game_settings *in)
-{
-    uint8_t *record = SAVE + 2 + game * 4;
-
-    SAVE[0] = SAVE_SIGNATURE_0;
-    SAVE[1] = SAVE_SIGNATURE_1;
-    record[0] = (uint8_t)(in->top_score >> 8);
-    record[1] = (uint8_t)in->top_score;
-    record[2] = in->level;
-    record[3] = SAVE_CHECK(record);
+    MBC_RAM_BANK = on ? MBC_RUMBLE : 0;
 }
 
 /* Used once, at power-on, before interrupts are enabled. */
@@ -368,6 +342,7 @@ void main(void)
     TAC = 0x04;
 
     MBC_RAM_ENABLE = 0x0a;
+    MBC_RAM_BANK = 0;
     far_bank(BANK_SETUP);
     memcpy((uint8_t *)SI_DATA_AT, si_data, SI_DATA_SIZE);
     far_bank(BANK_MENU);

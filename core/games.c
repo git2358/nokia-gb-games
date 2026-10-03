@@ -6,11 +6,17 @@
 
 uint8_t games_over;
 uint32_t games_score;
+struct game_options games_options = { 1, 1, 1 };
 
 static struct si_context ctx;
 
 /* Units left on the phone's three game timers; 0 is stopped. */
 static uint16_t tick_timer, one_shot_timer, repeat_timer;
+/* Units the vibrator still runs for; 0 is off. The phone's vibration is a
+   system timer the games application does not touch, so it is not among
+   the three above: it runs on through a pause, from games_rumble_elapse. */
+static uint8_t vibrate_timer;
+static uint16_t vibrate_us; /* microseconds not yet turned into units */
 static uint8_t held_key; /* 0 when none */
 
 #define REPEAT_UNITS 12
@@ -60,7 +66,8 @@ static uint8_t deliver(int event, uint8_t from)
             from = FROM_OTHER;
         break;
     case SI_RESULT_SOUND:
-        sound_play((uint8_t)ctx.sound);
+        if (games_options.sounds)
+            sound_play((uint8_t)ctx.sound);
         break;
     case SI_RESULT_REDRAW:
         break;
@@ -117,6 +124,32 @@ uint8_t games_advance(uint16_t n)
             draw |= deliver(held_key | SI_KEY_REPEAT, FROM_KEY);
     }
     return draw;
+}
+
+void games_vibrate(void)
+{
+    if (!games_options.shakes)
+        return;
+    if (!vibrate_timer)
+        platform_rumble(1);
+    vibrate_timer = GAMES_VIBRATE_UNITS;
+}
+
+void games_rumble_elapse(uint16_t us)
+{
+    if (!vibrate_timer)
+        return;
+    for (vibrate_us += us; vibrate_us >= GAMES_UNIT_US; vibrate_us -= GAMES_UNIT_US)
+        if (vibrate_timer && !--vibrate_timer)
+            platform_rumble(0);
+}
+
+void games_quiet(void)
+{
+    if (vibrate_timer) {
+        vibrate_timer = 0;
+        platform_rumble(0);
+    }
 }
 
 uint8_t games_elapse(uint16_t us)

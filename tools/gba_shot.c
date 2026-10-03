@@ -5,7 +5,9 @@
    KEYS is a mask of buttons held from frame FROM up to frame TO (bit 0 A,
    1 B, 2 Select, 3 Start, 4 Right, 5 Left, 6 Up, 7 Down). If the
    environment variable GBA_SHOT_AUDIO names a file, the left channel's
-   samples are written to it as raw signed 16-bit at 32768 Hz.
+   samples are written to it as raw signed 16-bit at 32768 Hz. The ROM is
+   given a rumble cartridge's motor, and "rumble FRAME ON" is printed
+   whenever the ROM switches it.
 
    The picture is a 32-bit BMP in the layout SameBoy's tester writes, so the
    same tools read both. Built against the library scripts/setup-mgba.sh
@@ -18,6 +20,8 @@
 #include <mgba/core/core.h>
 #include <mgba/core/blip_buf.h>
 #include <mgba/core/log.h>
+#include <mgba/internal/gba/gba.h>
+#include <mgba/internal/gba/cart/gpio.h>
 
 static void quiet(struct mLogger *logger, int category, enum mLogLevel level, const char *format, va_list args)
 {
@@ -30,6 +34,18 @@ static void quiet(struct mLogger *logger, int category, enum mLogLevel level, co
 
 #define AUDIO_SAMPLES 2048
 
+static long frame_now;
+static int rumble_on = -1;
+
+static void set_rumble(struct mRumble *rumble, int enable)
+{
+    (void)rumble;
+    if (enable != rumble_on) {
+        rumble_on = enable;
+        printf("rumble %ld %d\n", frame_now, enable);
+    }
+}
+
 static void put32(FILE *f, unsigned long v)
 {
     fputc(v & 0xff, f);
@@ -41,6 +57,7 @@ static void put32(FILE *f, unsigned long v)
 int main(int argc, char **argv)
 {
     static struct mLogger logger = { .log = quiet };
+    static struct mRumble rumble = { .setRumble = set_rumble };
     struct mCore *core;
     unsigned width, height, x, y;
     color_t *pixels;
@@ -73,6 +90,8 @@ int main(int argc, char **argv)
         fprintf(stderr, "%s: cannot load\n", argv[1]);
         return 1;
     }
+    core->setPeripheral(core, mPERIPH_RUMBLE, &rumble);
+    GBAHardwareInitRumble(&((struct GBA *)core->board)->memory.hw);
     core->reset(core);
     audio_path = getenv("GBA_SHOT_AUDIO");
     if (audio_path) {
@@ -81,6 +100,7 @@ int main(int argc, char **argv)
         blip_set_rates(core->getAudioChannel(core, 0), core->frequency(core), 32768);
     }
     for (frame = 0; frame < frames; frame++) {
+        frame_now = frame;
         core->setKeys(core, frame >= from && frame < to ? (uint32_t)keys : 0);
         core->runFrame(core);
         if (audio) {

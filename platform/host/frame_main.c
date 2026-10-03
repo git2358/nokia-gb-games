@@ -22,8 +22,9 @@ void platform_tone(uint8_t note)
     (void)note;
 }
 
-void platform_vibrate(void)
+void platform_rumble(uint8_t on)
 {
+    (void)on;
 }
 
 uint8_t platform_settings_load(uint8_t game, struct game_settings *out)
@@ -37,6 +38,17 @@ uint8_t platform_settings_load(uint8_t game, struct game_settings *out)
 void platform_settings_save(uint8_t game, const struct game_settings *in)
 {
     (void)game;
+    (void)in;
+}
+
+uint8_t platform_options_load(struct game_options *out)
+{
+    (void)out;
+    return 0;
+}
+
+void platform_options_save(const struct game_options *in)
+{
     (void)in;
 }
 

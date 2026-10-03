@@ -25,8 +25,9 @@ void platform_tone(uint8_t note)
     (void)note;
 }
 
-void platform_vibrate(void)
+void platform_rumble(uint8_t on)
 {
+    (void)on;
 }
 
 int main(int argc, char **argv)

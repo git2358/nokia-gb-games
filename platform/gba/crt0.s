@@ -16,6 +16,11 @@ _start:
     .byte   0                   @ software version
     .byte   0                   @ header checksum
     .fill   2, 1, 0
+    @ Bytes 0xc0 to 0xdf: the cartridge's general-purpose port, which the
+    @ rumble motor hangs off, answers at 0xc4 to 0xc9 (see main.c), so no
+    @ code goes here.
+    b       reset
+    .fill   28, 1, 0
 
 reset:
     @ IRQ mode stack, then system mode stack.

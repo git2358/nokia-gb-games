@@ -38,6 +38,13 @@
 #define REG_BG2Y REG32(0x0400002c)
 #define IRQ_VECTOR (*(void (*volatile *)(void))0x03007ffc)
 #define VRAM ((uint16_t *)0x06000000)
+/* The cartridge's general-purpose port, as the rumble cartridges wire it:
+   pin 3 drives the motor. The registers lie in the ROM's address space,
+   over bytes 0xc4 to 0xc9 of the image, which crt0.s leaves empty. */
+#define GPIO_DATA REG16(0x080000c4)
+#define GPIO_DIRECTION REG16(0x080000c6)
+#define GPIO_CONTROL REG16(0x080000c8)
+#define GPIO_RUMBLE 0x0008
 
 #define SCREEN_W LCD_FB_WIDTH
 #define SCREEN_H LCD_FB_HEIGHT
@@ -78,10 +85,14 @@
 
 /* Battery-backed cartridge RAM, one byte at a time: a two-byte signature,
    then one four-byte record per game laid out as the phone stores them: top
-   score high byte, low byte, level, and a check byte. */
+   score high byte, low byte, level, and a check byte; then the games'
+   settings as one byte of switches (Sounds, Lights, Shakes in bits 0 to
+   2) and its check byte. */
 #define SAVE ((volatile uint8_t *)0x0e000000)
 #define SAVE_SIGNATURE_0 'N'
 #define SAVE_SIGNATURE_1 '3'
+#define SAVE_OPTIONS (2 + GAME_COUNT * 4)
+#define OPTIONS_CHECK(flags) ((uint8_t)((flags) ^ 0xa5))
 
 /* Emulators and flash carts find the save type by this string. */
 __attribute__((used)) static const char save_type[] = "SRAM_V113";
@@ -158,8 +169,32 @@ void platform_tone(uint8_t note)
     REG_SOUND2CNT_H = (uint16_t)(0x8000 | (2048 - (((tone_divider[note % 12] >> note / 12) + 4) >> 3)));
 }
 
-void platform_vibrate(void)
+uint8_t platform_options_load(struct game_options *out)
 {
+    uint8_t flags = SAVE[SAVE_OPTIONS];
+
+    if (SAVE[0] != SAVE_SIGNATURE_0 || SAVE[1] != SAVE_SIGNATURE_1 || SAVE[SAVE_OPTIONS + 1] != OPTIONS_CHECK(flags))
+        return 0;
+    out->sounds = flags & 1;
+    out->lights = flags >> 1 & 1;
+    out->shakes = flags >> 2 & 1;
+    return 1;
+}
+
+void platform_options_save(const struct game_options *in)
+{
+    uint8_t flags = (uint8_t)(in->sounds | in->lights << 1 | in->shakes << 2);
+
+    SAVE[0] = SAVE_SIGNATURE_0;
+    SAVE[1] = SAVE_SIGNATURE_1;
+    SAVE[SAVE_OPTIONS] = flags;
+    SAVE[SAVE_OPTIONS + 1] = OPTIONS_CHECK(flags);
+}
+
+/* The motor of a rumble cartridge, or of a flash cart that acts as one. */
+void platform_rumble(uint8_t on)
+{
+    GPIO_DATA = on ? GPIO_RUMBLE : 0;
 }
 
 /* The magnified rectangle the screen currently shows, and by how much:
@@ -339,6 +374,10 @@ int main(void)
     REG_SOUNDCNT_X = 0x0080; /* sound on, channel 2 to both sides at full volume */
     REG_SOUNDCNT_L = 0x2277;
     REG_SOUNDCNT_H = 0x0002;
+
+    GPIO_CONTROL = 0; /* the port's registers are written, never read */
+    GPIO_DIRECTION = GPIO_RUMBLE; /* pin 3 is an output */
+    GPIO_DATA = 0;
 
     menu_init();
     menu_script(START_KEYS);

@@ -27,11 +27,24 @@ enum {
     SCREEN_MAIN,
     SCREEN_GAMES,
     SCREEN_ABOUT, /* the full-screen list's last entry: version and repository */
+    SCREEN_SETTINGS,      /* the phone's Settings: one page per setting */
+    SCREEN_SETTING_VALUE, /* a setting's Off and On */
+    SCREEN_DONE,          /* the phone's Done note after a setting is changed */
     SCREEN_GAME,
     SCREEN_TOP_SCORE,
     SCREEN_HELP,
     SCREEN_PLAY,
     SCREEN_GAME_OVER
+};
+
+/* The settings, in the phone's order. The last is the phone's Club Nokia
+   score ID, which has no ID and does nothing here. */
+enum {
+    SETTING_SOUNDS,
+    SETTING_LIGHTS,
+    SETTING_SHAKES,
+    SETTING_CLUB_NOKIA_ID,
+    SETTING_COUNT
 };
 
 #define HELP_Y 7
@@ -49,6 +62,22 @@ enum {
 /* The top score before anyone has played. The firmware has no default of
    its own: the 4075 MAME shows is a score saved in the PMM dump. */
 #define DEFAULT_TOP_SCORE 0
+
+/* The Done note: a box in its top right corner is ticked in three
+   pictures, the second and third shown after DONE_STEP_1 and DONE_STEP_2
+   phone ticks, and the note closes after DONE_TICKS. Measured in MAME:
+   0.70 s, 0.92 s and 1.47 s. */
+#define DONE_X 62
+#define DONE_WIDTH 22
+#define DONE_HEIGHT 32
+#define DONE_FRAME_BYTES 88
+#define DONE_STEP_1 90
+#define DONE_STEP_2 118
+#define DONE_TICKS ((uint16_t)(190ul * PHONE_TICK_US / MENU_FRAME_US))
+/* Where a setting's value is shown on its page: right-aligned here, above
+   the soft key. */
+#define SETTING_VALUE_RIGHT 78
+#define SETTING_VALUE_Y 29
 
 /* The Top score page's animation in its top right corner: stars gather
    into a cup, which then flashes. A new picture every 25 phone ticks; the
@@ -78,6 +107,10 @@ static uint8_t game;     /* selection in the list of games */
 static uint8_t game_top; /* first visible row of that list */
 static uint8_t item;     /* selection in the game's menu, counting visible items */
 static uint8_t item_top; /* first visible row of the game's menu */
+static uint8_t setting;  /* the setting whose page is shown */
+static uint8_t value;    /* selection on its Off and On page */
+static uint8_t done_step;  /* picture of the Done note's animation */
+static uint8_t done_ticks; /* phone ticks the note has been shown */
 static uint8_t paused;   /* a game is waiting behind the menu */
 static uint8_t new_top_score;  /* the game just ended beat the top score */
 static uint16_t final_score;   /* its score */
@@ -164,6 +197,44 @@ static void settings_load(void)
 {
     if (!platform_settings_load(GAME_SPACE_IMPACT, &settings))
         settings.top_score = DEFAULT_TOP_SCORE;
+    platform_options_load(&games_options);
+}
+
+static const char *setting_name(uint8_t which)
+{
+    switch (which) {
+    case SETTING_SOUNDS:
+        return text_sounds;
+    case SETTING_LIGHTS:
+        return text_lights;
+    case SETTING_SHAKES:
+        return text_shakes;
+    default:
+        return text_club_nokia_id;
+    }
+}
+
+/* The switch a setting is, or null for the score ID. */
+static uint8_t *setting_switch(uint8_t which)
+{
+    switch (which) {
+    case SETTING_SOUNDS:
+        return &games_options.sounds;
+    case SETTING_LIGHTS:
+        return &games_options.lights;
+    case SETTING_SHAKES:
+        return &games_options.shakes;
+    default:
+        return 0;
+    }
+}
+
+/* What a setting's page shows as its value. */
+static const char *setting_value(uint8_t which)
+{
+    const uint8_t *on = setting_switch(which);
+
+    return !on ? text_no_id : *on ? text_on : text_off;
 }
 
 static const char *list_name(uint8_t index)
@@ -222,10 +293,10 @@ static uint8_t thumb_for(uint8_t index, uint8_t count)
     return (uint8_t)(index * (SCROLLBAR_HEIGHT - THUMB_HEIGHT) / (count - 1));
 }
 
-/* The menu path in the top right corner, such as 8-2-1. */
+/* The menu path in the top right corner, such as 8-2-1 or 8-6-1-2. */
 static void draw_path(uint8_t depth)
 {
-    char path[6];
+    char path[8];
     uint8_t n = 0;
 
     path[n++] = '0' + GAMES_MENU_NUMBER;
@@ -236,7 +307,11 @@ static void draw_path(uint8_t depth)
     }
     if (depth > 1) {
         path[n++] = '-';
-        path[n++] = (char)('1' + item);
+        path[n++] = (char)('1' + (game < GAME_COUNT ? item : setting));
+    }
+    if (depth > 2) {
+        path[n++] = '-';
+        path[n++] = (char)('1' + value);
     }
     path[n] = 0;
     font_draw(&font_tiny_plain, LCD_WIDTH - font_text_width(&font_tiny_plain, path), HEADER_Y, path, 1);
@@ -309,6 +384,33 @@ static void draw_game(void)
     draw_softkey(text_select);
 }
 
+/* A setting's page: its name, and its value in the plain font at the
+   bottom right. The three pages are a list the scrollbar shows. */
+static void draw_setting(void)
+{
+    const char *shown = setting_value(setting);
+
+    draw_path(2);
+    font_draw(&font_small_bold, 0, LIST_Y, setting_name(setting), 1);
+    font_draw(&font_small_plain, SETTING_VALUE_RIGHT - font_text_width(&font_small_plain, shown), SETTING_VALUE_Y, shown, 1);
+    draw_scrollbar(thumb_for(setting, SETTING_COUNT));
+    draw_softkey(text_select);
+}
+
+static void draw_setting_value(void)
+{
+    draw_path(3);
+    draw_row(0, text_off, value == 0);
+    draw_row(1, text_on, value == 1);
+    draw_scrollbar(thumb_for(value, 2));
+    draw_softkey(text_ok);
+}
+
+static void draw_done_tick(void)
+{
+    lcd_blit_strips(DONE_X, 0, DONE_WIDTH, DONE_HEIGHT, done_tick + done_step * DONE_FRAME_BYTES);
+}
+
 static void native_title(const char *title)
 {
     lcd_fill_rect(0, 0, LCD_FB_WIDTH, NATIVE_TITLE_HEIGHT, 1);
@@ -364,6 +466,23 @@ static void native_about(void)
     native_hint(text_hint_back);
 }
 
+/* The full-screen variant's settings: every setting on one page with its
+   value, which A switches. The port's own layout. */
+static void native_settings(void)
+{
+    uint8_t i;
+
+    native_title(text_settings);
+    for (i = 0; i < SETTING_COUNT; i++) {
+        const char *shown = setting_value(i);
+
+        native_row(i, setting_name(i), i == setting);
+        font_draw(&NATIVE_FONT, LCD_FB_WIDTH - NATIVE_MARGIN - font_text_width(&NATIVE_FONT, shown),
+                  NATIVE_LIST_Y + i * NATIVE_ROW_HEIGHT + 1, shown, 1);
+    }
+    native_hint(text_hint_select);
+}
+
 static void native_game(void)
 {
     uint8_t i;
@@ -380,9 +499,9 @@ static uint8_t native_update(void)
 {
     uint8_t selection;
 
-    if (drawn_screen != screen || (screen != SCREEN_GAMES && screen != SCREEN_GAME))
+    if (drawn_screen != screen || (screen != SCREEN_GAMES && screen != SCREEN_GAME && screen != SCREEN_SETTINGS))
         return 0;
-    selection = screen == SCREEN_GAMES ? game : item;
+    selection = screen == SCREEN_GAMES ? game : screen == SCREEN_GAME ? item : setting;
     native_cursor(drawn_selection, 0);
     native_cursor(selection, 1);
     drawn_selection = selection;
@@ -532,6 +651,7 @@ void menu_init(void)
     paused = 0;
     full_screen = 0;
     held = NO_KEY;
+    games_quiet();
     settings_load();
 }
 
@@ -695,16 +815,59 @@ static uint8_t handle_key(uint8_t key)
             list_move(key, list_count(), &game, &game_top);
         } else if (key == MENU_KEY_SELECT) {
             /* Only Space Impact is here so far. */
-            if (game == GAME_SPACE_IMPACT)
+            if (game == GAME_SPACE_IMPACT) {
                 game_menu_open();
-            else if (game == LIST_COUNT)
+            } else if (game == GAME_COUNT) {
+                screen = SCREEN_SETTINGS;
+                setting = 0;
+            } else if (game == LIST_COUNT) {
                 screen = SCREEN_ABOUT;
+            }
         } else if (key == MENU_KEY_BACK) {
             screen = SCREEN_MAIN;
         }
         break;
     case SCREEN_ABOUT:
         screen = SCREEN_GAMES;
+        break;
+    case SCREEN_SETTINGS:
+        if (key == MENU_KEY_DOWN) {
+            setting = (uint8_t)((setting + 1) % SETTING_COUNT);
+        } else if (key == MENU_KEY_UP) {
+            setting = (uint8_t)((setting + SETTING_COUNT - 1) % SETTING_COUNT);
+        } else if (key == MENU_KEY_SELECT && setting_switch(setting)) {
+            if (full_screen) {
+                /* Switched on the spot; the full page is drawn again. */
+                *setting_switch(setting) ^= 1;
+                platform_options_save(&games_options);
+                drawn_screen = NO_SCREEN;
+                return 1;
+            }
+            screen = SCREEN_SETTING_VALUE;
+            value = *setting_switch(setting);
+        } else if (key == MENU_KEY_BACK) {
+            screen = SCREEN_GAMES;
+        }
+        break;
+    case SCREEN_SETTING_VALUE:
+        if (key == MENU_KEY_DOWN || key == MENU_KEY_UP) {
+            value ^= 1;
+        } else if (key == MENU_KEY_SELECT) {
+            *setting_switch(setting) = value;
+            platform_options_save(&games_options);
+            screen = SCREEN_DONE;
+            page_ticks = DONE_TICKS;
+            play_us = 0;
+            done_step = done_ticks = 0;
+        } else if (key == MENU_KEY_BACK) {
+            screen = SCREEN_SETTINGS;
+        }
+        break;
+    case SCREEN_DONE:
+        /* Any key closes the note; all but C then act on the page under it. */
+        screen = SCREEN_SETTINGS;
+        if (key != MENU_KEY_BACK)
+            handle_key(key);
         break;
     case SCREEN_HELP:
         if (key == MENU_KEY_SELECT)
@@ -736,13 +899,14 @@ static uint8_t handle_key(uint8_t key)
 uint8_t menu_key(uint8_t key)
 {
     uint8_t was_screen = screen, was_game = game, was_item = item, was_top = item_top;
+    uint8_t was_setting = setting, was_value = value;
     const char *was_page = help_page;
     uint8_t changed;
 
     sparkle_only = 0;
     changed = handle_key(key);
     return changed || screen != was_screen || game != was_game || item != was_item || item_top != was_top
-           || help_page != was_page;
+           || setting != was_setting || value != was_value || help_page != was_page;
 }
 
 void menu_seed(uint16_t seed)
@@ -763,6 +927,7 @@ uint8_t menu_tick(void)
     uint8_t changed = 0;
 
     uptime++;
+    games_rumble_elapse(MENU_FRAME_US);
     switch (screen) {
     case SCREEN_TOP_SCORE:
         if (--page_ticks == 0) {
@@ -788,6 +953,22 @@ uint8_t menu_tick(void)
             return 1;
         }
         break;
+    case SCREEN_DONE:
+        if (--page_ticks == 0) {
+            screen = SCREEN_SETTINGS;
+            return 1;
+        }
+        play_us += MENU_FRAME_US;
+        while (play_us >= PHONE_TICK_US) {
+            play_us -= PHONE_TICK_US;
+            done_ticks++;
+            if (done_ticks == DONE_STEP_1 || done_ticks == DONE_STEP_2) {
+                done_step++;
+                sparkle_only = 1;
+                changed = 1;
+            }
+        }
+        break;
     case SCREEN_PLAY:
         changed = games_elapse(MENU_FRAME_US);
         if (games_over) {
@@ -807,6 +988,7 @@ void menu_draw(void)
        all else is drawn in the phone's LCD. Changing between them, or
        leaving a screen that drew around the LCD, clears everything. */
     uint8_t mode = full_screen && screen != SCREEN_MAIN && screen != SCREEN_PLAY ? VIEW_NATIVE : VIEW_PHONE;
+    uint8_t selection;
 
     if (mode != view_mode || surround_used) {
         lcd_view_full();
@@ -837,11 +1019,16 @@ void menu_draw(void)
 
     if (mode == VIEW_NATIVE && native_update())
         return;
-    /* A step of the Top score page's animation leaves the rest as it is. */
+    /* A step of the Top score or Done page's animation leaves the rest as
+       it is. */
     if (sparkle_only) {
         sparkle_only = 0;
         if (screen == SCREEN_TOP_SCORE && !full_screen) {
             draw_sparkle();
+            return;
+        }
+        if (screen == SCREEN_DONE) {
+            draw_done_tick();
             return;
         }
     }
@@ -885,6 +1072,19 @@ void menu_draw(void)
     case SCREEN_ABOUT:
         native_about();
         break;
+    case SCREEN_SETTINGS:
+        if (full_screen)
+            native_settings();
+        else
+            draw_setting();
+        break;
+    case SCREEN_SETTING_VALUE:
+        draw_setting_value();
+        break;
+    case SCREEN_DONE:
+        draw_note(text_done, 0);
+        draw_done_tick();
+        break;
     default:
         if (full_screen)
             native_game();
@@ -893,8 +1093,9 @@ void menu_draw(void)
         break;
     }
     if (mode == VIEW_NATIVE) {
+        selection = screen == SCREEN_GAMES ? game : screen == SCREEN_GAME ? item : setting;
         drawn_screen = screen;
-        drawn_selection = screen == SCREEN_GAMES ? game : item;
+        drawn_selection = selection;
     }
 }
 

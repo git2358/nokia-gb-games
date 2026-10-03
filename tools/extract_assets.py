@@ -46,6 +46,7 @@ SCRIPT_END = 0x0B
 PICTURES = [
     ("menu_games_icon", 0x2F6C68, 128, "64x16 frame of the main menu's Games animation, 64 bytes per 8 rows"),
     ("top_score_sparkle", 0x2FAA40, 11 * 84, "11 pictures of the Top score page's animation, 21x32, 21 bytes per 8 rows"),
+    ("done_tick", 0x2F9E50, 3 * 88, "3 pictures of the Done page's animation, 22x32, 22 bytes per 8 rows"),
 ]
 
 # The language pack ("PPM") holds the fonts and the text. Each chunk is
@@ -69,6 +70,15 @@ STRINGS = [
     ("text_instructions", 554),
     ("text_new_game", 560),
     ("text_settings", 562),
+    ("text_sounds", 563),
+    ("text_lights", 557),
+    ("text_shakes", 782),
+    ("text_off", 564),
+    ("text_on", 565),
+    ("text_ok", 1004),
+    ("text_club_nokia_id", 572),
+    ("text_no_id", 569),
+    ("text_done", 495),
     ("text_pairs", 566),
     ("text_snake", 574),
     ("text_space_impact", 575),

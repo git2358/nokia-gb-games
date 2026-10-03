@@ -6,8 +6,14 @@
 
 #include <stdint.h>
 
+#include "game.h"
+
 /* The phone's timers count in units of 249/32 ms. */
 #define GAMES_UNIT_US 7781
+
+/* The settings the games follow: a sound is only played and the vibrator
+   only run when its switch is on. menu.c loads and keeps them. */
+extern struct game_options games_options;
 
 /* Nonzero once the game has ended; games_score is then its score. */
 extern uint8_t games_over;
@@ -37,5 +43,22 @@ uint8_t games_event(int event);
 
 /* Draws the game into the LCD view; with `all`, not just what changed. */
 void games_draw(uint8_t all);
+
+/* The phone's vibrator, as a game asks for it: a pulse of GAMES_VIBRATE_UNITS
+   timer units, started afresh by every call, when Shakes is on. */
+#define GAMES_VIBRATE_UNITS 62
+void games_vibrate(void);
+
+/* Lets this much time pass for the vibrator, in microseconds; a platform
+   or the menus call it once per screen frame whether or not a game is
+   being played, since the phone's vibration is a system timer that runs
+   on through a pause. */
+void games_rumble_elapse(uint16_t us);
+
+/* Stops the vibrator at once: for starting over. */
+void games_quiet(void);
+
+/* The platform's vibrator or rumble motor, on or off. */
+void platform_rumble(uint8_t on);
 
 #endif

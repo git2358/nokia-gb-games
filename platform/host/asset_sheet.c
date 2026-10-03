@@ -7,7 +7,7 @@
 #include "si.h"
 #include "si_data.h"
 
-void platform_vibrate(void)
+void games_vibrate(void)
 {
 }
 

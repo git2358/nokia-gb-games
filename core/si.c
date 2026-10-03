@@ -749,7 +749,7 @@ static void boss_destroyed(uint16_t id, struct si_context *ctx)
             object_free(si.boss_parts[1]);
     }
     award(0x31, 100, ctx);
-    platform_vibrate();
+    games_vibrate();
 }
 
 /* The beam's sweep: everything within three columns of it is hit. */
@@ -854,7 +854,7 @@ static void objects_step(struct si_context *ctx)
                     object_free(id);
                 } else {
                     o->frame = (uint8_t)(game_rand16() % o->frames + 1);
-                    platform_vibrate();
+                    games_vibrate();
                 }
             }
             continue;
@@ -1087,7 +1087,7 @@ static void ship_destroy(struct si_context *ctx)
     sprite_set_mode(si.ship, si.polarity);
     si_set_image(si.ship, si_type_frames[TYPE_EXPLOSION]);
     si.ship_lost = 1;
-    platform_vibrate();
+    games_vibrate();
     request_sound(ctx, SI_SOUND_SHIP_HIT);
 }
 

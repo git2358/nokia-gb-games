@@ -1,9 +1,9 @@
-/* The ROM is four banks of 16 KiB, of which the cartridge (MBC1) maps the
+/* The ROM is four banks of 16 KiB, of which the cartridge (MBC5) maps the
    first always and one of the others at a time:
 
    0  startup, this layer, the framebuffer, the sprite layer, the game's
       timers and the helpers every part of Space Impact uses;
-   1  the menus, the fonts and the text;
+   1  the menus, the fonts, the text and what the cartridge RAM keeps;
    2  Space Impact's play;
    3  how its games, levels and ships begin, and the image of its data that
       is copied to cartridge RAM at power-on.

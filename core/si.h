@@ -61,7 +61,7 @@ int si_handler(int event, struct si_context *ctx);
    scripted test asks for a later one. */
 extern uint8_t si_first_level;
 
-/* The phone's vibrator, pulsed on hits. */
-void platform_vibrate(void);
+/* The phone's vibrator, pulsed on hits; games.c has it. */
+void games_vibrate(void);
 
 #endif

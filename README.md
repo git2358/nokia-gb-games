@@ -21,7 +21,13 @@ What is there so far:
 - the bosses of all eight levels, so the game can be played to its end;
 - the top score, kept in battery-backed cartridge RAM. It starts at 0;
 - the game's five buzzer sounds: the shot, the missile or wall, the beam,
-  a bonus collected and the ship destroyed.
+  a bonus collected and the ship destroyed;
+- the phone's vibrator, as a rumble motor: half a second when the ship is
+  hit and when a boss explodes;
+- the Games menu's Settings: the phone's four pages, Sounds, Lights, Shakes
+  and Club Nokia ID, with their Off and On lists and the Done note. Sounds
+  and Shakes do what they say; Lights is kept but does nothing, and the
+  score ID has no ID. All are kept in cartridge RAM with the top score.
 
 Start on the first screen picks a full-screen mode instead, as in the 3210
 project: the port's own menus laid out for the console's whole screen in
@@ -39,10 +45,10 @@ nose out of sight.
 | B | back | special weapon |
 | Start, Select | select | pause |
 
-What is not: Snake II, Bantumi, Pairs II and Settings are in the list but
-do nothing, so the sounds cannot be switched off, and Space Impact's title
-animation is not shown. A paused game continues exactly where it stopped, where the phone
-gives the ship a second and a half of shield.
+What is not: Snake II, Bantumi and Pairs II are in the list but do
+nothing, and Space Impact's title animation is not shown. A paused game
+continues exactly where it stopped, where the phone gives the ship a
+second and a half of shield.
 
 ## Firmware policy
 
@@ -154,7 +160,13 @@ the phone's pace.
 
 `golden/menus/` holds frames of the phone's menus captured in MAME with
 the phone switched to English (Menu, 6, 2, 1, up, Select), each named
-after the host frame it must equal.
+after the host frame it must equal. The Top score page's two frames show
+the 4075 the PMM dump holds and differ from the port's 0 by design.
+
+The rumble is checked the same way: `build/gb_run ... rumble 1400` prints
+each frame the motor was on for, and `build/gba_shot` prints every switch
+of the motor. In a scripted game left to be hit, both show it on for
+about 29 frames at a time.
 
 ## Game Boy
 
@@ -176,8 +188,9 @@ When a tick still takes longer to show than the 93 ms between ticks, the
 game keeps the phone's pace and shows fewer pictures: every tick is
 played, not every one is drawn.
 
-The ROM is four 16 KiB banks on an MBC1 with 8 KiB of battery-backed RAM
-(`platform/gb/far.h` says what is where). Space Impact's 7 KiB of data is
+The ROM is four 16 KiB banks on an MBC5 with 8 KiB of battery-backed RAM
+(`platform/gb/far.h` says what is where); MBC5 for its rumble pin, see
+below. Space Impact's 7 KiB of data is
 copied from the ROM to cartridge RAM at power-on, because both the game
 and the sprite code, which are in different banks, read it. The save file
 therefore holds a copy of that data next to the top score.
@@ -205,7 +218,30 @@ GBA_SHOT_AUDIO=shot.raw build/gba_shot build/nokia3310-keys.gba shot.bmp 360 0x1
 
 Both write the left channel as raw signed 16-bit samples at 32768 Hz.
 The phone plays no sound until Sounds in the games' settings and Warning
-and game tones in the profile are both on; here they always play.
+and game tones in the profile are both on; here Sounds starts on and is
+enough.
+
+## Rumble
+
+Space Impact pulses the phone's vibrator when the ship is hit and when a
+boss explodes, for 62 of the phone's timer units, half a second, when
+Shakes in the games' settings is on; a hit during a pulse starts the half
+second over. The port does the same with whatever motor the cartridge has:
+
+- on the GBA, through the cartridge's general-purpose port as the rumble
+  cartridges (Drill Dozer, WarioWare: Twisted!) use it: pin 3 of the
+  registers at `0x80000c4`, left clear of code in the ROM header's tail.
+  mGBA gives a ROM that port when its game code is a known rumble
+  cartridge's, or through an override, `[override.N33E]` with
+  `hardware=2` in its `config.ini`; `build/gba_shot` sets it up itself. The EZ-Flash Omega Definitive Edition has a motor and a Mode B
+  setting of Rumble in its menu for cartridges that drive it this way;
+  that is how the ROM is meant to rumble there, and has not been tried
+  on the cart yet;
+- on the Game Boy, through the MBC5's rumble pin, bit 3 of the RAM bank
+  register, which is why the header now says MBC5. SameBoy's cartridge
+  rumble follows it; the EZ-Flash Junior has no motor.
+
+Shakes starts on, as on the phone.
 
 ## Golden run
 
@@ -229,14 +265,16 @@ ignored `golden/`.
 ## Layout
 
 - `core/` is portable C: `lcd` (framebuffer), `font`, `menu` (the phone's
-  menus and the full-screen ones), `sprite` (sprite list and tile layer),
-  `si`, `si_setup` and `si_base` (the game), `games` (keys and timers to
-  game events), `sound` (the notes of the sound in progress), `rand`.
+  menus, its Settings pages and the full-screen ones), `sprite` (sprite
+  list and tile layer), `si`, `si_setup` and `si_base` (the game), `games`
+  (keys and timers to game events, the settings the games follow and the
+  vibrator's timer), `sound` (the notes of the sound in progress), `rand`.
 - `platform/host/` has the tools above; `platform/gb/` and `platform/gba/`
   are the cartridges.
 - `tools/extract_assets.py` copies the game's data region, its sounds, the
-  fonts, the English text and the menus' pictures out of the dump; the
-  game reads its data by firmware address.
+  fonts, the English text and the menus' pictures, the Top score page's
+  and the Done note's animations among them, out of the dump; the game
+  reads its data by firmware address.
 - `tools/gb_run.c` runs a Game Boy ROM headlessly with scripted buttons,
   screenshots, sound capture, memory peeks and a profiler
   (`tools/gb_profile.py`).

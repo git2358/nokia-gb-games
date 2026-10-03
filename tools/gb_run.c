@@ -6,6 +6,9 @@
      N            run N screen frames
      +B / -B      press / release a button: a b s(elect) t(start) u d l r
      shot:FILE    write the screen as a binary PGM (160x144)
+     rumble       from here on, print "rumble FRAME SHARE" for every frame
+                  in which the cartridge's rumble motor was on, SHARE being
+                  the part of the frame it was on for
      audio:FILE   from here on, write the sound's left channel to FILE as
                   raw signed 16-bit samples at 32768 Hz
      peek:ADDR:N  print N bytes of memory from hexadecimal ADDR
@@ -36,6 +39,16 @@ static uint32_t rgb(GB_gameboy_t *gb, uint8_t r, uint8_t g, uint8_t b)
 
 /* For the audio step. */
 static FILE *audio;
+
+/* For the rumble step: frames run so far. */
+static unsigned long frames_run;
+
+static void on_rumble(GB_gameboy_t *gb, double amplitude)
+{
+    (void)gb;
+    if (amplitude > 0)
+        printf("rumble %lu %.2f\n", frames_run, amplitude);
+}
 
 static void on_sample(GB_gameboy_t *gb, GB_sample_t *sample)
 {
@@ -108,6 +121,9 @@ int main(int argc, char **argv)
             for (p = 0; p < 160 * 144; p++)
                 fputc((int)(pixels[p] & 0xff) < 128 ? 0 : 255, out);
             fclose(out);
+        } else if (strcmp(step, "rumble") == 0) {
+            GB_set_rumble_mode(gb, GB_RUMBLE_CARTRIDGE_ONLY);
+            GB_set_rumble_callback(gb, on_rumble);
         } else if (strncmp(step, "audio:", 6) == 0) {
             audio = fopen(step + 6, "wb");
             if (!audio) {
@@ -174,8 +190,10 @@ int main(int argc, char **argv)
         } else {
             long frames = strtol(step, NULL, 10);
 
-            while (frames-- > 0)
+            while (frames-- > 0) {
                 GB_run_frame(gb);
+                frames_run++;
+            }
         }
     }
     if (audio)

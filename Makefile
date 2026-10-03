@@ -67,7 +67,7 @@ GB_ROM := $(BUILD)/nokia3310.gb
 GB_TEST_ROM := $(BUILD)/nokia3310-keys.gb
 # The four banks of the Game Boy ROM (see platform/gb/far.h).
 GB_BANK0 := platform/gb/main.c platform/gb/far.c platform/gb/strip.c core/lcd.c core/sprite.c core/games.c core/rand.c core/si_base.c core/sound.c $(ASSETS)/si_tables.c
-GB_BANK1 := core/menu.c core/font.c $(ASSETS)/game_assets.c
+GB_BANK1 := core/menu.c core/font.c platform/gb/save.c $(ASSETS)/game_assets.c
 GB_BANK2 := core/si.c
 GB_BANK3 := core/si_setup.c $(ASSETS)/si_data.c
 gb_rels = $(patsubst %.c,$(BUILD)/gb/$(1)/%.rel,$(notdir $(2)))
@@ -245,14 +245,14 @@ $(BUILD)/gb/%.rel: platform/gb/%.s
 	@mkdir -p $(BUILD)/gb
 	$(SDAS) -o $@ $<
 
-# MBC1 with battery-backed RAM, four ROM banks and 8 KiB of RAM. The linker
-# does not mind the first bank running over into the second, so its end is
-# checked here.
+# MBC5 with its rumble pin and battery-backed RAM, four ROM banks and 8 KiB
+# of RAM. The linker does not mind the first bank running over into the
+# second, so its end is checked here.
 $(BUILD)/nokia3310%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/draw.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
 	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 -Wl-b_CODE_3=0x34000 \
 		-o $(BUILD)/gb/$(basename $(notdir $@)).ihx $^
 	@$(PYTHON) tools/gb_bank_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
-	$(MAKEBIN) -Z -yn NOKIA3310 -yt 0x03 -yo 4 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
+	$(MAKEBIN) -Z -yn NOKIA3310 -yt 0x1e -yo 4 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
 
 .SECONDARY: $(GB_RELS) $(BUILD)/gb/crt0.rel $(BUILD)/gb/draw.rel
 

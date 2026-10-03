@@ -18,6 +18,9 @@ No Nokia firmware, no extracted code or data from it, and nothing derived
 from a firmware image is committed here. `roms/`, run output and build
 output are ignored.
 
+That being said I got my firmware at firmware center
+<https://firmware.center/firmware/Nokia/3410%20%28NHM-2%29/Flash%20Files/NHM-2%20v.05.46%203410.rar>
+
 ## Dump
 
 Put the Wintesla flash files of NHM-2 v5.46 in `roms/3410-nhm2-v546/`:

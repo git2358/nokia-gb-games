@@ -56,7 +56,7 @@ SOUND_REST = 0xFE  # core/sound.h
 
 # Pictures the phone's menus use, as strips of 8 rows with a byte per column.
 PICTURES = [
-    ("menu_games_icon", 0x2F6C68, 128, "64x16 frame of the main menu's Games animation, 64 bytes per 8 rows"),
+    ("menu_games_icon", 0x2F6C68, 4 * 128, "4 pictures of the main menu's Games animation, 64x14 in 64x16, 64 bytes per 8 rows"),
     ("top_score_sparkle", 0x2FAA40, 11 * 84, "11 pictures of the Top score page's animation, 21x32, 21 bytes per 8 rows"),
     ("done_tick", 0x2F9E50, 3 * 88, "3 pictures of the Done page's animation, 22x32, 22 bytes per 8 rows"),
 ]

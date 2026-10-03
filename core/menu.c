@@ -26,6 +26,21 @@
 #define GAMES_MENU_NUMBER 8 /* Games is entry 8 of the phone's main menu */
 #define GAMES_MENU_THUMB 14 /* where that puts the main menu's scrollbar */
 
+/* The main menu's Games icon is animated: its first picture stays for
+   GAMES_ICON_FIRST phone ticks, then the four pictures follow one another
+   every GAMES_ICON_STEP, three times round, and it stops on the first.
+   Measured in MAME, where the first picture stays 0.84 s and the steps
+   come 0.155 s apart. Showing the entry again starts it over. */
+#define GAMES_ICON_X 10
+#define GAMES_ICON_Y 23
+#define GAMES_ICON_WIDTH 64
+#define GAMES_ICON_HEIGHT 16
+#define GAMES_ICON_BYTES 128
+#define GAMES_ICON_PICTURES 4
+#define GAMES_ICON_STEPS 12
+#define GAMES_ICON_FIRST 108
+#define GAMES_ICON_STEP 20
+
 enum {
     SCREEN_MAIN,
     SCREEN_GAMES,
@@ -215,6 +230,18 @@ static uint16_t page_ticks;   /* ticks left on a timed page */
 static uint8_t sparkle_step;  /* picture of the Top score page's animation */
 static uint8_t sparkle_ticks; /* phone ticks it has been shown */
 static uint8_t sparkle_only;  /* nothing else on the page needs drawing */
+static uint8_t icon_steps;    /* steps of the Games icon's animation so far */
+static uint8_t icon_ticks;    /* phone ticks to its next step */
+static uint16_t icon_us;      /* time not yet turned into phone ticks */
+
+/* Shows the main menu, its Games icon starting over. */
+static void main_open(void)
+{
+    screen = SCREEN_MAIN;
+    icon_steps = 0;
+    icon_ticks = GAMES_ICON_FIRST;
+    icon_us = 0;
+}
 static const char *help_page; /* first character of the Instructions page shown */
 
 /* The settings of the game whose menu is open. */
@@ -420,12 +447,18 @@ static void draw_hint(void)
 #endif
 }
 
+static void draw_games_icon(void)
+{
+    lcd_blit_strips(GAMES_ICON_X, GAMES_ICON_Y, GAMES_ICON_WIDTH, GAMES_ICON_HEIGHT,
+                    menu_games_icon + icon_steps % GAMES_ICON_PICTURES * GAMES_ICON_BYTES);
+}
+
 static void draw_main(void)
 {
     draw_hint();
     draw_path(0);
     font_draw(&font_large_bold, (CONTENT_WIDTH - font_text_width(&font_large_bold, text_games)) / 2, LIST_Y, text_games, 1);
-    lcd_blit_strips(10, 23, 64, 16, menu_games_icon);
+    draw_games_icon();
     draw_scrollbar(GAMES_MENU_THUMB);
     draw_softkey(text_select);
 }
@@ -772,7 +805,7 @@ static void help_more(void)
 
 void menu_init(void)
 {
-    screen = SCREEN_MAIN;
+    main_open();
     game = game_top = 0;
     paused = 0;
     full_screen = 0;
@@ -992,7 +1025,7 @@ static uint8_t handle_key(uint8_t key)
                 screen = SCREEN_ABOUT;
             }
         } else if (key == MENU_KEY_BACK) {
-            screen = SCREEN_MAIN;
+            main_open();
         }
         break;
     case SCREEN_ABOUT:
@@ -1141,6 +1174,19 @@ uint8_t menu_tick(void)
     uptime++;
     games_rumble_elapse(MENU_FRAME_US);
     switch (screen) {
+    case SCREEN_MAIN:
+        if (icon_steps == GAMES_ICON_STEPS)
+            break;
+        for (icon_us += MENU_FRAME_US; icon_us >= PHONE_TICK_US; icon_us -= PHONE_TICK_US) {
+            if (--icon_ticks)
+                continue;
+            icon_ticks = GAMES_ICON_STEP;
+            sparkle_only = 1;
+            changed = 1;
+            if (++icon_steps == GAMES_ICON_STEPS)
+                break;
+        }
+        break;
     case SCREEN_TOP_SCORE:
         if (--page_ticks == 0) {
             screen = SCREEN_GAME;
@@ -1213,9 +1259,17 @@ void menu_draw(void)
     uint8_t mode = full_screen && screen != SCREEN_MAIN && screen != SCREEN_PLAY && screen != SCREEN_TITLE
                    ? VIEW_NATIVE : VIEW_PHONE;
 
-    menu_drew_picture = screen == SCREEN_PLAY || screen == SCREEN_TITLE;
     uint8_t selection;
 
+    menu_drew_picture = screen == SCREEN_PLAY || screen == SCREEN_TITLE;
+    /* A step of the Games icon's animation changes only the icon, and the
+       first screen's hint around the LCD stays as it is. */
+    if (sparkle_only && screen == SCREEN_MAIN) {
+        sparkle_only = 0;
+        lcd_view_phone();
+        draw_games_icon();
+        return;
+    }
     if (mode != view_mode || surround_used) {
         lcd_view_full();
         lcd_clear();

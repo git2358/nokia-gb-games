@@ -12,7 +12,9 @@ Game Boy Advance ROM (`.gba`).
 
 What is there so far:
 
-- the phone's menus: the main menu's Games entry, the list of games,
+- the phone's menus: the main menu's Games entry with its animated icon
+  (the first picture for 0.84 s, then four pictures three times round at
+  0.155 s each, as measured in MAME), the list of games,
   Space Impact's menu with Continue while a game is paused, its Top score
   page with the animation, its Instructions and the Game over page, drawn
   with the phone's fonts and text;

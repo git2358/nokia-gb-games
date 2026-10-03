@@ -46,7 +46,7 @@
 #define ID_FULL 96
 #define NO_PLACE 0xff
 
-extern uint8_t gb_present_all, gb_zoom_band, gb_columns[4];
+extern uint8_t gb_present_all, gb_zoom_band, gb_zoom_bands, gb_columns[4];
 void gb_present_zoom(void);
 void gb_clear_tiles(void);
 void gb_tile_low(uint8_t *tile);
@@ -63,6 +63,7 @@ static uint8_t empty_id;    /* the tile of empty terrain */
 static uint8_t strip_row;   /* the strip's first row of tiles on the screen */
 static uint8_t strip_band;  /* and its first band of the picture */
 uint8_t strip_place = NO_PLACE; /* the terrain cell at the strip's left edge, 0..127 */
+static uint8_t plain_laid_out; /* the screen is laid out for a game without terrain */
 #define place strip_place
 /* For each cell of the strip on the screen, across and down: whether the
    tile map names the cell's own tile there, and for each band the bytes of
@@ -101,6 +102,7 @@ void strip_leave(uint8_t scx, uint8_t write_map)
     lcd_cuts(scx, 12 * 8 - 1, LCDC_HIGH, scx, 0xff, LCDC_HIGH, scx);
     place = NO_PLACE;
     terrain_map = 0;
+    plain_laid_out = 0;
     if (!write_map)
         return;
     /* The strip used all 32 columns of its rows; past the screen's 20 the
@@ -330,5 +332,32 @@ void strip_present(uint8_t all)
         strip_terrain = si.terrain.bitmap + band * 84;
         strip_scan(band);
     }
+    gb_zoom_bands = 4;
+    gb_present_zoom();
+}
+
+/* A game with no terrain, Snake II: the picture's six bands at 2x as
+   twelve rows of tiles at 0x8000, rows 3 to 14 of the screen, nothing
+   scrolled and nothing cut. */
+#define PLAIN_ROW 3
+
+void zoom_present(uint8_t all)
+{
+    uint8_t tx, ty;
+
+    if (all || terrain_map || !plain_laid_out) {
+        gb_clear_tiles();
+        lcd_cuts(0, 0xff, LCDC_LOW, 0, 0xff, LCDC_LOW, 0);
+        for (ty = 0; ty < 18; ty++)
+            for (tx = 0; tx < 32; tx++)
+                gb_vram_put(MAP + ty * 32 + tx, (uint8_t)(ty - PLAIN_ROW) < 12 && tx < 20
+                                                    ? (uint8_t)((ty - PLAIN_ROW) * 20 + tx) : ID_EMPTY);
+        terrain_map = 0;
+        place = NO_PLACE;
+        plain_laid_out = 1;
+        gb_present_all = 1;
+    }
+    gb_zoom_band = 0;
+    gb_zoom_bands = 6;
     gb_present_zoom();
 }

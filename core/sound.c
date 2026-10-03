@@ -39,7 +39,7 @@ void sound_tick(void)
         platform_tone(SOUND_SILENCE);
         return;
     }
-    platform_tone(next[0]);
+    platform_tone(next[0] == SOUND_REST ? SOUND_SILENCE : next[0]);
     left = next[1];
     next += 2;
 }

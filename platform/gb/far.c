@@ -2,6 +2,8 @@
 
 #define SI_SETUP_IMPL /* the real functions' names, not the far_ ones */
 #include "si_state.h"
+#include "snake2.h"
+#include "strip.h"
 
 #define MBC_ROM_BANK (*(volatile uint8_t *)0x2000)
 
@@ -13,7 +15,7 @@ void far_bank(uint8_t bank)
     MBC_ROM_BANK = bank;
 }
 
-int far_si_handler(int event, struct si_context *ctx)
+int far_si_handler(int event, struct game_context *ctx)
 {
     uint8_t was = mapped;
     int result;
@@ -33,7 +35,7 @@ void far_si_level_load(si_ref header)
     far_bank(was);
 }
 
-void far_si_ship_spawn(struct si_context *ctx, int how)
+void far_si_ship_spawn(struct game_context *ctx, int how)
 {
     uint8_t was = mapped;
 
@@ -42,7 +44,7 @@ void far_si_ship_spawn(struct si_context *ctx, int how)
     far_bank(was);
 }
 
-int far_si_new_game(struct si_context *ctx)
+int far_si_new_game(struct game_context *ctx)
 {
     uint8_t was = mapped;
     int result;
@@ -53,7 +55,7 @@ int far_si_new_game(struct si_context *ctx)
     return result;
 }
 
-int far_si_continue_key(int event, struct si_context *ctx)
+int far_si_continue_key(int event, struct game_context *ctx)
 {
     uint8_t was = mapped;
     int result;
@@ -64,11 +66,49 @@ int far_si_continue_key(int event, struct si_context *ctx)
     return result;
 }
 
-void far_si_continue_enter(struct si_context *ctx)
+void far_si_continue_enter(struct game_context *ctx)
 {
     uint8_t was = mapped;
 
     far_bank(BANK_SETUP);
     si_continue_enter(ctx);
+    far_bank(was);
+}
+
+int far_snake2_handler(int event, struct game_context *ctx)
+{
+    uint8_t was = mapped;
+    int result;
+
+    far_bank(BANK_SNAKE);
+    result = snake2_handler(event, ctx);
+    far_bank(was);
+    return result;
+}
+
+void far_strip_present(uint8_t all)
+{
+    uint8_t was = mapped;
+
+    far_bank(BANK_SNAKE);
+    strip_present(all);
+    far_bank(was);
+}
+
+void far_zoom_present(uint8_t all)
+{
+    uint8_t was = mapped;
+
+    far_bank(BANK_SNAKE);
+    zoom_present(all);
+    far_bank(was);
+}
+
+void far_strip_leave(uint8_t scx, uint8_t write_map)
+{
+    uint8_t was = mapped;
+
+    far_bank(BANK_SNAKE);
+    strip_leave(scx, write_map);
     far_bank(was);
 }

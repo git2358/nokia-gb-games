@@ -58,21 +58,22 @@ GBA_LOGO_FROM ?=
 
 BUILD := build
 ASSETS := $(BUILD)/assets
-ASSET_SRC := $(ASSETS)/game_assets.c $(ASSETS)/si_data.c $(ASSETS)/si_tables.c
+ASSET_SRC := $(ASSETS)/game_assets.c $(ASSETS)/si_data.c $(ASSETS)/si_tables.c $(ASSETS)/snake2_data.c
 CORE_SRC := $(wildcard core/*.c)
 CORE_HDR := $(wildcard core/*.h)
 INCLUDES := -Icore -Iplatform/host -I$(ASSETS)
 
 GB_ROM := $(BUILD)/nokia3310.gb
 GB_TEST_ROM := $(BUILD)/nokia3310-keys.gb
-# The four banks of the Game Boy ROM (see platform/gb/far.h).
-GB_BANK0 := platform/gb/main.c platform/gb/far.c platform/gb/strip.c core/lcd.c core/sprite.c core/games.c core/rand.c core/si_base.c core/sound.c $(ASSETS)/si_tables.c
+# The banks of the Game Boy ROM (see platform/gb/far.h).
+GB_BANK0 := platform/gb/main.c platform/gb/far.c core/lcd.c core/sprite.c core/games.c core/rand.c core/si_base.c core/sound.c $(ASSETS)/si_tables.c
 GB_BANK1 := core/menu.c core/font.c platform/gb/save.c $(ASSETS)/game_assets.c
 GB_BANK2 := core/si.c
 GB_BANK3 := core/si_setup.c $(ASSETS)/si_data.c
+GB_BANK4 := core/snake2.c $(ASSETS)/snake2_data.c platform/gb/strip.c
 gb_rels = $(patsubst %.c,$(BUILD)/gb/$(1)/%.rel,$(notdir $(2)))
 GB_RELS := $(call gb_rels,0,$(filter-out platform/gb/main.c,$(GB_BANK0))) $(call gb_rels,1,$(GB_BANK1)) \
-	$(call gb_rels,2,$(GB_BANK2)) $(call gb_rels,3,$(GB_BANK3))
+	$(call gb_rels,2,$(GB_BANK2)) $(call gb_rels,3,$(GB_BANK3)) $(call gb_rels,4,$(GB_BANK4))
 GBA_ROM := $(BUILD)/nokia3310.gba
 GBA_TEST_ROM := $(BUILD)/nokia3310-keys.gba
 # Keys a test ROM presses at power-on (see menu_script in core/menu.c), for
@@ -92,7 +93,7 @@ GOLDEN_SEED := a335
 GOLDEN_SECONDS := 40
 GOLDEN_KEYS := enter,wait1000,enter,wait1200,up,up,up,up,up,wait800,enter,wait1500,down,wait600,enter,wait2500,enter,wait4000,1,wait400,1,wait400,8,8,8,1,wait400,0,0,0,0,1,wait300,3,wait300,4,wait2000,1,wait500,1,wait6000
 
-.PHONY: help dump install-roms phone phone-window assets test sheet frames golden check-golden check-menus gb check-gb shot-gb run-gb cards gba check-gba shot-gba run-gba clean
+.PHONY: help dump install-roms phone phone-window assets test sheet frames golden golden-snake check-golden check-menus gb check-gb shot-gb run-gb cards gba check-gba shot-gba run-gba clean
 
 help:
 	@echo "make dump      rebuild $(DUMP) from the Wintesla files in FLASH_FILES=$(FLASH_FILES)"
@@ -103,7 +104,8 @@ help:
 	@echo "make sheet     draw the extracted sprites and tiles to $(BUILD)/sheet_*.pgm"
 	@echo "make frames    write the host reference frames to $(BUILD)/frame_*.pgm"
 	@echo "make golden    record the reference Space Impact run in MAME into $(GOLDEN)/"
-	@echo "make check-golden replay that run through the core and compare every frame"
+	@echo "make golden-snake record two Snake II games in MAME into golden/snake2-*/"
+	@echo "make check-golden replay the recorded runs through the core and compare every frame"
 	@echo "make check-menus compare the menu pages with the phone's in golden/menus/"
 	@echo "make gb        build $(GB_ROM)"
 	@echo "make check-gb  run the Game Boy ROM headlessly and compare its screen with the host's"
@@ -152,7 +154,7 @@ assets: $(ASSET_SRC)
 $(ASSETS)/game_assets.c: tools/extract_assets.py
 	$(PYTHON) tools/extract_assets.py "$(DUMP)" $(ASSETS)
 
-$(ASSETS)/si_data.c $(ASSETS)/si_tables.c: $(ASSETS)/game_assets.c
+$(ASSETS)/si_data.c $(ASSETS)/si_tables.c $(ASSETS)/snake2_data.c: $(ASSETS)/game_assets.c
 
 $(BUILD)/test_core: tests/test_core.c core/lcd.c core/rand.c core/sprite.c $(CORE_HDR)
 	@mkdir -p $(BUILD)
@@ -198,12 +200,44 @@ golden:
 $(BUILD)/replay: platform/host/replay_main.c platform/host/pgm.c $(GAME_SRC) $(CORE_HDR) $(ASSET_SRC)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/replay_main.c platform/host/pgm.c $(GAME_SRC) $(ASSET_SRC)
 
-# Skipped when the reference run has not been recorded.
+# Snake II's reference runs: the firmware's own game played by the fork's
+# probe, which steers the snake to the food and the creatures and, after
+# so many meals, into itself. Its steering is written to the game's state
+# and logged; the replay hands the game the key for each turn instead. A
+# run is NAME:LEVEL:MAZE:MEALS:SECONDS[:SWITCHES], the maze 0 for none and
+# the switches more of the probe's, comma-separated. a's ring goes round
+# before the end, so its dead snake does not blink; c leaves a creature to
+# run out and turns the snake free once in its short tick.
+SNAKE_GOLDENS ?= a:5:0:30:150 b:9:2:14:90 c:2:0:6:150:S2_IGNORE_CREATURE=1,S2_SAVE_ONCE=1
+SNAKE_KEYS := enter,wait1000,enter,wait1200,up,up,up,up,up,wait800,enter,wait1000,enter,wait1500,enter,wait1500,enter,wait1000
+
+golden-snake:
+	@test -x $(DCT3_RE)/mame/mame || { echo "Missing $(DCT3_RE)/mame/mame: build the fork first"; exit 1; }
+	@for run in $(SNAKE_GOLDENS); do \
+		set -- $$(echo $$run | tr : ' '); dir=golden/snake2-$$1; \
+		rm -rf run_golden_snake && mkdir -p run_golden_snake $$dir && \
+		$(MAKE) -C $(DCT3_RE) run-keys GAMES_PRODUCT=3310 RUN_DIR=$(abspath run_golden_snake) SECONDS=$$5 KEYS=$(SNAKE_KEYS) \
+			RUN_ENV="S2_AUTO=1 S2_AUTO_FROM=17 S2_LEVEL=$$2 S2_MAZE=$$3 S2_DIE_AFTER=$$4 $$(echo $$6 | tr , ' ')" \
+			RUN_EXTRA_ARGS="-autoboot_script $(abspath $(DCT3_RE))/mame_nokia_3310_snake2_probe.lua -debug -debugger none" || exit 1; \
+		cp run_golden_snake/nokia_dct3_lcdmirror_*.pgm $$dir/ && \
+		awk 'BEGIN{k[0]="d";k[1]="b";k[2]="f";k[3]="11"} /^GEV 0 2b/{on=1} on && /^GEV 0 /{print $$3} on && /S2KEY/{print k[$$NF]}' \
+			run_golden_snake/error.log | tr '\n' ' ' > $$dir/events.txt && \
+		echo "$$2 $$(($$3 + 1))" > $$dir/setup.txt; \
+	done
+
+# Skipped when the reference runs have not been recorded. Snake II starts
+# from the seed the phone has after power-on, 1.
 check-golden: $(BUILD)/replay
 	@if [ -f $(GOLDEN)/events.txt ]; then \
 		out=$$(mktemp -d) && $(BUILD)/replay $(GOLDEN)/events.txt $$out $(GOLDEN_SEED) && \
 		$(PYTHON) tools/check_replay.py $$out $(GOLDEN); \
 	else echo "no $(GOLDEN)/events.txt: run make golden; skipped"; fi
+	@for dir in golden/snake2-*; do \
+		if [ -f $$dir/events.txt ]; then \
+			out=$$(mktemp -d) && $(BUILD)/replay $$dir/events.txt $$out 1 0 $$(cat $$dir/setup.txt) && \
+			$(PYTHON) tools/check_replay.py $$out $$dir || exit 1; \
+		else echo "no $$dir/events.txt: run make golden-snake; skipped"; fi; \
+	done
 
 # The menu pages against frames of the phone's own, captured in MAME with
 # the phone set to English and named after the host frame they must equal.
@@ -217,8 +251,11 @@ FORCE:
 
 vpath %.c core platform/gb $(ASSETS)
 
+# main.c reaches the game at 2x in bank 4 through far.c.
+GB_MAIN_FAR := -Dstrip_present=far_strip_present -Dzoom_present=far_zoom_present -Dstrip_leave=far_strip_leave
+
 # games.c reaches the game in bank 2 through far.c.
-$(BUILD)/gb/0/games.rel: GB_EXTRA := -Dsi_handler=far_si_handler
+$(BUILD)/gb/0/games.rel: GB_EXTRA := -Dsi_handler=far_si_handler -Dsnake2_handler=far_snake2_handler
 
 $(BUILD)/gb/0/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
 	@mkdir -p $(BUILD)/gb/0
@@ -236,23 +273,27 @@ $(BUILD)/gb/3/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
 	@mkdir -p $(BUILD)/gb/3
 	$(SDCC) $(GB_CFLAGS) --codeseg CODE_3 -c $< -o $@
 
+$(BUILD)/gb/4/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
+	@mkdir -p $(BUILD)/gb/4
+	$(SDCC) $(GB_CFLAGS) --codeseg CODE_4 -c $< -o $@
+
 # The layer itself twice: once pressing no keys, once pressing KEYS.
 $(BUILD)/gb/0/main.rel $(BUILD)/gb/0/main-keys.rel: platform/gb/main.c $(CORE_HDR) $(ASSET_SRC) FORCE
 	@mkdir -p $(BUILD)/gb/0
-	$(SDCC) $(GB_CFLAGS) '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -c $< -o $@
+	$(SDCC) $(GB_CFLAGS) $(GB_MAIN_FAR) '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -c $< -o $@
 
 $(BUILD)/gb/%.rel: platform/gb/%.s
 	@mkdir -p $(BUILD)/gb
 	$(SDAS) -o $@ $<
 
-# MBC5 with its rumble pin and battery-backed RAM, four ROM banks and 8 KiB
-# of RAM. The linker does not mind the first bank running over into the
+# MBC5 with its rumble pin and battery-backed RAM, eight ROM banks (five
+# used) and 8 KiB of RAM. The linker does not mind the first bank running over into the
 # second, so its end is checked here.
 $(BUILD)/nokia3310%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/draw.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
-	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 -Wl-b_CODE_3=0x34000 \
+	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 -Wl-b_CODE_3=0x34000 -Wl-b_CODE_4=0x44000 \
 		-o $(BUILD)/gb/$(basename $(notdir $@)).ihx $^
 	@$(PYTHON) tools/gb_bank_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
-	$(MAKEBIN) -Z -yn NOKIA3310 -yt 0x1e -yo 4 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
+	$(MAKEBIN) -Z -yn NOKIA3310 -yt 0x1e -yo 8 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
 
 .SECONDARY: $(GB_RELS) $(BUILD)/gb/crt0.rel $(BUILD)/gb/draw.rel
 

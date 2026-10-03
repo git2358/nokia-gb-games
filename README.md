@@ -3,9 +3,10 @@
 ![The first screen, the list of games and Space Impact being played, on the Game Boy and the Game Boy Advance, each in the phone-sized mode and in full screen, with blank panels for the games not here yet: Snake II, Bantumi and Pairs II](docs/banner.png)
 
 The Nokia 3310 (NHM-5 v6.39) follow-up to
-<https://github.com/lukesau/nokia-3210-games>: Space Impact re-implemented
-in C from a map of the firmware, behind the phone's own Games menus, with
-the levels, sprites, fonts and text read from your own dump at build time.
+<https://github.com/lukesau/nokia-3210-games>: Space Impact and Snake II
+re-implemented in C from a map of the firmware, behind the phone's own
+Games menus, with the levels, mazes, sprites, fonts and text read from your
+own dump at build time.
 One portable core runs on the host, as a Game Boy ROM (`.gb`) and as a
 Game Boy Advance ROM (`.gba`).
 
@@ -27,7 +28,14 @@ What is there so far:
 - the Games menu's Settings: the phone's four pages, Sounds, Lights, Shakes
   and Club Nokia ID, with their Off and On lists and the Done note. Sounds
   and Shakes do what they say; Lights is kept but does nothing, and the
-  score ID has no ID. All are kept in cartridge RAM with the top score.
+  score ID has no ID. All are kept in cartridge RAM with the top score;
+- Snake II: its menu with Level (the nine bars), Mazes (No maze and the
+  five mazes, with the note that one was chosen), Top score and
+  Instructions; the game on the 20 by 9 board with its speeds, mazes,
+  food, the small creatures and their countdown, the fat swallowed piece,
+  the one short tick a turn can save the snake in, the blinking death and
+  its three sounds, and the same rumble on every meal and at the end. The
+  level and the maze are kept with its top score.
 
 Start on the first screen picks a full-screen mode instead, as in the 3210
 project: the port's own menus laid out for the console's whole screen in
@@ -38,17 +46,19 @@ width, so the last four are left off: nothing of the score, which ends at
 column 75, but enemies come on four columns late and the ship can fly its
 nose out of sight.
 
-| | Menus | Space Impact |
-|---|---|---|
-| D-pad | up and down | move the ship |
-| A | select | fire |
-| B | back | special weapon |
-| Start, Select | select | pause |
+| | Menus | Space Impact | Snake II |
+|---|---|---|---|
+| D-pad | up and down | move the ship | steer (2, 4, 6, 8) |
+| A | select | fire | turn clockwise (#) |
+| B | back | special weapon | turn anticlockwise (*) |
+| Start, Select | select | pause | pause |
 
-What is not: Snake II, Bantumi and Pairs II are in the list but do
-nothing, and Space Impact's title animation is not shown. A paused game
-continues exactly where it stopped, where the phone gives the ship a
-second and a half of shield.
+What is not: Bantumi and Pairs II are in the list but do nothing, and the
+games' title animations are not shown. A paused Space Impact continues
+exactly where it stopped, where the phone gives the ship a second and a
+half of shield; a paused Snake II waits for a key, as on the phone. Snake
+II's large animated creature never comes: the phone lets it come only when
+a setting the port does not have is on, and in MAME it never does.
 
 ## Firmware policy
 
@@ -146,9 +156,10 @@ keys, so only the button pressed last counts.
 
 ```
 make check-menus                 # the menu pages against the phone's own, to the pixel
-make check-golden                # the game against a recorded run of the firmware (below)
+make check-golden                # the games against recorded runs of the firmware (below)
 make check-gb                    # the .gb in SameBoy against the host's frames, and its speed
 make check-gb KEYS=a3sdss        # the same in the full-screen mode's 2x, starting at the fourth level
+make check-gb KEYS=asss          # Snake II in the full-screen mode
 make check-gba                   # the .gba in mGBA against the host's frames
 make shot-gb KEYS=sds            # a screenshot after scripted keys
 ```
@@ -160,8 +171,13 @@ the phone's pace.
 
 `golden/menus/` holds frames of the phone's menus captured in MAME with
 the phone switched to English (Menu, 6, 2, 1, up, Select), each named
-after the host frame it must equal. The Top score page's two frames show
-the 4075 the PMM dump holds and differ from the port's 0 by design.
+after the host frame it must equal; those that start a game begin with
+`z`, the seed the phone has after power-on. The phone shows its games'
+title animations before their menus, which the port does not, so the
+keys differ there. Space Impact's Top score page's two frames show the
+4075 the PMM dump holds and differ from the port's 0 by design. The other
+frames, Snake II's menus and Level, Mazes and Instructions pages among
+them, are equal to the pixel.
 
 The rumble is checked the same way: `build/gb_run ... rumble 1400` prints
 each frame the motor was on for, and `build/gba_shot` prints every switch
@@ -184,13 +200,17 @@ over the terrain, a ship or a shot, that cell gets a tile of its own made
 from the picture, so what is shown is still the phone's picture to the
 pixel; `make check-gb` holds it to that.
 
+Snake II has no terrain, and at 2x all six bands of its picture are made
+into twelve rows of tiles, of which only those that changed are made
+again.
+
 When a tick still takes longer to show than the 93 ms between ticks, the
 game keeps the phone's pace and shows fewer pictures: every tick is
 played, not every one is drawn.
 
-The ROM is four 16 KiB banks on an MBC5 with 8 KiB of battery-backed RAM
-(`platform/gb/far.h` says what is where); MBC5 for its rumble pin, see
-below. Space Impact's 7 KiB of data is
+The ROM is 16 KiB banks on an MBC5 with 8 KiB of battery-backed RAM, five
+of eight banks used (`platform/gb/far.h` says what is where); MBC5 for
+its rumble pin, see below. Space Impact's 7 KiB of data is
 copied from the ROM to cartridge RAM at power-on, because both the game
 and the sprite code, which are in different banks, read it. The save file
 therefore holds a copy of that data next to the top score.
@@ -199,7 +219,7 @@ therefore holds a copy of that data next to the top score.
 
 The sounds are read from the dump with the rest: each is a short run of
 notes for the phone's buzzer, a pitch and a length in the units of the
-phone's timers, 7.8 ms. The notes are too short to be timed by screen
+phone's timers, 7.8 ms, with rests and repeats in Snake II's death. The notes are too short to be timed by screen
 frames, two units for most, so both consoles keep a timer that interrupts
 once a unit, and play the notes as a square wave on their second pulse
 channel. A sound that starts while another plays takes its place, as on
@@ -224,9 +244,10 @@ enough.
 ## Rumble
 
 Space Impact pulses the phone's vibrator when the ship is hit and when a
-boss explodes, for 62 of the phone's timer units, half a second, when
-Shakes in the games' settings is on; a hit during a pulse starts the half
-second over. The port does the same with whatever motor the cartridge has:
+boss explodes, and Snake II at every meal and when the snake dies, for 62
+of the phone's timer units, half a second, when Shakes in the games'
+settings is on; a pulse that starts during another starts the half second
+over. The port does the same with whatever motor the cartridge has:
 
 - on the GBA, through the cartridge's general-purpose port as the rumble
   cartridges (Drill Dozer, WarioWare: Twisted!) use it: pin 3 of the
@@ -259,27 +280,47 @@ follow the firmware's code but have not been compared with it running.
 The bosses were only checked by a bot that plays each level through on the
 host.
 
-The frames and the event log are derived from the firmware and stay in the
-ignored `golden/`.
+Snake II is checked the same way against two games the firmware played
+in MAME (`make golden-snake`, `SNAKE_GOLDENS` in the `Makefile`), steered
+by the MAME fork's `mame_nokia_3310_snake2_probe.lua`, which takes the
+snake to the food and the creatures and, after so many meals, into itself.
+It steers by writing the game's next direction, and logs each write; the
+replay hands the game the key that would have done it. The three games:
+
+- level 5, no maze, 30 meals and a death after the snake's ring of
+  segments has gone round, when the phone's dead snake does not blink;
+- level 9 on Maze 2, 14 meals;
+- level 2, no maze, creatures left alone, and a crash the snake is turned
+  out of in its one short tick before it crashes for good.
+
+Every picture of all three appears in order among MAME's: growth, the fat
+swallowed piece, creatures and their countdown, eating one and letting
+one run out, the wrap at the edges, walls, the saving tick, the death and
+the blinking.
+
+The frames and the event logs are derived from the firmware and stay in
+the ignored `golden/`.
 
 ## Layout
 
 - `core/` is portable C: `lcd` (framebuffer), `font`, `menu` (the phone's
   menus, its Settings pages and the full-screen ones), `sprite` (sprite
-  list and tile layer), `si`, `si_setup` and `si_base` (the game), `games`
+  list and tile layer), `si`, `si_setup` and `si_base` (Space Impact),
+  `snake2` (Snake II, which draws straight into the sprite layer's
+  picture), `game` (what the games and the menus share), `games`
   (keys and timers to game events, the settings the games follow and the
   vibrator's timer), `sound` (the notes of the sound in progress), `rand`.
 - `platform/host/` has the tools above; `platform/gb/` and `platform/gba/`
   are the cartridges.
-- `tools/extract_assets.py` copies the game's data region, its sounds, the
+- `tools/extract_assets.py` copies the games' data regions, their sounds, the
   fonts, the English text and the menus' pictures, the Top score page's
   and the Done note's animations among them, out of the dump; the game
   reads its data by firmware address.
 - `tools/gb_run.c` runs a Game Boy ROM headlessly with scripted buttons,
   screenshots, sound capture, memory peeks and a profiler
   (`tools/gb_profile.py`).
-- The firmware map the core follows is `docs/games_applications_3310.md`
-  in the MAME fork.
+- The firmware maps the core follows are `docs/games_applications_3310.md`
+  and `docs/games_snake2_3310.md` in the MAME fork.
 
 `tools/export_fonts.py` and `tools/gb_audio.c` are unchanged copies from
 the 3210 project and are not used yet.

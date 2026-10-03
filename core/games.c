@@ -1,6 +1,7 @@
 #include "games.h"
 
 #include "si.h"
+#include "snake2.h"
 #include "sound.h"
 #include "sprite.h"
 
@@ -8,7 +9,12 @@ uint8_t games_over;
 uint32_t games_score;
 struct game_options games_options = { 1, 1, 1 };
 
-static struct si_context ctx;
+static struct game_context ctx;
+uint8_t games_playing = GAME_SPACE_IMPACT;
+#define playing games_playing
+/* A continued game stands still until a key is pressed, as Snake II does
+   on the phone. */
+static uint8_t waiting;
 
 /* Units left on the phone's three game timers; 0 is stopped. */
 static uint16_t tick_timer, one_shot_timer, repeat_timer;
@@ -43,35 +49,59 @@ static uint16_t units(uint16_t ms)
     return last_units;
 }
 
+static int handle(int event)
+{
+    if (playing == GAME_SNAKE)
+        return snake2_handler(event, &ctx);
+    return si_handler(event, &ctx);
+}
+
+/* The one-shot timer from the context; 0 ms runs out at the next unit. */
+static uint16_t one_shot_units(void)
+{
+    uint16_t n = units(ctx.one_shot);
+
+    return n ? n : 1;
+}
+
 static uint8_t deliver(int event, uint8_t from)
 {
-    int result = si_handler(event, &ctx);
+    int result = handle(event);
     uint8_t draw = 1;
 
     switch (result) {
-    case SI_RESULT_GAME_OVER:
+    case GAME_RESULT_GAME_OVER:
         games_over = 1;
         games_score = ctx.score;
         tick_timer = one_shot_timer = repeat_timer = 0;
         return 1;
-    case SI_RESULT_RESTART_TIMERS:
+    case GAME_RESULT_RESTART_TIMERS:
         tick_timer = units(ctx.period);
         one_shot_timer = units(ctx.one_shot);
         if (from == FROM_KEY)
             repeat_timer = REPEAT_UNITS;
         return 1;
-    case SI_RESULT_RESTART_TICK:
+    case GAME_RESULT_RESTART_TICK:
         tick_timer = units(ctx.period);
         if (from == FROM_TICK)
             from = FROM_OTHER;
         break;
-    case SI_RESULT_SOUND:
+    case GAME_RESULT_SOUND:
         if (games_options.sounds)
             sound_play((uint8_t)ctx.sound);
         break;
-    case SI_RESULT_REDRAW:
+    case GAME_RESULT_ONE_SHOT_SOUND:
+        if (games_options.sounds)
+            sound_play((uint8_t)ctx.sound);
+        /* fall through */
+    case GAME_RESULT_ONE_SHOT:
+        one_shot_timer = one_shot_units();
+        if (from == FROM_TIMER)
+            from = FROM_OTHER;
         break;
-    case SI_RESULT_NONE:
+    case GAME_RESULT_REDRAW:
+        break;
+    case GAME_RESULT_NONE:
         draw = 0;
         break;
     default:
@@ -87,20 +117,47 @@ static uint8_t deliver(int event, uint8_t from)
     return draw;
 }
 
-void games_start(void)
+void games_setup(uint8_t game, uint8_t level, uint8_t option)
 {
+    playing = game;
+    ctx.level = level;
+    ctx.option = option;
+}
+
+void games_start(uint8_t game, uint8_t level, uint8_t option)
+{
+    games_setup(game, level, option);
     games_over = 0;
     games_score = 0;
     held_key = 0;
+    waiting = 0;
     one_shot_timer = repeat_timer = 0;
-    deliver(SI_EVENT_START, FROM_OTHER);
+    deliver(GAME_EVENT_START, FROM_OTHER);
     tick_timer = units(ctx.period);
+}
+
+void games_continue(void)
+{
+    if (playing != GAME_SNAKE)
+        return;
+    deliver(GAME_EVENT_RESUME, FROM_OTHER);
+    /* The phone stops the game's timers when it leaves it and starts the
+       tick again at the first key. A snake that has died has no period to
+       wait for, and its timers run on here. */
+    if (ctx.period) {
+        tick_timer = one_shot_timer = repeat_timer = 0;
+        waiting = 1;
+    }
 }
 
 uint8_t games_key_down(uint8_t key)
 {
     if (games_over)
         return 0;
+    if (waiting) {
+        waiting = 0;
+        tick_timer = units(ctx.period);
+    }
     held_key = key;
     return deliver(key, FROM_KEY);
 }
@@ -117,11 +174,11 @@ uint8_t games_advance(uint16_t n)
 
     for (; n && !games_over; n--) {
         if (tick_timer && !--tick_timer)
-            draw |= deliver(SI_EVENT_TICK, FROM_TICK);
+            draw |= deliver(GAME_EVENT_TICK, FROM_TICK);
         if (one_shot_timer && !--one_shot_timer)
-            draw |= deliver(SI_EVENT_TIMER, FROM_TIMER);
+            draw |= deliver(GAME_EVENT_TIMER, FROM_TIMER);
         if (repeat_timer && !--repeat_timer && held_key)
-            draw |= deliver(held_key | SI_KEY_REPEAT, FROM_KEY);
+            draw |= deliver(held_key | GAME_KEY_REPEAT, FROM_KEY);
     }
     return draw;
 }
@@ -164,17 +221,24 @@ uint8_t games_elapse(uint16_t us)
 
 uint8_t games_event(int event)
 {
-    int result = si_handler(event, &ctx);
+    int result = handle(event);
 
-    if (result == SI_RESULT_GAME_OVER) {
+    if (result == GAME_RESULT_GAME_OVER) {
         games_over = 1;
         games_score = ctx.score;
     }
-    return result != SI_RESULT_NONE && result != SI_RESULT_UNUSED;
+    return result != GAME_RESULT_NONE && result != GAME_RESULT_UNUSED;
+}
+
+void games_render(void)
+{
+    /* Snake II draws into the picture as it goes. */
+    if (playing != GAME_SNAKE)
+        sprite_render();
 }
 
 void games_draw(uint8_t all)
 {
-    sprite_render();
+    games_render();
     sprite_present(all);
 }

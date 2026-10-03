@@ -1,4 +1,4 @@
-/* The layer between a platform and the game: it turns keys and elapsed
+/* The layer between a platform and the games: it turns keys and elapsed
    time into the game's events and acts on what the game's handler returns,
    as the phone's games application does. */
 #ifndef CORE_GAMES_H
@@ -15,14 +15,21 @@
    only run when its switch is on. menu.c loads and keeps them. */
 extern struct game_options games_options;
 
+/* The game being played or last played, a GAME_ code. */
+extern uint8_t games_playing;
+
 /* Nonzero once the game has ended; games_score is then its score. */
 extern uint8_t games_over;
 extern uint32_t games_score;
 
-/* Starts a new game of Space Impact. */
-void games_start(void);
+/* Starts a new game: a GAME_ code, the phone's level setting plus one
+   and its option setting plus one (Snake II's maze). */
+void games_start(uint8_t game, uint8_t level, uint8_t option);
 
-/* A key went down (an SI_KEY_ code) or the held key came up. One key is
+/* The game goes on after a pause. */
+void games_continue(void);
+
+/* A key went down (an GAME_KEY_ code) or the held key came up. One key is
    held at a time, as on the phone's keypad. Returns nonzero when the
    screen needs drawing. */
 uint8_t games_key_down(uint8_t key);
@@ -37,9 +44,16 @@ uint8_t games_advance(uint16_t units);
    drawing. */
 uint8_t games_elapse(uint16_t us);
 
+/* Picks the game, level and option games_event delivers to, as
+   games_start does, without starting it. */
+void games_setup(uint8_t game, uint8_t level, uint8_t option);
+
 /* Delivers one event straight to the game, for replaying a recorded
    sequence. Returns nonzero when the screen needs drawing. */
 uint8_t games_event(int event);
+
+/* Brings sprite_screen up to date with the game. */
+void games_render(void);
 
 /* Draws the game into the LCD view; with `all`, not just what changed. */
 void games_draw(uint8_t all);

@@ -15,6 +15,7 @@
 #include "far.h"
 #include "game.h"
 #include "game_assets.h"
+#include "games.h"
 #include "lcd.h"
 #include "menu.h"
 #include "si.h"
@@ -195,7 +196,10 @@ void sprite_present(uint8_t all)
     if (direct != mode)
         all = 1;
     if (mode == DIRECT_ZOOM) {
-        strip_present(all);
+        if (games_playing == GAME_SNAKE)
+            zoom_present(all);
+        else
+            strip_present(all);
     } else {
         if (all) {
             /* The tiles hold a menu, or nothing: clear them all and make

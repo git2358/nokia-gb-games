@@ -5,10 +5,10 @@ Usage: extract_assets.py DUMP OUT_DIR
 
 DUMP is the 2 MiB flash image `make dump` writes (3310f639e.fls), or the
 16-bit byte-swapped form the static tools use; it is identified by hash.
-Writes OUT_DIR/game_assets.h and three sources: si_data.c (the game's data
-region), si_tables.c (its small tables and its sounds) and game_assets.c
-(the menus' fonts, text and pictures), apart so that a platform can place
-them apart.
+Writes OUT_DIR/game_assets.h and four sources: si_data.c (Space Impact's
+data region), si_tables.c (its small tables and the games' sounds),
+snake2_data.c (Snake II's data region) and game_assets.c (the menus' fonts,
+text and pictures), apart so that a platform can place them apart.
 The output is derived from the firmware and must stay in an ignored
 directory.
 
@@ -29,18 +29,26 @@ SHA256_RAW = "975ec791205f026d647254ee772d7fa32691fa50c72a68eecdaff7c8a5921442"
 # Tilemaps, spawn lists, level headers, y paths, tiles, sprite bitmaps and
 # descriptors, HUD icons and the object templates.
 DATA_START, DATA_END = 0x311740, 0x313384
+# Snake II's data: its bitmaps and their descriptors, the maze walls, the
+# speeds and the maze records, referring to each other by absolute address
+# as Space Impact's do; see core/snake2_data.h and the MAME fork's
+# docs/games_snake2_3310.md.
+SNAKE2_START, SNAKE2_END = 0x327D4C, 0x328168
 # Initialised-data images of tables the firmware keeps in RAM.
 DIGIT_GLYPHS = (0x2F2320, 40)  # ten 4x5 digits, 4 bytes each
 LEVEL_TABLE = (0x2F30D4, 8)  # pointers to the level headers
 TYPE_FRAMES = (0x2F3108, 37)  # per object type, pointer to its sprite descriptors
 
 # The phone's sounds, by id: 8-byte records that start with the address of
-# a tone script. The game's are a zero byte, the command 9, pairs of note
-# and length, and the command 11.
+# a tone script. The games' are a zero byte, the command 9, pairs of note
+# and length, and the command 11; a note of 0x40 is a rest, and the
+# commands 5 n ... 6 play what they enclose n times.
 SOUND_TABLE = 0x321E6C
-SOUND_IDS = [0x17, 0x18, 0x19, 0x1A, 0x1F]  # the SI_SOUND_ codes of core/si.h
+SOUND_IDS = [0x17, 0x18, 0x19, 0x1A, 0x1F, 0x20, 0x22]  # the games' SOUND_ codes
 NOTE_FIRST, NOTE_LAST = 0x7C, 0xAB  # 440 Hz and 47 semitones above it
-SCRIPT_END = 0x0B
+NOTE_REST = 0x40
+SCRIPT_END, SCRIPT_REPEAT, SCRIPT_AGAIN = 0x0B, 0x05, 0x06
+SOUND_REST = 0xFE  # core/sound.h
 
 # Pictures the phone's menus use, as strips of 8 rows with a byte per column.
 PICTURES = [
@@ -85,6 +93,17 @@ STRINGS = [
     ("text_game_over_top_score", 576),
     ("text_game_over_score", 578),
     ("text_help_space_impact", 1332),
+    ("text_help_snake", 1331),
+    ("text_level", 556),
+    ("text_level_value", 538),
+    ("text_mazes", 533),
+    ("text_no_maze", 544),
+    ("text_maze_1", 539),
+    ("text_maze_2", 540),
+    ("text_maze_3", 541),
+    ("text_maze_4", 542),
+    ("text_maze_5", 543),
+    ("text_maze_selected", 546),
 ]
 
 
@@ -202,11 +221,12 @@ def c_refs(name, pointers):
 
 
 def extract_sounds(image):
-    """Returns the game's sounds as one run of bytes and, by id less the
+    """Returns the games' sounds as one run of bytes and, by id less the
     first id, each sound's place in it (0xff for an id that is not the
-    game's). A sound is pairs of note, in semitones above 440 Hz, and
-    length in timer units, ended by 0xff. Notes of one pitch in a row are
-    made one, as the phone's buzzer sounds them."""
+    games'). A sound is pairs of note, in semitones above 440 Hz or
+    SOUND_REST, and length in timer units, ended by 0xff. Repeats are
+    written out, and notes of one pitch in a row are made one, as the
+    phone's buzzer sounds them."""
     scripts, places = bytearray(), [0xFF] * (SOUND_IDS[-1] - SOUND_IDS[0] + 1)
     for sound in SOUND_IDS:
         record = SOUND_TABLE + sound * 8 - FLASH_BASE
@@ -214,16 +234,32 @@ def extract_sounds(image):
         if image[at:at + 2] != b"\x00\x09":
             sys.exit(f"sound {sound:#x} is not a plain run of notes")
         at += 2
-        notes = []
+        steps, repeat = [], None
         while image[at] != SCRIPT_END:
+            if image[at] == SCRIPT_REPEAT:
+                repeat = (len(steps), image[at + 1])
+                at += 2
+                continue
+            if image[at] == SCRIPT_AGAIN and repeat:
+                first, times = repeat
+                steps += steps[first:] * (times - 1)
+                repeat = None
+                at += 1
+                continue
             note, length = image[at], image[at + 1]
-            if not NOTE_FIRST <= note <= NOTE_LAST or not length:
+            if note == NOTE_REST and length:
+                steps.append((SOUND_REST, length))
+            elif NOTE_FIRST <= note <= NOTE_LAST and length:
+                steps.append((note - NOTE_FIRST, length))
+            else:
                 sys.exit(f"sound {sound:#x} has something other than a note at 0x{at + FLASH_BASE:06x}")
-            if notes and notes[-1][0] == note - NOTE_FIRST and notes[-1][1] + length < 256:
+            at += 2
+        notes = []
+        for note, length in steps:
+            if notes and notes[-1][0] == note and notes[-1][1] + length < 256:
                 notes[-1][1] += length
             else:
-                notes.append([note - NOTE_FIRST, length])
-            at += 2
+                notes.append([note, length])
         places[sound - SOUND_IDS[0]] = len(scripts)
         scripts += bytes(b for note in notes for b in note) + b"\xff"
     return bytes(scripts), bytes(places)
@@ -243,6 +279,7 @@ def main():
         return [int.from_bytes(at(addr + 4 * i, 4), "big") for i in range(count)]
 
     data = at(DATA_START, DATA_END - DATA_START)
+    snake2 = at(SNAKE2_START, SNAKE2_END - SNAKE2_START)
     levels = words(*LEVEL_TABLE)
     frames = words(*TYPE_FRAMES)
     sounds, sound_places = extract_sounds(image)
@@ -255,6 +292,10 @@ def main():
 #define GAME_ASSETS_H
 
 #include <stdint.h>
+
+#define SNAKE2_DATA_BASE 0x{SNAKE2_START:06x}ul
+#define SNAKE2_DATA_SIZE {len(snake2)}
+extern const uint8_t snake2_data[SNAKE2_DATA_SIZE];
 
 #define SI_DATA_BASE 0x{DATA_START:06x}ul
 #define SI_DATA_SIZE {len(data)}
@@ -274,6 +315,7 @@ extern const uint8_t si_sound_places[{len(sound_places)}];
 """
     banner = '/* Generated by tools/extract_assets.py from the firmware dump. Do not commit. */\n#include "game_assets.h"'
     (out / "si_data.c").write_text("\n\n".join([banner, c_bytes("si_data", data)]) + "\n")
+    (out / "snake2_data.c").write_text("\n\n".join([banner, c_bytes("snake2_data", snake2)]) + "\n")
     (out / "si_tables.c").write_text("\n\n".join([
         banner,
         c_bytes("si_digit_glyphs", at(*DIGIT_GLYPHS)),

@@ -1,7 +1,8 @@
 /* What the cartridge RAM keeps between power cycles, for the menus (bank
    1, as they are). It starts with the settings: a two-byte signature, then
    one four-byte record per game laid out as the phone stores them: top
-   score high byte, low byte, level, and a check byte; then the games'
+   score high byte, low byte, level (the option in its top four bits:
+   Snake II's maze) and a check byte; then the games'
    settings as one byte of switches (Sounds, Lights, Shakes in bits 0 to 2)
    and its check byte. main.c enables the RAM at power-on and copies Space
    Impact's data behind this. */
@@ -22,9 +23,11 @@ uint8_t platform_settings_load(uint8_t game, struct game_settings *out)
 
     out->top_score = 0;
     out->level = 0;
+    out->option = 0;
     if (SAVE[0] == SAVE_SIGNATURE_0 && SAVE[1] == SAVE_SIGNATURE_1 && record[3] == SAVE_CHECK(record)) {
         out->top_score = (uint16_t)(record[0] << 8 | record[1]);
-        out->level = record[2];
+        out->level = record[2] & 15;
+        out->option = record[2] >> 4;
         return 1;
     }
     return 0;
@@ -38,7 +41,7 @@ void platform_settings_save(uint8_t game, const struct game_settings *in)
     SAVE[1] = SAVE_SIGNATURE_1;
     record[0] = (uint8_t)(in->top_score >> 8);
     record[1] = (uint8_t)in->top_score;
-    record[2] = in->level;
+    record[2] = (uint8_t)(in->level | in->option << 4);
     record[3] = SAVE_CHECK(record);
 }
 

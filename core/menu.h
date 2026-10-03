@@ -47,8 +47,10 @@ void menu_seed(uint16_t seed);
 
 /* Plays scripted keys, drawing after each as a platform does: u, d, l, r,
    s the Navi key (A), b back (B), a Start, e Select, w a second of time,
-   t a tenth of one, p start over as after a power cycle, and 1 to 7 to
-   have new games start at that level (the phone's second to eighth). */
+   t a tenth of one, p start over as after a power cycle, 1 to 7 to have
+   new games of Space Impact start at that level (the phone's second to
+   eighth), and z to start games from the seed the phone has after
+   power-on. */
 void menu_script(const char *keys);
 
 #endif

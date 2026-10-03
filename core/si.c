@@ -17,44 +17,44 @@ static void shield_follow(void)
         sprite_move(si.shield, sprites[si.ship].x - 2, sprites[si.ship].y - 2);
 }
 
-static void request_sound(struct si_context *ctx, uint16_t sound)
+static void request_sound(struct game_context *ctx, uint16_t sound)
 {
     ctx->sound = sound;
     if (!si.pending)
-        si.pending = SI_RESULT_SOUND;
+        si.pending = GAME_RESULT_SOUND;
 }
 
-static void key(int event, struct si_context *ctx)
+static void key(int event, struct game_context *ctx)
 {
     const struct sprite *ship = &sprites[si.ship];
-    int repeat = event & SI_KEY_REPEAT ? 1 : 0;
+    int repeat = event & GAME_KEY_REPEAT ? 1 : 0;
     int x = ship->x, y = ship->y;
 
     if (si.ship_lost == 1)
         return;
-    switch (event & ~SI_KEY_REPEAT) {
-    case SI_KEY_STAR: /* left */
+    switch (event & ~GAME_KEY_REPEAT) {
+    case GAME_KEY_STAR: /* left */
         if (x <= repeat + 1)
             return;
         x = x - repeat - 1;
         break;
-    case SI_KEY_HASH: /* right */
+    case GAME_KEY_HASH: /* right */
         if (0x49 - repeat <= x)
             return;
         x = x + repeat + 1;
         break;
-    case SI_KEY_8: /* up */
+    case GAME_KEY_8: /* up */
         if (si.terrain.top == TERRAIN_TOP ? y <= repeat + 1 : si.terrain.top != 0 || y <= repeat + si.top)
             return;
         y = y - repeat - 1;
         break;
-    case SI_KEY_0: /* down */
+    case GAME_KEY_0: /* down */
         if (si.terrain.top == 0 ? si.bottom - repeat + 9 <= y : si.terrain.top != TERRAIN_TOP || si.bottom - repeat - 7 <= y)
             return;
         y = y + repeat + 1;
         break;
-    case SI_KEY_1:
-    case SI_KEY_3:
+    case GAME_KEY_1:
+    case GAME_KEY_3:
         if (repeat) {
             if (si.repeats > 4)
                 return;
@@ -72,8 +72,8 @@ static void key(int event, struct si_context *ctx)
         si.repeats = 0;
         request_sound(ctx, SI_SOUND_SHOT);
         return;
-    case SI_KEY_4:
-    case SI_KEY_6:
+    case GAME_KEY_4:
+    case GAME_KEY_6:
         if (repeat || si.fire_cooldown || si.specials < 1)
             return;
         if (si.special != TYPE_BEAM) {
@@ -646,10 +646,10 @@ static void move_descend(uint16_t id, int speed)
         enemy_fire(id);
 }
 
-static void boss_destroyed(uint16_t id, struct si_context *ctx);
+static void boss_destroyed(uint16_t id, struct game_context *ctx);
 
 /* Bonuses and score. */
-static void award(int kind, int amount, struct si_context *ctx)
+static void award(int kind, int amount, struct game_context *ctx)
 {
     if (kind == TYPE_BONUS) {
         request_sound(ctx, SI_SOUND_BONUS);
@@ -717,7 +717,7 @@ static void random_frame(uint16_t id)
     si.objects[id].frame = si.objects[id].frames ? (uint8_t)(r % si.objects[id].frames) : 0;
 }
 
-static void boss_destroyed(uint16_t id, struct si_context *ctx)
+static void boss_destroyed(uint16_t id, struct game_context *ctx)
 {
     const struct sprite *sp = &sprites[id];
     int cx = (int16_t)(sp->x + (sp->image.w >> 1)), cy = (int16_t)(sp->y + (sp->image.h >> 1));
@@ -753,7 +753,7 @@ static void boss_destroyed(uint16_t id, struct si_context *ctx)
 }
 
 /* The beam's sweep: everything within three columns of it is hit. */
-static void beam_scan(struct si_context *ctx)
+static void beam_scan(struct game_context *ctx)
 {
     uint16_t id, next;
 
@@ -786,7 +786,7 @@ static void beam_scan(struct si_context *ctx)
 /* One step of every object after the terrain in the list: animation, the
    special cases, then the movement pattern. Returns early when the game
    is over. */
-static void objects_step(struct si_context *ctx)
+static void objects_step(struct game_context *ctx)
 {
     uint16_t id = sprites[si.terrain_sprite].next, next;
 
@@ -822,7 +822,7 @@ static void objects_step(struct si_context *ctx)
                 si_continue_enter(ctx);
             } else {
                 ctx->score = si.score;
-                si.pending = SI_RESULT_GAME_OVER;
+                si.pending = GAME_RESULT_GAME_OVER;
                 return;
             }
             continue;
@@ -1081,7 +1081,7 @@ static void boss_flash(uint16_t id)
     si_work.flashed = id;
 }
 
-static void ship_destroy(struct si_context *ctx)
+static void ship_destroy(struct game_context *ctx)
 {
     explode(si.ship);
     sprite_set_mode(si.ship, si.polarity);
@@ -1091,14 +1091,14 @@ static void ship_destroy(struct si_context *ctx)
     request_sound(ctx, SI_SOUND_SHIP_HIT);
 }
 
-static void enemy_destroyed(uint16_t id, struct si_context *ctx)
+static void enemy_destroyed(uint16_t id, struct game_context *ctx)
 {
     if (si.objects[id].no_score != 1)
         award(0x31, 10, ctx);
     explode(id);
 }
 
-static void collisions(struct si_context *ctx)
+static void collisions(struct game_context *ctx)
 {
     uint16_t id, next, hit;
 
@@ -1216,7 +1216,7 @@ static void collisions(struct si_context *ctx)
 /* After a boss: line the ship up with the top of the play area, fly it
    off to the right ever faster, then start the next level. Returns
    nonzero when that was the last level. */
-static int level_exit_step(struct si_context *ctx)
+static int level_exit_step(struct game_context *ctx)
 {
     struct sprite *ship = &sprites[si.ship];
 
@@ -1242,20 +1242,20 @@ static int level_exit_step(struct si_context *ctx)
     return 0;
 }
 
-static int tick(struct si_context *ctx)
+static int tick(struct game_context *ctx)
 {
     if (si.phase == PHASE_CONTINUE) {
         if (--si.countdown >= 0) {
             si_draw_number(si.terrain_sprite, (unsigned)si.countdown, 2);
-            return SI_RESULT_REDRAW;
+            return GAME_RESULT_REDRAW;
         }
         ctx->score = si.score;
-        return SI_RESULT_GAME_OVER;
+        return GAME_RESULT_GAME_OVER;
     }
     if (si.phase == PHASE_LEVEL_EXIT) {
         if (level_exit_step(ctx)) {
             ctx->score = si.score;
-            return SI_RESULT_GAME_OVER;
+            return GAME_RESULT_GAME_OVER;
         }
         shield_follow();
     }
@@ -1287,14 +1287,14 @@ static int tick(struct si_context *ctx)
     collisions(ctx);
     if (si.fire_cooldown)
         si.fire_cooldown = si.fire_cooldown == 2 ? 0 : (uint8_t)(si.fire_cooldown + 1);
-    return SI_RESULT_REDRAW;
+    return GAME_RESULT_REDRAW;
 }
 
-int si_handler(int event, struct si_context *ctx)
+int si_handler(int event, struct game_context *ctx)
 {
     uint8_t pending;
 
-    if (event == SI_EVENT_START || event == 0x24) {
+    if (event == GAME_EVENT_START || event == 0x24) {
         ctx->period = 100;
         ctx->one_shot = 0;
         return si_new_game(ctx);
@@ -1311,17 +1311,17 @@ int si_handler(int event, struct si_context *ctx)
         return pending;
     }
     switch (event) {
-    case SI_EVENT_TICK:
+    case GAME_EVENT_TICK:
         return tick(ctx);
-    case SI_EVENT_TIMER:
+    case GAME_EVENT_TIMER:
         if (si.shield) {
             object_free(si.shield);
             si.shield = 0;
         }
-        return SI_RESULT_NONE;
+        return GAME_RESULT_NONE;
     case 0x13: case 0x15: case 0x17: case 0x18: case 0x1a: case 0x1c: case 0x1d:
-        return SI_RESULT_UNUSED;
+        return GAME_RESULT_UNUSED;
     }
-    return SI_RESULT_NONE;
+    return GAME_RESULT_NONE;
 }
 

@@ -7,6 +7,7 @@
 #include "lcd.h"
 #include "rand.h"
 #include "si.h"
+#include "snake2.h"
 #include "version.h"
 
 /* Screen geometry shared by the phone's menu pages. */
@@ -30,6 +31,9 @@ enum {
     SCREEN_SETTINGS,      /* the phone's Settings: one page per setting */
     SCREEN_SETTING_VALUE, /* a setting's Off and On */
     SCREEN_DONE,          /* the phone's Done note after a setting is changed */
+    SCREEN_LEVEL,         /* Snake II's Level: bars of rising height */
+    SCREEN_MAZES,         /* Snake II's list of mazes */
+    SCREEN_MAZE_DONE,     /* its note that a maze was chosen */
     SCREEN_GAME,
     SCREEN_TOP_SCORE,
     SCREEN_HELP,
@@ -89,13 +93,26 @@ enum {
 #define SPARKLE_TICKS 25
 static const uint8_t sparkle_frames[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 10, 10, 9, 9, 10, 10, 9, 10 };
 
-/* Space Impact's menu. Continue is there only while a game is paused. */
+/* The games' menus. Continue is there only while a game is paused. */
 enum {
     ITEM_CONTINUE,
     ITEM_NEW_GAME,
+    ITEM_LEVEL,
+    ITEM_MAZES,
     ITEM_TOP_SCORE,
     ITEM_INSTRUCTIONS
 };
+static const uint8_t space_impact_items[] = { ITEM_NEW_GAME, ITEM_TOP_SCORE, ITEM_INSTRUCTIONS };
+static const uint8_t snake_items[] = { ITEM_NEW_GAME, ITEM_LEVEL, ITEM_MAZES, ITEM_TOP_SCORE, ITEM_INSTRUCTIONS };
+
+/* Snake II's Level page: a bar for each level, the ones up to the level
+   filled, each two rows taller than the one before and with a shadow on
+   its right and below. */
+#define LEVEL_BAR_X 5
+#define LEVEL_BAR_PITCH 8
+#define LEVEL_BAR_WIDTH 4
+#define LEVEL_BAR_BOTTOM 34
+#define LEVEL_BAR_FIRST_HEIGHT 6
 
 /* The phone's list of games ends with a Settings entry. */
 #define LIST_COUNT (GAME_COUNT + 1)
@@ -112,6 +129,10 @@ static uint8_t value;    /* selection on its Off and On page */
 static uint8_t done_step;  /* picture of the Done note's animation */
 static uint8_t done_ticks; /* phone ticks the note has been shown */
 static uint8_t paused;   /* a game is waiting behind the menu */
+static uint8_t paused_game; /* which one */
+static uint8_t level;    /* selection on the Level page, 0 is the first */
+static uint8_t maze;     /* selection in the list of mazes */
+static uint8_t maze_top;
 static uint8_t new_top_score;  /* the game just ended beat the top score */
 static uint16_t final_score;   /* its score */
 static uint8_t held = NO_KEY;  /* the button the game sees as held */
@@ -193,11 +214,46 @@ static uint8_t sparkle_ticks; /* phone ticks it has been shown */
 static uint8_t sparkle_only;  /* nothing else on the page needs drawing */
 static const char *help_page; /* first character of the Instructions page shown */
 
+/* The settings of the game whose menu is open. */
 static void settings_load(void)
 {
-    if (!platform_settings_load(GAME_SPACE_IMPACT, &settings))
+    if (!platform_settings_load(game, &settings))
         settings.top_score = DEFAULT_TOP_SCORE;
-    platform_options_load(&games_options);
+    if (game == GAME_SNAKE) {
+        /* The phone's own default: the fastest level, no maze. */
+        if (settings.level >= SNAKE2_LEVELS)
+            settings.level = SNAKE2_LEVELS - 1;
+        if (settings.option >= SNAKE2_MAZE_COUNT)
+            settings.option = 0;
+    }
+}
+
+static const char *game_name(void)
+{
+    return game == GAME_SNAKE ? text_snake : text_space_impact;
+}
+
+static const char *game_help(void)
+{
+    return game == GAME_SNAKE ? text_help_snake : text_help_space_impact;
+}
+
+static const char *maze_name(uint8_t which)
+{
+    switch (which) {
+    case 0:
+        return text_no_maze;
+    case 1:
+        return text_maze_1;
+    case 2:
+        return text_maze_2;
+    case 3:
+        return text_maze_3;
+    case 4:
+        return text_maze_4;
+    default:
+        return text_maze_5;
+    }
 }
 
 static const char *setting_name(uint8_t which)
@@ -253,15 +309,26 @@ static const char *list_name(uint8_t index)
     }
 }
 
+/* A game of the menu's own is waiting behind it. */
+static uint8_t can_continue(void)
+{
+    return (uint8_t)(paused && paused_game == game);
+}
+
 static uint8_t item_count(void)
 {
-    return paused ? 4 : 3;
+    return (uint8_t)((game == GAME_SNAKE ? sizeof snake_items : sizeof space_impact_items) + can_continue());
 }
 
 /* The item at visible position `index`. */
 static uint8_t item_id(uint8_t index)
 {
-    return (uint8_t)(paused ? index : index + 1);
+    if (can_continue()) {
+        if (!index)
+            return ITEM_CONTINUE;
+        index--;
+    }
+    return game == GAME_SNAKE ? snake_items[index] : space_impact_items[index];
 }
 
 static const char *item_name(uint8_t id)
@@ -271,6 +338,10 @@ static const char *item_name(uint8_t id)
         return text_continue;
     case ITEM_NEW_GAME:
         return text_new_game;
+    case ITEM_LEVEL:
+        return text_level;
+    case ITEM_MAZES:
+        return text_mazes;
     case ITEM_TOP_SCORE:
         return text_top_score;
     default:
@@ -311,7 +382,7 @@ static void draw_path(uint8_t depth)
     }
     if (depth > 2) {
         path[n++] = '-';
-        path[n++] = (char)('1' + value);
+        path[n++] = (char)('1' + (game < GAME_COUNT ? maze : value));
     }
     path[n] = 0;
     font_draw(&font_tiny_plain, LCD_WIDTH - font_text_width(&font_tiny_plain, path), HEADER_Y, path, 1);
@@ -406,6 +477,47 @@ static void draw_setting_value(void)
     draw_softkey(text_ok);
 }
 
+static void draw_level(void)
+{
+    uint8_t i, x, top;
+
+    font_draw(&font_small_bold, LEVEL_BAR_X, HEADER_Y, text_level_value, 1);
+    for (i = 0; i < SNAKE2_LEVELS; i++) {
+        x = (uint8_t)(LEVEL_BAR_X + i * LEVEL_BAR_PITCH);
+        top = (uint8_t)(LEVEL_BAR_BOTTOM + 1 - LEVEL_BAR_FIRST_HEIGHT - 2 * i);
+        if (i <= level)
+            lcd_fill_rect(x, top, LEVEL_BAR_WIDTH, LEVEL_BAR_BOTTOM + 1 - top, 1);
+        lcd_fill_rect(x + LEVEL_BAR_WIDTH + 1, top + 1, 1, LEVEL_BAR_BOTTOM + 1 - top, 1);
+        lcd_fill_rect(x + 1, LEVEL_BAR_BOTTOM + 2, LEVEL_BAR_WIDTH + 1, 1, 1);
+    }
+    draw_softkey(text_ok);
+}
+
+static void draw_mazes(void)
+{
+    uint8_t row;
+
+    draw_path(3);
+    for (row = 0; row < VISIBLE_ROWS; row++) {
+        uint8_t index = (uint8_t)((maze_top + row) % SNAKE2_MAZE_COUNT);
+
+        draw_row(row, maze_name(index), index == maze);
+    }
+    draw_scrollbar(thumb_for(maze, SNAKE2_MAZE_COUNT));
+    draw_softkey(text_ok);
+}
+
+/* "Maze 1 selected", the name on a line of its own. */
+static void draw_maze_done(void)
+{
+    const char *rest = text_maze_selected;
+
+    while (*rest && *rest != ' ')
+        rest++;
+    font_draw(&font_large_bold, 0, 3, maze_name(maze), 1);
+    font_draw(&font_large_bold, 0, 18, *rest ? rest + 1 : rest, 1);
+}
+
 static void draw_done_tick(void)
 {
     lcd_blit_strips(DONE_X, 0, DONE_WIDTH, DONE_HEIGHT, done_tick + done_step * DONE_FRAME_BYTES);
@@ -483,11 +595,21 @@ static void native_settings(void)
     native_hint(text_hint_select);
 }
 
+static void native_mazes(void)
+{
+    uint8_t i;
+
+    native_title(text_mazes);
+    for (i = 0; i < SNAKE2_MAZE_COUNT; i++)
+        native_row(i, maze_name(i), i == maze);
+    native_hint(text_hint_select);
+}
+
 static void native_game(void)
 {
     uint8_t i;
 
-    native_title(text_space_impact);
+    native_title(game_name());
     for (i = 0; i < item_count(); i++)
         native_row(i, item_name(item_id(i)), i == item);
     native_hint(text_hint_select);
@@ -499,9 +621,10 @@ static uint8_t native_update(void)
 {
     uint8_t selection;
 
-    if (drawn_screen != screen || (screen != SCREEN_GAMES && screen != SCREEN_GAME && screen != SCREEN_SETTINGS))
+    if (drawn_screen != screen
+        || (screen != SCREEN_GAMES && screen != SCREEN_GAME && screen != SCREEN_SETTINGS && screen != SCREEN_MAZES))
         return 0;
-    selection = screen == SCREEN_GAMES ? game : screen == SCREEN_GAME ? item : setting;
+    selection = screen == SCREEN_GAMES ? game : screen == SCREEN_GAME ? item : screen == SCREEN_MAZES ? maze : setting;
     native_cursor(drawn_selection, 0);
     native_cursor(selection, 1);
     drawn_selection = selection;
@@ -641,7 +764,7 @@ static void help_more(void)
     for (row = 0; row < help_lines() && *help_page; row++)
         help_page = help_next_line(help_page);
     if (!*help_page)
-        help_page = text_help_space_impact;
+        help_page = game_help();
 }
 
 void menu_init(void)
@@ -652,7 +775,7 @@ void menu_init(void)
     full_screen = 0;
     held = NO_KEY;
     games_quiet();
-    settings_load();
+    platform_options_load(&games_options);
 }
 
 /* Opens the game's menu on its first entry: Continue when a game is
@@ -661,6 +784,7 @@ static void game_menu_open(void)
 {
     screen = SCREEN_GAME;
     item = item_top = 0;
+    settings_load();
 }
 
 static void play_over(void)
@@ -669,7 +793,7 @@ static void play_over(void)
     new_top_score = final_score > settings.top_score;
     if (new_top_score) {
         settings.top_score = final_score;
-        platform_settings_save(GAME_SPACE_IMPACT, &settings);
+        platform_settings_save(game, &settings);
     }
     paused = 0;
     held = NO_KEY;
@@ -683,27 +807,46 @@ static void play_start(void)
        of the choice does the same. */
     game_rand16_seed = seed_fixed ? fixed_seed : (uint16_t)(uptime % 0xfff0 + 1);
     held = NO_KEY;
-    games_start();
+    games_start(game, (uint8_t)(settings.level + 1), (uint8_t)(settings.option + 1));
     board_drawn = 0;
     screen = SCREEN_PLAY;
 }
 
-/* The phone key a button is in the game, or 0. */
+/* The phone key a button is in the game, or 0. Snake II: the pad steers,
+   A turns clockwise and B anticlockwise, as # and * do on the phone. */
 static uint8_t play_phone_key(uint8_t key)
 {
+    if (game == GAME_SNAKE) {
+        switch (key) {
+        case MENU_KEY_UP:
+            return GAME_KEY_2;
+        case MENU_KEY_DOWN:
+            return GAME_KEY_8;
+        case MENU_KEY_LEFT:
+            return GAME_KEY_4;
+        case MENU_KEY_RIGHT:
+            return GAME_KEY_6;
+        case MENU_KEY_SELECT:
+            return GAME_KEY_HASH;
+        case MENU_KEY_BACK:
+            return GAME_KEY_STAR;
+        default:
+            return 0;
+        }
+    }
     switch (key) {
     case MENU_KEY_UP:
-        return SI_KEY_8;
+        return GAME_KEY_8;
     case MENU_KEY_DOWN:
-        return SI_KEY_0;
+        return GAME_KEY_0;
     case MENU_KEY_LEFT:
-        return SI_KEY_STAR;
+        return GAME_KEY_STAR;
     case MENU_KEY_RIGHT:
-        return SI_KEY_HASH;
+        return GAME_KEY_HASH;
     case MENU_KEY_SELECT:
-        return SI_KEY_1;
+        return GAME_KEY_1;
     case MENU_KEY_BACK:
-        return SI_KEY_4;
+        return GAME_KEY_4;
     default:
         return 0;
     }
@@ -719,6 +862,7 @@ static uint8_t play_key(uint8_t key)
         games_key_up();
         held = NO_KEY;
         paused = 1;
+        paused_game = game;
         game_menu_open();
         return 1;
     }
@@ -758,10 +902,19 @@ static void game_menu_select(void)
         paused = 0;
         board_drawn = 0;
         screen = SCREEN_PLAY;
+        games_continue();
         break;
     case ITEM_NEW_GAME:
         paused = 0;
         play_start();
+        break;
+    case ITEM_LEVEL:
+        screen = SCREEN_LEVEL;
+        level = settings.level;
+        break;
+    case ITEM_MAZES:
+        screen = SCREEN_MAZES;
+        maze = maze_top = settings.option;
         break;
     case ITEM_TOP_SCORE:
         screen = SCREEN_TOP_SCORE;
@@ -771,7 +924,7 @@ static void game_menu_select(void)
         break;
     default:
         screen = SCREEN_HELP;
-        help_page = text_help_space_impact;
+        help_page = game_help();
         break;
     }
 }
@@ -814,8 +967,8 @@ static uint8_t handle_key(uint8_t key)
         if (key == MENU_KEY_DOWN || key == MENU_KEY_UP) {
             list_move(key, list_count(), &game, &game_top);
         } else if (key == MENU_KEY_SELECT) {
-            /* Only Space Impact is here so far. */
-            if (game == GAME_SPACE_IMPACT) {
+            /* Bantumi and Pairs II are not here yet. */
+            if (game == GAME_SPACE_IMPACT || game == GAME_SNAKE) {
                 game_menu_open();
             } else if (game == GAME_COUNT) {
                 screen = SCREEN_SETTINGS;
@@ -869,6 +1022,46 @@ static uint8_t handle_key(uint8_t key)
         if (key != MENU_KEY_BACK)
             handle_key(key);
         break;
+    case SCREEN_LEVEL:
+        /* Up and down change the level by one, stopping at the ends; OK
+           keeps it. */
+        if (key == MENU_KEY_UP && level < SNAKE2_LEVELS - 1) {
+            level++;
+        } else if (key == MENU_KEY_DOWN && level > 0) {
+            level--;
+        } else if (key == MENU_KEY_SELECT) {
+            settings.level = level;
+            platform_settings_save(game, &settings);
+            screen = SCREEN_GAME;
+        } else if (key == MENU_KEY_BACK) {
+            screen = SCREEN_GAME;
+        }
+        drawn_screen = NO_SCREEN;
+        return 1;
+    case SCREEN_MAZES:
+        if (key == MENU_KEY_DOWN || key == MENU_KEY_UP) {
+            list_move(key, SNAKE2_MAZE_COUNT, &maze, &maze_top);
+        } else if (key == MENU_KEY_SELECT) {
+            settings.option = maze;
+            platform_settings_save(game, &settings);
+            /* The full-screen variant has no note. */
+            if (full_screen) {
+                screen = SCREEN_GAME;
+                break;
+            }
+            screen = SCREEN_MAZE_DONE;
+            page_ticks = DONE_TICKS;
+            play_us = 0;
+            done_step = done_ticks = 0;
+        } else if (key == MENU_KEY_BACK) {
+            screen = SCREEN_GAME;
+        }
+        break;
+    case SCREEN_MAZE_DONE:
+        screen = SCREEN_GAME;
+        if (key != MENU_KEY_BACK)
+            handle_key(key);
+        break;
     case SCREEN_HELP:
         if (key == MENU_KEY_SELECT)
             help_more();
@@ -899,14 +1092,14 @@ static uint8_t handle_key(uint8_t key)
 uint8_t menu_key(uint8_t key)
 {
     uint8_t was_screen = screen, was_game = game, was_item = item, was_top = item_top;
-    uint8_t was_setting = setting, was_value = value;
+    uint8_t was_setting = setting, was_value = value, was_maze = maze;
     const char *was_page = help_page;
     uint8_t changed;
 
     sparkle_only = 0;
     changed = handle_key(key);
     return changed || screen != was_screen || game != was_game || item != was_item || item_top != was_top
-           || setting != was_setting || value != was_value || help_page != was_page;
+           || setting != was_setting || value != was_value || maze != was_maze || help_page != was_page;
 }
 
 void menu_seed(uint16_t seed)
@@ -954,8 +1147,9 @@ uint8_t menu_tick(void)
         }
         break;
     case SCREEN_DONE:
+    case SCREEN_MAZE_DONE:
         if (--page_ticks == 0) {
-            screen = SCREEN_SETTINGS;
+            screen = screen == SCREEN_DONE ? SCREEN_SETTINGS : SCREEN_GAME;
             return 1;
         }
         play_us += MENU_FRAME_US;
@@ -1027,7 +1221,7 @@ void menu_draw(void)
             draw_sparkle();
             return;
         }
-        if (screen == SCREEN_DONE) {
+        if (screen == SCREEN_DONE || screen == SCREEN_MAZE_DONE) {
             draw_done_tick();
             return;
         }
@@ -1085,6 +1279,24 @@ void menu_draw(void)
         draw_note(text_done, 0);
         draw_done_tick();
         break;
+    case SCREEN_LEVEL:
+        if (full_screen) {
+            native_note(text_level, "%N", (uint16_t)(level + 1));
+            native_hint(text_hint_select);
+        } else {
+            draw_level();
+        }
+        break;
+    case SCREEN_MAZES:
+        if (full_screen)
+            native_mazes();
+        else
+            draw_mazes();
+        break;
+    case SCREEN_MAZE_DONE:
+        draw_maze_done();
+        draw_done_tick();
+        break;
     default:
         if (full_screen)
             native_game();
@@ -1093,7 +1305,7 @@ void menu_draw(void)
         break;
     }
     if (mode == VIEW_NATIVE) {
-        selection = screen == SCREEN_GAMES ? game : screen == SCREEN_GAME ? item : setting;
+        selection = screen == SCREEN_GAMES ? game : screen == SCREEN_GAME ? item : screen == SCREEN_MAZES ? maze : setting;
         drawn_screen = screen;
         drawn_selection = selection;
     }
@@ -1111,6 +1323,10 @@ void menu_script(const char *keys)
             break;
         case '1': case '2': case '3': case '4': case '5': case '6': case '7':
             si_first_level = (uint8_t)(*keys - '0');
+            break;
+        case 'z':
+            /* The seed the phone's games start from after power-on. */
+            menu_seed(1);
             break;
         case 'w':
         case 't':

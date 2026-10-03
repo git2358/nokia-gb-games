@@ -1,13 +1,15 @@
 /* Replays a recorded sequence of game events and writes the frames it
    produces, for comparison with frames captured from the firmware in MAME.
 
-   Usage: replay EVENTS OUT_DIR [SEED16]
+   Usage: replay EVENTS OUT_DIR [SEED16 [GAME LEVEL OPTION]]
 
    EVENTS holds the game events in hex, separated by white space, starting
    with 2b (new game). A frame is written each time the picture changes,
    as OUT_DIR/NNNN.pgm, numbered by the event that produced it. SEED16 is
    the games' random seed at the start, in hex; on the phone the title
-   animation has drawn from it by then. */
+   animation has drawn from it by then. GAME is a GAME_ code (Space Impact
+   when it is not given), LEVEL and OPTION what the context hands the game
+   (Snake II's level, 1 to 9, and maze, 1 to 6). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,8 +39,8 @@ int main(int argc, char **argv)
     unsigned event, n = 0, written = 0;
     FILE *events;
 
-    if (argc < 3 || argc > 4) {
-        fprintf(stderr, "usage: replay EVENTS OUT_DIR [SEED16]\n");
+    if (argc != 3 && argc != 4 && argc != 7) {
+        fprintf(stderr, "usage: replay EVENTS OUT_DIR [SEED16 [GAME LEVEL OPTION]]\n");
         return 2;
     }
     events = fopen(argv[1], "r");
@@ -46,13 +48,15 @@ int main(int argc, char **argv)
         perror(argv[1]);
         return 1;
     }
-    if (argc == 4)
+    if (argc >= 4)
         game_rand16_seed = (uint16_t)strtoul(argv[3], 0, 16);
+    if (argc == 7)
+        games_setup((uint8_t)atoi(argv[4]), (uint8_t)atoi(argv[5]), (uint8_t)atoi(argv[6]));
     memset(last, 0xaa, sizeof last);
     for (; fscanf(events, "%x", &event) == 1; n++) {
         if (!games_event((int)event))
             continue;
-        sprite_render();
+        games_render();
         if (memcmp(last, sprite_screen, sizeof last) == 0)
             continue;
         memcpy(last, sprite_screen, sizeof last);

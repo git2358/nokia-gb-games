@@ -8,7 +8,7 @@
 	.globl	_sprite_band, _sprite_band_dst, _sprite_band_src, _sprite_draw_bitmap
 	.globl	_sprite_band_n, _sprite_band_up, _sprite_band_valid, _sprite_band_mode
 	.globl	_gb_present_zoom, _gb_present_plain, _gb_present_all, _gb_clear_tiles
-	.globl	_gb_zoom_band, _gb_columns, _gb_tile_low, _gb_tile_high, _gb_vram_put
+	.globl	_gb_zoom_band, _gb_zoom_bands, _gb_columns, _gb_tile_low, _gb_tile_high, _gb_vram_put
 	.globl	_sprites, _si_player_side_types
 	.globl	_strip_scan, _strip_cell, _strip_own, _strip_place, _strip_fine
 	.globl	_strip_invert, _strip_picture, _strip_terrain
@@ -38,8 +38,12 @@ shown:
 	.ds	504
 _gb_present_all::
 	.ds	1
-;; The first of the four bands of the picture gb_present_zoom shows.
+;; The first of the bands of the picture gb_present_zoom shows, and how
+;; many: four beside Space Impact's strip of terrain, all six for a game
+;; without one.
 _gb_zoom_band::
+	.ds	1
+_gb_zoom_bands::
 	.ds	1
 band:
 	.ds	1
@@ -644,9 +648,10 @@ tile_address:
 ;; The game at 2x, as the full-screen variant shows it: a tile is four
 ;; columns by four rows of the picture, so each group of four bytes of a
 ;; band is two tiles, one for each half byte, and the picture's first 80
-;; columns fill the screen's 20 tiles. This does four bands of the picture,
-;; from gb_zoom_band, as eight rows of tiles at 0x8000; the other two bands
-;; hold the terrain, which main.c puts on the screen. Only the groups that
+;; columns fill the screen's 20 tiles. This does gb_zoom_bands bands of the
+;; picture from gb_zoom_band, two rows of tiles each at 0x8000; for Space
+;; Impact that is four, and the other two bands hold the terrain, which
+;; strip.c puts on the screen. Only the groups that
 ;; differ from what is shown are made again.
 ;; void gb_present_zoom(void)
 _gb_present_zoom::
@@ -655,7 +660,7 @@ _gb_present_zoom::
 	call	nz, forget_shown
 	xor	a, a
 	ld	(#band), a
-	ld	a, #4
+	ld	a, (#_gb_zoom_bands)
 	ld	(#bands_left), a
 	;; 84 bytes on in the picture and in the copy for each band skipped.
 	ld	hl, #_sprite_screen

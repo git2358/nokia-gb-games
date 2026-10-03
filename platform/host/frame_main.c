@@ -67,7 +67,7 @@ int main(int argc, char **argv)
     } else if (strcmp(argv[1], "start") == 0 || strncmp(argv[1], "run-", 4) == 0) {
         long frames = argv[1][0] == 'r' ? strtol(argv[1] + 4, 0, 10) : 0;
 
-        games_start();
+        games_start(GAME_SPACE_IMPACT, 1, 1);
         while (frames-- > 0)
             games_elapse(16743);
         games_draw(1);

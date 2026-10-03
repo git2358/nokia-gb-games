@@ -90,7 +90,7 @@ static void level_reload(void)
 
 /* A new ship (how 10) or the next one after a loss (how 0x14), with its
    shield, which lasts as long as the one-shot timer. */
-void si_ship_spawn(struct si_context *ctx, int how)
+void si_ship_spawn(struct game_context *ctx, int how)
 {
     uint8_t shield_mode = si.polarity == 2 ? SPRITE_MODE_XOR : SPRITE_MODE_SET;
 
@@ -113,7 +113,7 @@ void si_ship_spawn(struct si_context *ctx, int how)
     }
     ctx->one_shot = 3000;
     ctx->period = 100;
-    si.pending = SI_RESULT_RESTART_TIMERS;
+    si.pending = GAME_RESULT_RESTART_TIMERS;
     si_hud_refresh();
     if (si.level == 0) {
         si_set_image(si.ship, SI_SHIP_FIRST_LEVEL);
@@ -121,7 +121,7 @@ void si_ship_spawn(struct si_context *ctx, int how)
     }
 }
 
-int si_new_game(struct si_context *ctx)
+int si_new_game(struct game_context *ctx)
 {
     sprite_reset_all();
     si.pending = 0;
@@ -138,13 +138,13 @@ int si_new_game(struct si_context *ctx)
     si.level = si_first_level;
     si_level_load(si_level_table[si_first_level]);
     si_ship_spawn(ctx, 10);
-    return SI_RESULT_NONE;
+    return GAME_RESULT_NONE;
 }
 
 /* The continue screen: fire or special starts the level again. */
-int si_continue_key(int event, struct si_context *ctx)
+int si_continue_key(int event, struct game_context *ctx)
 {
-    if (event != SI_KEY_1 && event != SI_KEY_3 && event != SI_KEY_4 && event != SI_KEY_6)
+    if (event != GAME_KEY_1 && event != GAME_KEY_3 && event != GAME_KEY_4 && event != GAME_KEY_6)
         return 0;
     si.fire_cooldown = 0;
     si.repeats = 0;
@@ -160,7 +160,7 @@ int si_continue_key(int event, struct si_context *ctx)
 
 /* The screen between losing the last ship and the end: one icon per
    continue left and a countdown. */
-void si_continue_enter(struct si_context *ctx)
+void si_continue_enter(struct game_context *ctx)
 {
     struct sprite_image zero;
     int i;
@@ -183,5 +183,5 @@ void si_continue_enter(struct si_context *ctx)
     si_draw_number(si.terrain_sprite, 5, 2);
     si.phase = PHASE_CONTINUE;
     ctx->period = 800;
-    si.pending = SI_RESULT_RESTART_TICK;
+    si.pending = GAME_RESULT_RESTART_TICK;
 }

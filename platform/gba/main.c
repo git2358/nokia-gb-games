@@ -85,7 +85,8 @@
 
 /* Battery-backed cartridge RAM, one byte at a time: a two-byte signature,
    then one four-byte record per game laid out as the phone stores them: top
-   score high byte, low byte, level, and a check byte; then the games'
+   score high byte, low byte, level (the option in its top four bits:
+   Snake II's maze) and a check byte; then the games'
    settings as one byte of switches (Sounds, Lights, Shakes in bits 0 to
    2) and its check byte. */
 #define SAVE ((volatile uint8_t *)0x0e000000)
@@ -130,9 +131,11 @@ uint8_t platform_settings_load(uint8_t game, struct game_settings *out)
 
     out->top_score = 0;
     out->level = 0;
+    out->option = 0;
     if (SAVE[0] == SAVE_SIGNATURE_0 && SAVE[1] == SAVE_SIGNATURE_1 && record[3] == save_check(hi, lo, level)) {
         out->top_score = (uint16_t)(hi << 8 | lo);
-        out->level = level;
+        out->level = level & 15;
+        out->option = level >> 4;
         return 1;
     }
     return 0;
@@ -147,8 +150,8 @@ void platform_settings_save(uint8_t game, const struct game_settings *in)
     SAVE[1] = SAVE_SIGNATURE_1;
     record[0] = hi;
     record[1] = lo;
-    record[2] = in->level;
-    record[3] = save_check(hi, lo, in->level);
+    record[2] = (uint8_t)(in->level | in->option << 4);
+    record[3] = save_check(hi, lo, record[2]);
 }
 
 /* The buzzer is pulse channel 2: a 50% square wave at full volume, of

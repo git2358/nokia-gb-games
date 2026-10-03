@@ -139,9 +139,9 @@ void si_hud_refresh(void);
 #define si_continue_enter far_si_continue_enter
 #endif
 void si_level_load(si_ref header);
-void si_ship_spawn(struct si_context *ctx, int how);
-int si_new_game(struct si_context *ctx);
-int si_continue_key(int event, struct si_context *ctx);
-void si_continue_enter(struct si_context *ctx);
+void si_ship_spawn(struct game_context *ctx, int how);
+int si_new_game(struct game_context *ctx);
+int si_continue_key(int event, struct game_context *ctx);
+void si_continue_enter(struct game_context *ctx);
 
 #endif

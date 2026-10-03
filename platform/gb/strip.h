@@ -26,4 +26,7 @@ void strip_leave(uint8_t scx, uint8_t write_map);
    screen holds something else: everything is made afresh. */
 void strip_present(uint8_t all);
 
+/* The same for a game without Space Impact's terrain. */
+void zoom_present(uint8_t all);
+
 #endif

@@ -121,7 +121,9 @@ ROMs (`build/nokia3210-keys.*`), which it leaves alone.
 ## Status
 
 In progress. Both cartridges build and run the same core: they open on the
-main menu's Games entry and walk the Games list and each game's menu with
+main menu's Games entry, whose icon animates as the phone's does (the first
+picture for 1.08 s, then the other twelve at 0.19 s each and the first
+again, as measured in MAME), and walk the Games list and each game's menu with
 its Level, Top score and Instructions pages, drawn with the phone's own
 fonts and text. All three of the phone's games play, with the pause menu's
 Continue, the Game over page and Last view:

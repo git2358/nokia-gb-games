@@ -4,8 +4,9 @@
    keys pressed from the first screen (u up, d down, l left, r right,
    s select, e the console's Select button, b back, a the full-screen key, t one move of the running game,
    F forget what is drawn so the next draw is a full one, k flip the phase
-   of Memory's blinking cursor, w wait for a timed page to close). A name seedXXXXXXXX-menu-KEYS starts the
-   games from that seed of rand, in hex. */
+   of Memory's blinking cursor, w wait for a timed page to close), and
+   menu-KEYS+N the same N screen frames later. A name seedXXXXXXXX-menu-KEYS
+   starts the games from that seed of rand, in hex. */
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -62,8 +63,12 @@ int main(int argc, char **argv)
         snake_draw();
     } else if (strncmp(argv[1], "menu-", 5) == 0) {
         const char *key;
+        char *plus = strchr(argv[1], '+');
+        long frames = plus ? strtol(plus + 1, 0, 10) : 0;
         int wait;
 
+        if (plus)
+            *plus = 0;
         menu_init();
         if (seeded)
             menu_seed((uint32_t)seed);
@@ -87,6 +92,9 @@ int main(int argc, char **argv)
                          : MENU_KEY_BACK);
         }
         menu_draw();
+        while (frames-- > 0)
+            if (menu_tick())
+                menu_draw();
     } else {
         fprintf(stderr, "unknown frame %s\n", argv[1]);
         return 2;

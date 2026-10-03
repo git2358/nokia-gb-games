@@ -30,7 +30,7 @@ TABLES = [
     ("game3_background", 0x2D9764, 504, "84x48 scene, 6 bytes per column"),
     ("game3_sprites", 0x2D995C, 0x2D9A20 - 0x2D995C, "10x10 sprites, 20 bytes each, then smaller pieces"),
     ("top_score_sparkle", 0x2C83FD, 11 * 84, "11 pictures of the Top score page's animation, 21x32, 21 bytes per 8 rows"),
-    ("menu_games_icon", 0x2C50D4, 128, "64x16 frame of the main menu's Games animation, 64 bytes per 8 rows"),
+    ("menu_games_icon", 0x2C50D4, 13 * 128, "13 pictures of the main menu's Games animation, 64x14 in 64x16, 64 bytes per 8 rows"),
 ]
 
 # The language pack ("PPM") holds the fonts and the text. Each chunk is

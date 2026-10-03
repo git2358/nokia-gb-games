@@ -669,6 +669,10 @@ static int tick(struct game_context *ctx)
 
     if (s.crash == CRASH_DEAD) {
         ctx->sound = 0;
+        /* The phone starts the vibrator here too, but in MAME it stops
+           0.28 ms later as the game ends, too short to feel. Kept as a
+           full pulse on purpose: on hardware that last pulse may well be
+           felt, timing being what it is. */
         games_vibrate();
         return GAME_RESULT_GAME_OVER;
     }

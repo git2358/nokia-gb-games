@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Copy the built ROMs to the root of the flash carts' SD cards: the .gb to
-# the two EZ-Flash Junior cards and the .gba to the EZ-Flash Omega card.
+# the two EZ-Flash Junior cards and to the EZ-Flash Omega Definitive
+# Edition card, whose built-in Game Boy emulator runs it (with the Omega's
+# motor, to try the rumble), and the .gba to the Omega card.
 #
 # Usage: scripts/copy-to-cards.sh [ROM...]
 #
@@ -18,7 +20,7 @@
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-GB_CARDS=(/Volumes/EZGB_FW4 /Volumes/EZGB_FW5)
+GB_CARDS=(/Volumes/EZGB_FW4 /Volumes/EZGB_FW5 /Volumes/OMEGADE)
 GBA_CARDS=(/Volumes/OMEGADE)
 LOGO_SHA1="17daa0fec02fc33c0f6abb549a8b80b6613b48ee"
 

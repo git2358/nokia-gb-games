@@ -18,6 +18,10 @@ extern struct game_options games_options;
 /* The game being played or last played, a GAME_ code. */
 extern uint8_t games_playing;
 
+/* Whether the picture last put on the screen has Space Impact's strip of
+   terrain, which a platform may show by other means (platform/gb/strip.c). */
+extern uint8_t games_strip;
+
 /* Nonzero once the game has ended; games_score is then its score. */
 extern uint8_t games_over;
 extern uint32_t games_score;

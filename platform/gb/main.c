@@ -179,12 +179,12 @@ static void stage_tile(uint8_t tx, uint8_t ty, uint8_t *n)
    the sprite layer's picture, at 2x when the core has named a rectangle to
    magnify (the full-screen variant; see strip.c) and as it is otherwise
    (draw.s). `direct` says which of the two the screen's tiles hold, 0 for
-   neither; game_shown that the last menu_draw drew the game. */
+   neither. menu_drew_picture says whether the last menu_draw drew it. */
 enum {
     DIRECT_PLAIN = 1,
     DIRECT_ZOOM
 };
-static uint8_t direct, game_shown;
+static uint8_t direct;
 extern uint8_t gb_present_all;
 void gb_present_plain(void);
 void gb_clear_tiles(void);
@@ -196,10 +196,10 @@ void sprite_present(uint8_t all)
     if (direct != mode)
         all = 1;
     if (mode == DIRECT_ZOOM) {
-        if (games_playing == GAME_SNAKE)
-            zoom_present(all);
-        else
+        if (games_strip)
             strip_present(all);
+        else
+            zoom_present(all);
     } else {
         if (all) {
             /* The tiles hold a menu, or nothing: clear them all and make
@@ -212,7 +212,6 @@ void sprite_present(uint8_t all)
         gb_present_plain();
     }
     direct = mode;
-    game_shown = 1;
 }
 
 /* Brings video RAM up to date with the cells of lcd_fb drawn to since the
@@ -255,10 +254,8 @@ static void show(void)
 {
     uint16_t i;
 
-    if (game_shown) {
-        game_shown = 0;
+    if (menu_drew_picture)
         return;
-    }
     if (direct) {
         /* Blank first, so that the game's tiles are not seen through the
            menus' tile map while the menu's are being made. */
@@ -397,7 +394,7 @@ void main(void)
             uint8_t under_way = direct;
 
             menu_draw();
-            under_way = under_way && game_shown;
+            under_way = under_way && menu_drew_picture;
             show();
             if (!under_way)
                 seen = frame_count;

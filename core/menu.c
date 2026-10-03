@@ -8,6 +8,8 @@
 #include "rand.h"
 #include "si.h"
 #include "snake2.h"
+#include "sprite.h"
+#include "title.h"
 #include "version.h"
 
 /* Screen geometry shared by the phone's menu pages. */
@@ -34,6 +36,7 @@ enum {
     SCREEN_LEVEL,         /* Snake II's Level: bars of rising height */
     SCREEN_MAZES,         /* Snake II's list of mazes */
     SCREEN_MAZE_DONE,     /* its note that a maze was chosen */
+    SCREEN_TITLE,         /* the game's title animation, before its menu */
     SCREEN_GAME,
     SCREEN_TOP_SCORE,
     SCREEN_HELP,
@@ -136,11 +139,11 @@ static uint8_t maze_top;
 static uint8_t new_top_score;  /* the game just ended beat the top score */
 static uint16_t final_score;   /* its score */
 static uint8_t held = NO_KEY;  /* the button the game sees as held */
-static uint8_t seed_fixed;     /* games start from fixed_seed, not from the time */
-static uint16_t fixed_seed;
+static uint8_t seed_fixed;     /* the games' generator is never reseeded from the time */
 static uint16_t play_us;       /* time not yet turned into phone ticks */
 static uint16_t uptime;        /* menu_tick calls so far; seeds the games' generator */
 static uint8_t board_drawn;    /* the LCD holds the running game's picture */
+uint8_t menu_drew_picture;
 /* The full-screen menu the LCD holds and the selection drawn on it;
    NO_SCREEN when it holds something else. */
 #define NO_SCREEN 0xff
@@ -787,6 +790,16 @@ static void game_menu_open(void)
     settings_load();
 }
 
+/* After the title, the game's menu; Bantumi and Pairs II have none yet,
+   and go back to the list. */
+static void title_over(void)
+{
+    if (game == GAME_SNAKE || game == GAME_SPACE_IMPACT)
+        game_menu_open();
+    else
+        screen = SCREEN_GAMES;
+}
+
 static void play_over(void)
 {
     final_score = (uint16_t)games_score;
@@ -803,9 +816,10 @@ static void play_over(void)
 
 static void play_start(void)
 {
-    /* The phone seeds the games' generator from its clock; here the time
-       of the choice does the same. */
-    game_rand16_seed = seed_fixed ? fixed_seed : (uint16_t)(uptime % 0xfff0 + 1);
+    /* The phone seeds the games' generator from its clock, when it is
+       set; here the time of the choice does the same. */
+    if (!seed_fixed)
+        game_rand16_seed = (uint16_t)(uptime % 0xfff0 + 1);
     held = NO_KEY;
     games_start(game, (uint8_t)(settings.level + 1), (uint8_t)(settings.option + 1));
     board_drawn = 0;
@@ -967,9 +981,10 @@ static uint8_t handle_key(uint8_t key)
         if (key == MENU_KEY_DOWN || key == MENU_KEY_UP) {
             list_move(key, list_count(), &game, &game_top);
         } else if (key == MENU_KEY_SELECT) {
-            /* Bantumi and Pairs II are not here yet. */
-            if (game == GAME_SPACE_IMPACT || game == GAME_SNAKE) {
-                game_menu_open();
+            if (game < GAME_COUNT) {
+                screen = SCREEN_TITLE;
+                board_drawn = 0;
+                title_start(game, !seed_fixed, (uint16_t)(uptime % 0xfff0 + 1));
             } else if (game == GAME_COUNT) {
                 screen = SCREEN_SETTINGS;
                 setting = 0;
@@ -982,6 +997,10 @@ static uint8_t handle_key(uint8_t key)
         break;
     case SCREEN_ABOUT:
         screen = SCREEN_GAMES;
+        break;
+    case SCREEN_TITLE:
+        /* Any key ends the title. */
+        title_over();
         break;
     case SCREEN_SETTINGS:
         if (key == MENU_KEY_DOWN) {
@@ -1104,7 +1123,7 @@ uint8_t menu_key(uint8_t key)
 
 void menu_seed(uint16_t seed)
 {
-    fixed_seed = seed;
+    game_rand16_seed = seed;
     seed_fixed = 1;
 }
 
@@ -1163,6 +1182,16 @@ uint8_t menu_tick(void)
             }
         }
         break;
+    case SCREEN_TITLE: {
+        uint8_t what = title_elapse(MENU_FRAME_US);
+
+        if (what & TITLE_OVER) {
+            title_over();
+            return 1;
+        }
+        changed = what;
+        break;
+    }
     case SCREEN_PLAY:
         changed = games_elapse(MENU_FRAME_US);
         if (games_over) {
@@ -1181,7 +1210,10 @@ void menu_draw(void)
     /* The full-screen variant has its own menus over the whole framebuffer;
        all else is drawn in the phone's LCD. Changing between them, or
        leaving a screen that drew around the LCD, clears everything. */
-    uint8_t mode = full_screen && screen != SCREEN_MAIN && screen != SCREEN_PLAY ? VIEW_NATIVE : VIEW_PHONE;
+    uint8_t mode = full_screen && screen != SCREEN_MAIN && screen != SCREEN_PLAY && screen != SCREEN_TITLE
+                   ? VIEW_NATIVE : VIEW_PHONE;
+
+    menu_drew_picture = screen == SCREEN_PLAY || screen == SCREEN_TITLE;
     uint8_t selection;
 
     if (mode != view_mode || surround_used) {
@@ -1228,7 +1260,7 @@ void menu_draw(void)
     }
     drawn_screen = NO_SCREEN;
 
-    if (screen != SCREEN_PLAY) {
+    if (screen != SCREEN_PLAY && screen != SCREEN_TITLE) {
         lcd_clear();
         board_drawn = 0;
     }
@@ -1258,6 +1290,13 @@ void menu_draw(void)
         break;
     case SCREEN_PLAY:
         games_draw(!board_drawn);
+        board_drawn = 1;
+        break;
+    case SCREEN_TITLE:
+        /* The title is the phone's picture, shown as the game is. */
+        title_draw();
+        games_strip = 0;
+        sprite_present(!board_drawn);
         board_drawn = 1;
         break;
     case SCREEN_HELP:

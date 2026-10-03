@@ -312,32 +312,35 @@ static void draw_line(const struct sprite *s, uint8_t op)
     }
 }
 
+void sprite_draw(const struct sprite *s)
+{
+    const uint8_t *ops;
+
+    if (sprite_mode(s) >= SPRITE_MODE_HIDDEN)
+        return;
+    ops = mode_ops[sprite_mode(s)];
+    switch (sprite_kind(s)) {
+    case SPRITE_BITMAP:
+        draw_bitmap(s, sprite_mode(s));
+        break;
+    case SPRITE_LINE:
+        draw_line(s, ops[0]);
+        break;
+    case SPRITE_FILL:
+        /* All set bits: the clear-background mode has nothing to do. */
+        if (ops[0] != OP_NONE)
+            draw_fill(s, sprite_mode(s));
+        break;
+    }
+}
+
 void sprite_render(void)
 {
     uint16_t id;
 
     memset(sprite_screen, 0, sizeof sprite_screen);
-    for (id = sprites[0].next; id; id = sprites[id].next) {
-        const struct sprite *s = &sprites[id];
-        const uint8_t *ops;
-
-        if (sprite_mode(s) >= SPRITE_MODE_HIDDEN)
-            continue;
-        ops = mode_ops[sprite_mode(s)];
-        switch (sprite_kind(s)) {
-        case SPRITE_BITMAP:
-            draw_bitmap(s, sprite_mode(s));
-            break;
-        case SPRITE_LINE:
-            draw_line(s, ops[0]);
-            break;
-        case SPRITE_FILL:
-            /* All set bits: the clear-background mode has nothing to do. */
-            if (ops[0] != OP_NONE)
-                draw_fill(s, sprite_mode(s));
-            break;
-        }
-    }
+    for (id = sprites[0].next; id; id = sprites[id].next)
+        sprite_draw(&sprites[id]);
 }
 
 /* A platform that puts the picture on its screen itself, as the Game Boy

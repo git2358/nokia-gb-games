@@ -45,8 +45,8 @@ GAMES_FULL="a"
 # Space Impact's first level: the ship shoots at the first wave, moves down
 # a row, loses a life to the second and is shooting at the third.
 SI_PLAY="wwsttsttsttwwwsttsttdsttwwwwwwsttsttusttstt"
-SI_PHONE="sdss${SI_PLAY}"
-SI_FULL="adss${SI_PLAY}"
+SI_PHONE="sdsss${SI_PLAY}"
+SI_FULL="adsss${SI_PLAY}"
 
 # The ROM plays its keys before it shows anything, which takes the Game Boy
 # a good ten seconds for a game under way, so each screenshot is taken a

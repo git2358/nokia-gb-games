@@ -53,8 +53,13 @@ nose out of sight.
 | B | back | special weapon | turn anticlockwise (*) |
 | Start, Select | select | pause | pause |
 
-What is not: Bantumi and Pairs II are in the list but do nothing, and the
-games' title animations are not shown. A paused Space Impact continues
+Choosing a game from the list first plays its title animation, as on the
+phone, and any button skips it. All four games' titles are there: Snake
+II's, Space Impact's stars and closing logo, Bantumi's and Pairs II's
+cards turning to spell its name.
+
+What is not: Bantumi and Pairs II play their titles and then go back to
+the list, as their games are not here yet. A paused Space Impact continues
 exactly where it stopped, where the phone gives the ship a second and a
 half of shield; a paused Snake II waits for a key, as on the phone. Snake
 II's large animated creature never comes: the phone lets it come only when
@@ -158,10 +163,11 @@ keys, so only the button pressed last counts.
 make check-menus                 # the menu pages against the phone's own, to the pixel
 make check-golden                # the games against recorded runs of the firmware (below)
 make check-gb                    # the .gb in SameBoy against the host's frames, and its speed
-make check-gb KEYS=a3sdss        # the same in the full-screen mode's 2x, starting at the fourth level
-make check-gb KEYS=asss          # Snake II in the full-screen mode
+make check-gb KEYS=a3dsss        # the same in the full-screen mode's 2x, starting at the fourth level
+make check-gb KEYS=asssss        # Snake II in the full-screen mode
+make check-gba KEYS=sds SHOT_FRAMES=70   # Space Impact's title, part-way
 make check-gba                   # the .gba in mGBA against the host's frames
-make shot-gb KEYS=sds            # a screenshot after scripted keys
+make shot-gb KEYS=sdsss          # a screenshot after scripted keys
 ```
 
 `KEYS` are pressed by a test ROM at power-on (`menu_script` in
@@ -172,12 +178,13 @@ the phone's pace.
 `golden/menus/` holds frames of the phone's menus captured in MAME with
 the phone switched to English (Menu, 6, 2, 1, up, Select), each named
 after the host frame it must equal; those that start a game begin with
-`z`, the seed the phone has after power-on. The phone shows its games'
-title animations before their menus, which the port does not, so the
-keys differ there. Space Impact's Top score page's two frames show the
-4075 the PMM dump holds and differ from the port's 0 by design. The other
-frames, Snake II's menus and Level, Mazes and Instructions pages among
-them, are equal to the pixel.
+`z`, the seed the phone has after power-on, which it never reseeds in
+MAME since the clock is not set; the port then does not reseed either.
+They include every distinct picture of the four title animations, Space
+Impact's stars drawn from that seed. Space Impact's Top score page's two
+frames show the 4075 the PMM dump holds and differ from the port's 0 by
+design. The other frames, Snake II's menus and Level, Mazes and
+Instructions pages among them, are equal to the pixel.
 
 The rumble is checked the same way: `build/gb_run ... rumble 1400` prints
 each frame the motor was on for, and `build/gba_shot` prints every switch
@@ -304,7 +311,9 @@ the ignored `golden/`.
 ## Layout
 
 - `core/` is portable C: `lcd` (framebuffer), `font`, `menu` (the phone's
-  menus, its Settings pages and the full-screen ones), `sprite` (sprite
+  menus, its Settings pages and the full-screen ones), `title` (the games'
+  title animations, drawn with the sprite layer's drawing but none of its
+  sprites, so that a paused game's are kept), `sprite` (sprite
   list and tile layer), `si`, `si_setup` and `si_base` (Space Impact),
   `snake2` (Snake II, which draws straight into the sprite layer's
   picture), `game` (what the games and the menus share), `games`

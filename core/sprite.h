@@ -77,6 +77,9 @@ extern uint8_t sprite_screen[84 * SPRITE_SCREEN_BANDS];
 
 /* Draws the list into sprite_screen. */
 void sprite_render(void);
+/* Draws one sprite into sprite_screen over what is there; it need not be
+   in the list. */
+void sprite_draw(const struct sprite *s);
 /* Copies what changed in sprite_screen since the last call to the LCD view;
    with `all`, everything: the view then holds something else, or nothing. */
 void sprite_present(uint8_t all);

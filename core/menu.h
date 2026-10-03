@@ -38,6 +38,10 @@ uint8_t menu_held(uint8_t keys);
 uint8_t menu_tick(void);
 void menu_draw(void);
 
+/* Nonzero when the last menu_draw put a game's or a title's picture on
+   the screen (through sprite_present) rather than a page of the menus. */
+extern uint8_t menu_drew_picture;
+
 /* Forgets what the LCD holds, so the next menu_draw draws everything. */
 void menu_redraw_all(void);
 

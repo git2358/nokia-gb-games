@@ -4,6 +4,7 @@
 #include "si_state.h"
 #include "snake2.h"
 #include "strip.h"
+#include "title.h"
 
 #define MBC_ROM_BANK (*(volatile uint8_t *)0x2000)
 
@@ -110,5 +111,33 @@ void far_strip_leave(uint8_t scx, uint8_t write_map)
 
     far_bank(BANK_SNAKE);
     strip_leave(scx, write_map);
+    far_bank(was);
+}
+
+void far_title_start(uint8_t game, uint8_t reseed, uint16_t seed)
+{
+    uint8_t was = mapped;
+
+    far_bank(BANK_SETUP);
+    title_start(game, reseed, seed);
+    far_bank(was);
+}
+
+uint8_t far_title_elapse(uint16_t us)
+{
+    uint8_t was = mapped, what;
+
+    far_bank(BANK_SETUP);
+    what = title_elapse(us);
+    far_bank(was);
+    return what;
+}
+
+void far_title_draw(void)
+{
+    uint8_t was = mapped;
+
+    far_bank(BANK_SETUP);
+    title_draw();
     far_bank(was);
 }

@@ -58,7 +58,7 @@ GBA_LOGO_FROM ?=
 
 BUILD := build
 ASSETS := $(BUILD)/assets
-ASSET_SRC := $(ASSETS)/game_assets.c $(ASSETS)/si_data.c $(ASSETS)/si_tables.c $(ASSETS)/snake2_data.c
+ASSET_SRC := $(ASSETS)/game_assets.c $(ASSETS)/si_data.c $(ASSETS)/si_tables.c $(ASSETS)/snake2_data.c $(ASSETS)/title_data.c
 CORE_SRC := $(wildcard core/*.c)
 CORE_HDR := $(wildcard core/*.h)
 INCLUDES := -Icore -Iplatform/host -I$(ASSETS)
@@ -69,7 +69,7 @@ GB_TEST_ROM := $(BUILD)/nokia3310-keys.gb
 GB_BANK0 := platform/gb/main.c platform/gb/far.c core/lcd.c core/sprite.c core/games.c core/rand.c core/si_base.c core/sound.c $(ASSETS)/si_tables.c
 GB_BANK1 := core/menu.c core/font.c platform/gb/save.c $(ASSETS)/game_assets.c
 GB_BANK2 := core/si.c
-GB_BANK3 := core/si_setup.c $(ASSETS)/si_data.c
+GB_BANK3 := core/si_setup.c $(ASSETS)/si_data.c core/title.c $(ASSETS)/title_data.c
 GB_BANK4 := core/snake2.c $(ASSETS)/snake2_data.c platform/gb/strip.c
 gb_rels = $(patsubst %.c,$(BUILD)/gb/$(1)/%.rel,$(notdir $(2)))
 GB_RELS := $(call gb_rels,0,$(filter-out platform/gb/main.c,$(GB_BANK0))) $(call gb_rels,1,$(GB_BANK1)) \
@@ -80,7 +80,7 @@ GBA_TEST_ROM := $(BUILD)/nokia3310-keys.gba
 # scripted screenshots and the checks against the host's frame for them.
 # The default opens Space Impact and starts a game. The ROMs `make gba` and
 # `make gb` build press none.
-KEYS ?= sdss
+KEYS ?= sdsss
 # The game without the menus, for tools that drive it directly.
 GAME_SRC := $(filter-out core/menu.c core/font.c,$(CORE_SRC))
 GBA_SRC := platform/gba/crt0.s platform/gba/main.c platform/gba/libc.c $(CORE_SRC) $(ASSET_SRC)
@@ -154,7 +154,7 @@ assets: $(ASSET_SRC)
 $(ASSETS)/game_assets.c: tools/extract_assets.py
 	$(PYTHON) tools/extract_assets.py "$(DUMP)" $(ASSETS)
 
-$(ASSETS)/si_data.c $(ASSETS)/si_tables.c $(ASSETS)/snake2_data.c: $(ASSETS)/game_assets.c
+$(ASSETS)/si_data.c $(ASSETS)/si_tables.c $(ASSETS)/snake2_data.c $(ASSETS)/title_data.c: $(ASSETS)/game_assets.c
 
 $(BUILD)/test_core: tests/test_core.c core/lcd.c core/rand.c core/sprite.c $(CORE_HDR)
 	@mkdir -p $(BUILD)
@@ -256,6 +256,8 @@ GB_MAIN_FAR := -Dstrip_present=far_strip_present -Dzoom_present=far_zoom_present
 
 # games.c reaches the game in bank 2 through far.c.
 $(BUILD)/gb/0/games.rel: GB_EXTRA := -Dsi_handler=far_si_handler -Dsnake2_handler=far_snake2_handler
+# menu.c reaches the titles in bank 3 through far.c.
+$(BUILD)/gb/1/menu.rel: GB_EXTRA := -Dtitle_start=far_title_start -Dtitle_elapse=far_title_elapse -Dtitle_draw=far_title_draw
 
 $(BUILD)/gb/0/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
 	@mkdir -p $(BUILD)/gb/0
@@ -263,7 +265,7 @@ $(BUILD)/gb/0/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
 
 $(BUILD)/gb/1/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
 	@mkdir -p $(BUILD)/gb/1
-	$(SDCC) $(GB_CFLAGS) --codeseg CODE_1 -c $< -o $@
+	$(SDCC) $(GB_CFLAGS) $(GB_EXTRA) --codeseg CODE_1 -c $< -o $@
 
 $(BUILD)/gb/2/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
 	@mkdir -p $(BUILD)/gb/2
@@ -311,7 +313,7 @@ $(BUILD)/frame_gb: platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(
 
 # The ROM presses KEYS at power-on; its screen at each of GB_FRAMES must be
 # one of the host's frames for those keys, to the pixel. With the default
-# keys that is a game under way in the phone-sized mode; KEYS=asdss is the
+# keys that is a game under way in the phone-sized mode; KEYS=adsss is the
 # full-screen variant's 2x. Also says how fast the ROM ran the game between
 # the screenshots, 100% being the phone's speed.
 check-gb: $(GB_TEST_ROM) $(BUILD)/gb_run $(BUILD)/frame_gb

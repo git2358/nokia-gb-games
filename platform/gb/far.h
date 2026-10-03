@@ -5,8 +5,8 @@
       timers and the helpers every part of Space Impact uses;
    1  the menus, the fonts, the text and what the cartridge RAM keeps;
    2  Space Impact's play;
-   3  how its games, levels and ships begin, and the image of its data that
-      is copied to cartridge RAM at power-on;
+   3  how its games, levels and ships begin, the image of its data that
+      is copied to cartridge RAM at power-on, and the games' titles;
    4  Snake II and its data, and the games at 2x (strip.c).
 
    The main loop runs with bank 1 mapped. A call into bank 2, 3 or 4 goes

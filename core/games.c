@@ -11,6 +11,7 @@ struct game_options games_options = { 1, 1, 1 };
 
 static struct game_context ctx;
 uint8_t games_playing = GAME_SPACE_IMPACT;
+uint8_t games_strip;
 #define playing games_playing
 /* A continued game stands still until a key is pressed, as Snake II does
    on the phone. */
@@ -240,5 +241,6 @@ void games_render(void)
 void games_draw(uint8_t all)
 {
     games_render();
+    games_strip = playing == GAME_SPACE_IMPACT;
     sprite_present(all);
 }

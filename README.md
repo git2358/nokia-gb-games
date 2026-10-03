@@ -8,9 +8,11 @@ built from one portable C core:
 - a Game Boy ROM (`.gb`), and
 - a Game Boy Advance ROM (`.gba`).
 
-Targets: Snake, Memory and Rotation as shipped, plus the two games the
-firmware carries but never offers: the six-cell reaction game in its plugin
-table and the Mastermind-style Logic.
+Targets: Snake, Memory and Rotation as shipped. The two games the firmware
+carries but never offers, React (a shooting gallery in its plugin table)
+and the Mastermind-style Logic, were re-implemented and tried in October
+2026 and dropped again: they are not fun to play. The fork's
+`docs/games_applications.md` keeps everything learned about them.
 
 The games are re-implemented from a function-level map of the firmware, not
 copied from it. The map, the tracing tools and the evidence live in a fork of
@@ -76,6 +78,14 @@ scripts/setup-sameboy.sh
   library for headless GBA frames (`scripts/setup-mgba.sh`, needs cmake);
   `make run-gb` and `make run-gba` open the ROMs in SameBoy.app and
   mGBA.app.
+
+## Version
+
+The first screen shows the port's version in its bottom right corner, and
+the full-screen variant's list of games ends with an About entry that
+shows it with this repository's address. Both come from `GAME_VERSION` in
+`core/version.h`, set by hand; change the string there when a release
+deserves a new number.
 
 ## Building
 

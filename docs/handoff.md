@@ -102,8 +102,8 @@ use has each 16-bit pair swapped (see the fork's `roms/README.md`), so
    input, timer-driven tick, SRAM settings.
 5. Game Boy layer (SDCC `sm83`, no GBDK): tile renderer, input, timer tick,
    cartridge RAM settings.
-6. Memory and Rotation, then the reaction game and Logic, each with the same
-   golden-frame check.
+6. Memory and Rotation, each with the same golden-frame check. (React and
+   Logic: done and dropped, see the open questions.)
 
 ## Open questions
 

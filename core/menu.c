@@ -598,8 +598,10 @@ static uint8_t help_lines(void)
 static const char *help_next_line(const char *text)
 {
     const char *end = text, *p = text;
-    uint8_t limit = full_screen ? LCD_FB_WIDTH - 2 * NATIVE_MARGIN : LCD_WIDTH;
-    uint8_t width = 0;
+    /* Wider than a byte: the full-screen limit is close to 255 and a line
+       measured past it must still compare as too long. */
+    uint16_t limit = full_screen ? LCD_FB_WIDTH - 2 * NATIVE_MARGIN : LCD_WIDTH;
+    uint16_t width = 0;
 
     for (;;) {
         while (*p && *p != ' ')

@@ -7,9 +7,10 @@
    2  Space Impact's play;
    3  how its games, levels and ships begin, the image of its data that
       is copied to cartridge RAM at power-on, and the games' titles;
-   4  Snake II and its data, and the games at 2x (strip.c).
+   4  Snake II and its data, and the games at 2x (strip.c);
+   5  Pairs II and its pictures.
 
-   The main loop runs with bank 1 mapped. A call into bank 2, 3 or 4 goes
+   The main loop runs with bank 1 mapped. A call into bank 2 to 5 goes
    through one of the far_ functions here, which map that bank for the call
    and then the one that was mapped before. */
 #ifndef GB_FAR_H
@@ -21,7 +22,8 @@ enum {
     BANK_MENU = 1,
     BANK_PLAY,
     BANK_SETUP,
-    BANK_SNAKE
+    BANK_SNAKE,
+    BANK_PAIRS
 };
 
 void far_bank(uint8_t bank);

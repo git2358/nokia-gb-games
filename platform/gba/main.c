@@ -88,12 +88,20 @@
    score high byte, low byte, level (the option in its top four bits:
    Snake II's maze) and a check byte; then the games'
    settings as one byte of switches (Sounds, Lights, Shakes in bits 0 to
-   2) and its check byte. */
+   2) and its check byte; then one more record, Pairs II's Puzzle's (Time
+   trial has the game's). */
 #define SAVE ((volatile uint8_t *)0x0e000000)
 #define SAVE_SIGNATURE_0 'N'
 #define SAVE_SIGNATURE_1 '3'
 #define SAVE_OPTIONS (2 + GAME_COUNT * 4)
 #define OPTIONS_CHECK(flags) ((uint8_t)((flags) ^ 0xa5))
+
+/* Where a slot's record is: the games' in order, then Pairs II's Puzzle's
+   after the switches. */
+static uint8_t save_record(uint8_t slot)
+{
+    return (uint8_t)(slot < GAME_COUNT ? 2 + slot * 4 : SAVE_OPTIONS + 2);
+}
 
 /* Emulators and flash carts find the save type by this string. */
 __attribute__((used)) static const char save_type[] = "SRAM_V113";
@@ -126,7 +134,7 @@ static uint8_t save_check(uint8_t hi, uint8_t lo, uint8_t level)
 
 uint8_t platform_settings_load(uint8_t game, struct game_settings *out)
 {
-    volatile uint8_t *record = SAVE + 2 + game * 4;
+    volatile uint8_t *record = SAVE + save_record(game);
     uint8_t hi = record[0], lo = record[1], level = record[2];
 
     out->top_score = 0;
@@ -143,7 +151,7 @@ uint8_t platform_settings_load(uint8_t game, struct game_settings *out)
 
 void platform_settings_save(uint8_t game, const struct game_settings *in)
 {
-    volatile uint8_t *record = SAVE + 2 + game * 4;
+    volatile uint8_t *record = SAVE + save_record(game);
     uint8_t hi = (uint8_t)(in->top_score >> 8), lo = (uint8_t)in->top_score;
 
     SAVE[0] = SAVE_SIGNATURE_0;

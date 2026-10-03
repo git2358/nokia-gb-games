@@ -10,12 +10,12 @@ static uint16_t free_head;
 
 uint8_t sprite_screen[84 * SPRITE_SCREEN_BANDS];
 
-void sprite_reset_all(void)
+void sprite_reset(uint8_t count)
 {
     uint16_t id;
 
     memset(sprites, 0, sizeof sprites);
-    for (id = 1; id < SPRITE_COUNT; id++)
+    for (id = 1; id < count; id++)
         sprites[id].next = (uint16_t)(id + 1);
     sprites[id].next = 0;
     free_head = 1;

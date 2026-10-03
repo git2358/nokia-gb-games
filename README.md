@@ -3,9 +3,9 @@
 ![The first screen, the list of games and Space Impact being played, on the Game Boy and the Game Boy Advance, each in the phone-sized mode and in full screen, with blank panels for the games not here yet: Snake II, Bantumi and Pairs II](docs/banner.png)
 
 The Nokia 3310 (NHM-5 v6.39) follow-up to
-<https://github.com/lukesau/nokia-3210-games>: Space Impact and Snake II
-re-implemented in C from a map of the firmware, behind the phone's own
-Games menus, with the levels, mazes, sprites, fonts and text read from your
+<https://github.com/lukesau/nokia-3210-games>: Space Impact, Snake II and
+Pairs II re-implemented in C from a map of the firmware, behind the phone's
+own Games menus, with the levels, mazes, boards, sprites, fonts and text read from your
 own dump at build time.
 One portable core runs on the host, as a Game Boy ROM (`.gb`) and as a
 Game Boy Advance ROM (`.gba`).
@@ -37,7 +37,16 @@ What is there so far:
   food, the small creatures and their countdown, the fat swallowed piece,
   the one short tick a turn can save the snake in, the blinking death and
   its three sounds, and the same rumble on every meal and at the end. The
-  level and the maze are kept with its top score.
+  level and the maze are kept with its top score;
+- Pairs II: its list of the two modes, Time trial and Puzzle, each with its
+  own menu, Level (seven bars), Top score and Instructions, and its own
+  record of level and top score, as on the phone. Time trial's nine boards
+  with their shapes and time limits, the cards dealt one pixel a tick from
+  the middle, the saloon door and the wipe, the dynamite's fuse burning
+  down, the explosion when time runs out and the bonus of half the time
+  left; Puzzle's grid by level, each pair found taken away to uncover the
+  picture behind. Level + 4 points a pair and one off a miss, and the
+  phone's two sounds; the phone does not vibrate in Pairs II.
 
 Start on the first screen picks a full-screen mode instead, as in the 3210
 project: the port's own menus laid out for the console's whole screen in
@@ -48,22 +57,23 @@ width, so the last four are left off: nothing of the score, which ends at
 column 75, but enemies come on four columns late and the ship can fly its
 nose out of sight.
 
-| | Menus | Space Impact | Snake II |
-|---|---|---|---|
-| D-pad | up and down | move the ship | steer (2, 4, 6, 8) |
-| A | select | fire | turn clockwise (#) |
-| B | back | special weapon | turn anticlockwise (*) |
-| Start, Select | select | pause | pause |
+| | Menus | Space Impact | Snake II | Pairs II |
+|---|---|---|---|---|
+| D-pad | up and down | move the ship | steer (2, 4, 6, 8) | move the cursor (2, 4, 6, 8) |
+| A | select | fire | turn clockwise (#) | open a card (5) |
+| B | back | special weapon | turn anticlockwise (*) | open a card (5) |
+| Start, Select | select | pause | pause | pause |
 
 Choosing a game from the list first plays its title animation, as on the
 phone, and any button skips it. All four games' titles are there: Snake
 II's, Space Impact's stars and closing logo, Bantumi's and Pairs II's
 cards turning to spell its name.
 
-What is not: Bantumi and Pairs II play their titles and then go back to
-the list, as their games are not here yet. A paused Space Impact continues
+What is not: Bantumi plays its title and then goes back to the list, as
+its game is not here yet. A paused Space Impact continues
 exactly where it stopped, where the phone gives the ship a second and a
-half of shield; a paused Snake II waits for a key, as on the phone. Snake
+half of shield; a paused Snake II or Pairs II waits for a key, as on the
+phone. Snake
 II's large animated creature never comes: the phone lets it come only when
 a setting the port does not have is on, and in MAME it never does.
 
@@ -167,6 +177,7 @@ make check-golden                # the games against recorded runs of the firmwa
 make check-gb                    # the .gb in SameBoy against the host's frames, and its speed
 make check-gb KEYS=a3dsss        # the same in the full-screen mode's 2x, starting at the fourth level
 make check-gb KEYS=asssss        # Snake II in the full-screen mode
+make check-gb KEYS=sdddsssswwwwwwwwsrsrsdsls  # Pairs II's Time trial, cards opened after the deal
 make check-gba KEYS=sds SHOT_FRAMES=70   # Space Impact's title, part-way
 make check-gba                   # the .gba in mGBA against the host's frames
 make shot-gb KEYS=sdsss          # a screenshot after scripted keys
@@ -186,7 +197,8 @@ They include every distinct picture of the four title animations, Space
 Impact's stars drawn from that seed. Space Impact's Top score page's two
 frames show the 4075 the PMM dump holds and differ from the port's 0 by
 design. The other frames, Snake II's menus and Level, Mazes and
-Instructions pages among them, are equal to the pixel.
+Instructions pages and Pairs II's list of modes, menu and Level page among
+them, are equal to the pixel.
 
 The rumble is checked the same way: `build/gb_run ... rumble 1400` prints
 each frame the motor was on for, and `build/gba_shot` prints every switch
@@ -209,20 +221,22 @@ over the terrain, a ship or a shot, that cell gets a tile of its own made
 from the picture, so what is shown is still the phone's picture to the
 pixel; `make check-gb` holds it to that.
 
-Snake II has no terrain, and at 2x all six bands of its picture are made
-into twelve rows of tiles, of which only those that changed are made
-again.
+Snake II and Pairs II have no terrain, and at 2x all six bands of their
+picture are made into twelve rows of tiles, of which only those that
+changed are made again.
 
 When a tick still takes longer to show than the 93 ms between ticks, the
 game keeps the phone's pace and shows fewer pictures: every tick is
 played, not every one is drawn.
 
-The ROM is 16 KiB banks on an MBC5 with 8 KiB of battery-backed RAM, five
+The ROM is 16 KiB banks on an MBC5 with 8 KiB of battery-backed RAM, six
 of eight banks used (`platform/gb/far.h` says what is where); MBC5 for
 its rumble pin, see below. Space Impact's 7 KiB of data is
 copied from the ROM to cartridge RAM at power-on, because both the game
 and the sprite code, which are in different banks, read it. The save file
-therefore holds a copy of that data next to the top score.
+therefore holds a copy of that data next to the top score. Pairs II's
+state, nearly 600 bytes for up to 60 cards, does not fit in the Game Boy's work
+RAM either and is kept in cartridge RAM after that data.
 
 ## Sound
 
@@ -307,6 +321,23 @@ swallowed piece, creatures and their countdown, eating one and letting
 one run out, the wrap at the edges, walls, the saving tick, the death and
 the blinking.
 
+Pairs II is checked against four games (`make golden-pairs`,
+`PAIRS_GOLDENS`) played by the MAME fork's `mame_nokia_3310_pairs2_bot.lua`,
+which reads the board from RAM, steers the cursor the shortest way to the
+other card of a pair, and opens a wrong card every so many pairs. The
+phone draws a tick's change on the LCD up to 170 ms after the tick, so the
+autopilot presses a key only once that change is shown and at least
+130 ms before the next tick, as a key's change takes up to 100 ms; MAME's LCD then shows each change on its own:
+
+- Time trial at level 1, all nine boards to the end of the game;
+- Time trial at level 3, the time left to run out on the second board;
+- Time trial at level 5, paused between boards and continued, which deals
+  the next board;
+- Puzzle at level 5, paused and continued, to the last pair.
+
+Level 7's 100 ms tick leaves the autopilot no time between ticks, so it is
+not among them.
+
 The frames and the event logs are derived from the firmware and stay in
 the ignored `golden/`.
 
@@ -318,9 +349,10 @@ the ignored `golden/`.
   sprites, so that a paused game's are kept), `sprite` (sprite
   list and tile layer), `si`, `si_setup` and `si_base` (Space Impact),
   `snake2` (Snake II, which draws straight into the sprite layer's
-  picture), `game` (what the games and the menus share), `games`
-  (keys and timers to game events, the settings the games follow and the
-  vibrator's timer), `sound` (the notes of the sound in progress), `rand`.
+  picture), `pairs2` (Pairs II, both modes), `game` (what the games and
+  the menus share), `games` (keys and timers to game events, the settings
+  the games follow and the vibrator's timer), `sound` (the notes of the
+  sound in progress), `rand`.
 - `platform/host/` has the tools above; `platform/gb/` and `platform/gba/`
   are the cartridges.
 - `tools/extract_assets.py` copies the games' data regions, their sounds, the

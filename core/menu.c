@@ -7,6 +7,7 @@
 #include "lcd.h"
 #include "rand.h"
 #include "si.h"
+#include "pairs2.h"
 #include "snake2.h"
 #include "sprite.h"
 #include "title.h"
@@ -52,6 +53,7 @@ enum {
     SCREEN_MAZES,         /* Snake II's list of mazes */
     SCREEN_MAZE_DONE,     /* its note that a maze was chosen */
     SCREEN_TITLE,         /* the game's title animation, before its menu */
+    SCREEN_MODES,         /* Pairs II's list: Time trial, Puzzle */
     SCREEN_GAME,
     SCREEN_TOP_SCORE,
     SCREEN_HELP,
@@ -122,6 +124,7 @@ enum {
 };
 static const uint8_t space_impact_items[] = { ITEM_NEW_GAME, ITEM_TOP_SCORE, ITEM_INSTRUCTIONS };
 static const uint8_t snake_items[] = { ITEM_NEW_GAME, ITEM_LEVEL, ITEM_MAZES, ITEM_TOP_SCORE, ITEM_INSTRUCTIONS };
+static const uint8_t pairs_items[] = { ITEM_NEW_GAME, ITEM_LEVEL, ITEM_TOP_SCORE, ITEM_INSTRUCTIONS };
 
 /* Snake II's Level page: a bar for each level, the ones up to the level
    filled, each two rows taller than the one before and with a shadow on
@@ -148,6 +151,9 @@ static uint8_t done_step;  /* picture of the Done note's animation */
 static uint8_t done_ticks; /* phone ticks the note has been shown */
 static uint8_t paused;   /* a game is waiting behind the menu */
 static uint8_t paused_game; /* which one */
+static uint8_t paused_mode; /* and its mode, for Pairs II */
+static uint8_t pairs_mode; /* Pairs II's mode, the selection in its list */
+static uint8_t pairs_mode_top;
 static uint8_t level;    /* selection on the Level page, 0 is the first */
 static uint8_t maze;     /* selection in the list of mazes */
 static uint8_t maze_top;
@@ -244,10 +250,17 @@ static void main_open(void)
 }
 static const char *help_page; /* first character of the Instructions page shown */
 
+/* Where the settings of the game whose menu is open are kept: each of
+   Pairs II's modes has its own. */
+static uint8_t settings_slot(void)
+{
+    return game == GAME_PAIRS && pairs_mode == PAIRS2_PUZZLE ? GAME_SLOT_PAIRS_PUZZLE : game;
+}
+
 /* The settings of the game whose menu is open. */
 static void settings_load(void)
 {
-    if (!platform_settings_load(game, &settings))
+    if (!platform_settings_load(settings_slot(), &settings))
         settings.top_score = DEFAULT_TOP_SCORE;
     if (game == GAME_SNAKE) {
         /* The phone's own default: the fastest level, no maze. */
@@ -256,15 +269,33 @@ static void settings_load(void)
         if (settings.option >= SNAKE2_MAZE_COUNT)
             settings.option = 0;
     }
+    if (game == GAME_PAIRS && settings.level >= PAIRS2_LEVELS)
+        settings.level = PAIRS2_LEVELS - 1;
 }
 
+/* The bars of the Level page. */
+static uint8_t levels(void)
+{
+    return game == GAME_PAIRS ? PAIRS2_LEVELS : SNAKE2_LEVELS;
+}
+
+static const char *mode_name(uint8_t which)
+{
+    return which == PAIRS2_PUZZLE ? text_puzzle : text_time_trial;
+}
+
+/* Pairs II's menus are its modes' own. */
 static const char *game_name(void)
 {
+    if (game == GAME_PAIRS)
+        return mode_name(pairs_mode);
     return game == GAME_SNAKE ? text_snake : text_space_impact;
 }
 
 static const char *game_help(void)
 {
+    if (game == GAME_PAIRS)
+        return pairs_mode == PAIRS2_PUZZLE ? text_help_puzzle : text_help_time_trial;
     return game == GAME_SNAKE ? text_help_snake : text_help_space_impact;
 }
 
@@ -342,12 +373,14 @@ static const char *list_name(uint8_t index)
 /* A game of the menu's own is waiting behind it. */
 static uint8_t can_continue(void)
 {
-    return (uint8_t)(paused && paused_game == game);
+    return (uint8_t)(paused && paused_game == game && (game != GAME_PAIRS || paused_mode == pairs_mode));
 }
 
 static uint8_t item_count(void)
 {
-    return (uint8_t)((game == GAME_SNAKE ? sizeof snake_items : sizeof space_impact_items) + can_continue());
+    uint8_t n = game == GAME_SNAKE ? sizeof snake_items : game == GAME_PAIRS ? sizeof pairs_items : sizeof space_impact_items;
+
+    return (uint8_t)(n + can_continue());
 }
 
 /* The item at visible position `index`. */
@@ -358,7 +391,7 @@ static uint8_t item_id(uint8_t index)
             return ITEM_CONTINUE;
         index--;
     }
-    return game == GAME_SNAKE ? snake_items[index] : space_impact_items[index];
+    return game == GAME_SNAKE ? snake_items[index] : game == GAME_PAIRS ? pairs_items[index] : space_impact_items[index];
 }
 
 static const char *item_name(uint8_t id)
@@ -406,13 +439,14 @@ static void draw_path(uint8_t depth)
         /* The phone numbers Settings 6: an entry before it is not shown. */
         path[n++] = (char)((game < GAME_COUNT ? '1' : '2') + game);
     }
+    /* Pairs II's menus are a level deeper, under its modes. */
     if (depth > 1) {
         path[n++] = '-';
-        path[n++] = (char)('1' + (game < GAME_COUNT ? item : setting));
+        path[n++] = (char)('1' + (game == GAME_PAIRS ? pairs_mode : game < GAME_COUNT ? item : setting));
     }
     if (depth > 2) {
         path[n++] = '-';
-        path[n++] = (char)('1' + (game < GAME_COUNT ? maze : value));
+        path[n++] = (char)('1' + (game == GAME_PAIRS ? item : game < GAME_COUNT ? maze : value));
     }
     path[n] = 0;
     font_draw(&font_tiny_plain, LCD_WIDTH - font_text_width(&font_tiny_plain, path), HEADER_Y, path, 1);
@@ -481,7 +515,7 @@ static void draw_game(void)
 {
     uint8_t row;
 
-    draw_path(2);
+    draw_path(game == GAME_PAIRS ? 3 : 2);
     for (row = 0; row < VISIBLE_ROWS; row++) {
         uint8_t index = (uint8_t)((item_top + row) % item_count());
 
@@ -518,7 +552,7 @@ static void draw_level(void)
     uint8_t i, x, top;
 
     font_draw(&font_small_bold, LEVEL_BAR_X, HEADER_Y, text_level_value, 1);
-    for (i = 0; i < SNAKE2_LEVELS; i++) {
+    for (i = 0; i < levels(); i++) {
         x = (uint8_t)(LEVEL_BAR_X + i * LEVEL_BAR_PITCH);
         top = (uint8_t)(LEVEL_BAR_BOTTOM + 1 - LEVEL_BAR_FIRST_HEIGHT - 2 * i);
         if (i <= level)
@@ -527,6 +561,15 @@ static void draw_level(void)
         lcd_fill_rect(x + 1, LEVEL_BAR_BOTTOM + 2, LEVEL_BAR_WIDTH + 1, 1, 1);
     }
     draw_softkey(text_ok);
+}
+
+static void draw_modes(void)
+{
+    draw_path(2);
+    draw_row(0, mode_name(PAIRS2_TIME_TRIAL), pairs_mode == PAIRS2_TIME_TRIAL);
+    draw_row(1, mode_name(PAIRS2_PUZZLE), pairs_mode == PAIRS2_PUZZLE);
+    draw_scrollbar(thumb_for(pairs_mode, 2));
+    draw_softkey(text_select);
 }
 
 static void draw_mazes(void)
@@ -631,6 +674,14 @@ static void native_settings(void)
     native_hint(text_hint_select);
 }
 
+static void native_modes(void)
+{
+    native_title(text_pairs);
+    native_row(0, mode_name(PAIRS2_TIME_TRIAL), pairs_mode == PAIRS2_TIME_TRIAL);
+    native_row(1, mode_name(PAIRS2_PUZZLE), pairs_mode == PAIRS2_PUZZLE);
+    native_hint(text_hint_select);
+}
+
 static void native_mazes(void)
 {
     uint8_t i;
@@ -651,6 +702,22 @@ static void native_game(void)
     native_hint(text_hint_select);
 }
 
+static uint8_t native_selection(void)
+{
+    switch (screen) {
+    case SCREEN_GAMES:
+        return game;
+    case SCREEN_GAME:
+        return item;
+    case SCREEN_MAZES:
+        return maze;
+    case SCREEN_MODES:
+        return pairs_mode;
+    default:
+        return setting;
+    }
+}
+
 /* When only the selection moved on a full-screen menu, redraws just that
    and returns nonzero. */
 static uint8_t native_update(void)
@@ -658,9 +725,10 @@ static uint8_t native_update(void)
     uint8_t selection;
 
     if (drawn_screen != screen
-        || (screen != SCREEN_GAMES && screen != SCREEN_GAME && screen != SCREEN_SETTINGS && screen != SCREEN_MAZES))
+        || (screen != SCREEN_GAMES && screen != SCREEN_GAME && screen != SCREEN_SETTINGS && screen != SCREEN_MAZES
+            && screen != SCREEN_MODES))
         return 0;
-    selection = screen == SCREEN_GAMES ? game : screen == SCREEN_GAME ? item : screen == SCREEN_MAZES ? maze : setting;
+    selection = native_selection();
     native_cursor(drawn_selection, 0);
     native_cursor(selection, 1);
     drawn_selection = selection;
@@ -823,14 +891,18 @@ static void game_menu_open(void)
     settings_load();
 }
 
-/* After the title, the game's menu; Bantumi and Pairs II have none yet,
-   and go back to the list. */
+/* After the title, the game's menu, or Pairs II's list of modes; Bantumi
+   has none yet, and goes back to the list. */
 static void title_over(void)
 {
-    if (game == GAME_SNAKE || game == GAME_SPACE_IMPACT)
+    if (game == GAME_SNAKE || game == GAME_SPACE_IMPACT) {
         game_menu_open();
-    else
+    } else if (game == GAME_PAIRS) {
+        screen = SCREEN_MODES;
+        pairs_mode = pairs_mode_top = 0;
+    } else {
         screen = SCREEN_GAMES;
+    }
 }
 
 static void play_over(void)
@@ -839,7 +911,7 @@ static void play_over(void)
     new_top_score = final_score > settings.top_score;
     if (new_top_score) {
         settings.top_score = final_score;
-        platform_settings_save(game, &settings);
+        platform_settings_save(settings_slot(), &settings);
     }
     paused = 0;
     held = NO_KEY;
@@ -854,7 +926,7 @@ static void play_start(void)
     if (!seed_fixed)
         game_rand16_seed = (uint16_t)(uptime % 0xfff0 + 1);
     held = NO_KEY;
-    games_start(game, (uint8_t)(settings.level + 1), (uint8_t)(settings.option + 1));
+    games_start(game, (uint8_t)(settings.level + 1), game == GAME_PAIRS ? pairs_mode : (uint8_t)(settings.option + 1));
     board_drawn = 0;
     screen = SCREEN_PLAY;
 }
@@ -863,6 +935,24 @@ static void play_start(void)
    A turns clockwise and B anticlockwise, as # and * do on the phone. */
 static uint8_t play_phone_key(uint8_t key)
 {
+    /* Pairs II: the pad moves the cursor, A or B opens a card. */
+    if (game == GAME_PAIRS) {
+        switch (key) {
+        case MENU_KEY_UP:
+            return GAME_KEY_2;
+        case MENU_KEY_DOWN:
+            return GAME_KEY_8;
+        case MENU_KEY_LEFT:
+            return GAME_KEY_4;
+        case MENU_KEY_RIGHT:
+            return GAME_KEY_6;
+        case MENU_KEY_SELECT:
+        case MENU_KEY_BACK:
+            return GAME_KEY_5;
+        default:
+            return 0;
+        }
+    }
     if (game == GAME_SNAKE) {
         switch (key) {
         case MENU_KEY_UP:
@@ -910,6 +1000,7 @@ static uint8_t play_key(uint8_t key)
         held = NO_KEY;
         paused = 1;
         paused_game = game;
+        paused_mode = pairs_mode;
         game_menu_open();
         return 1;
     }
@@ -1077,13 +1168,13 @@ static uint8_t handle_key(uint8_t key)
     case SCREEN_LEVEL:
         /* Up and down change the level by one, stopping at the ends; OK
            keeps it. */
-        if (key == MENU_KEY_UP && level < SNAKE2_LEVELS - 1) {
+        if (key == MENU_KEY_UP && level < levels() - 1) {
             level++;
         } else if (key == MENU_KEY_DOWN && level > 0) {
             level--;
         } else if (key == MENU_KEY_SELECT) {
             settings.level = level;
-            platform_settings_save(game, &settings);
+            platform_settings_save(settings_slot(), &settings);
             screen = SCREEN_GAME;
         } else if (key == MENU_KEY_BACK) {
             screen = SCREEN_GAME;
@@ -1095,7 +1186,7 @@ static uint8_t handle_key(uint8_t key)
             list_move(key, SNAKE2_MAZE_COUNT, &maze, &maze_top);
         } else if (key == MENU_KEY_SELECT) {
             settings.option = maze;
-            platform_settings_save(game, &settings);
+            platform_settings_save(settings_slot(), &settings);
             /* The full-screen variant has no note. */
             if (full_screen) {
                 screen = SCREEN_GAME;
@@ -1129,13 +1220,21 @@ static uint8_t handle_key(uint8_t key)
     case SCREEN_GAME_OVER:
         game_menu_open();
         break;
+    case SCREEN_MODES:
+        if (key == MENU_KEY_DOWN || key == MENU_KEY_UP)
+            list_move(key, 2, &pairs_mode, &pairs_mode_top);
+        else if (key == MENU_KEY_SELECT)
+            game_menu_open();
+        else if (key == MENU_KEY_BACK)
+            screen = SCREEN_GAMES;
+        break;
     default:
         if (key == MENU_KEY_DOWN || key == MENU_KEY_UP)
             list_move(key, item_count(), &item, &item_top);
         else if (key == MENU_KEY_SELECT)
             game_menu_select();
         else if (key == MENU_KEY_BACK)
-            screen = SCREEN_GAMES;
+            screen = game == GAME_PAIRS ? SCREEN_MODES : SCREEN_GAMES;
         break;
     }
     return 0;
@@ -1144,14 +1243,14 @@ static uint8_t handle_key(uint8_t key)
 uint8_t menu_key(uint8_t key)
 {
     uint8_t was_screen = screen, was_game = game, was_item = item, was_top = item_top;
-    uint8_t was_setting = setting, was_value = value, was_maze = maze;
+    uint8_t was_setting = setting, was_value = value, was_maze = maze, was_mode = pairs_mode;
     const char *was_page = help_page;
     uint8_t changed;
 
     sparkle_only = 0;
     changed = handle_key(key);
     return changed || screen != was_screen || game != was_game || item != was_item || item_top != was_top
-           || setting != was_setting || value != was_value || maze != was_maze || help_page != was_page;
+           || setting != was_setting || value != was_value || maze != was_maze || pairs_mode != was_mode || help_page != was_page;
 }
 
 void menu_seed(uint16_t seed)
@@ -1386,6 +1485,12 @@ void menu_draw(void)
         else
             draw_mazes();
         break;
+    case SCREEN_MODES:
+        if (full_screen)
+            native_modes();
+        else
+            draw_modes();
+        break;
     case SCREEN_MAZE_DONE:
         draw_maze_done();
         draw_done_tick();
@@ -1398,7 +1503,7 @@ void menu_draw(void)
         break;
     }
     if (mode == VIEW_NATIVE) {
-        selection = screen == SCREEN_GAMES ? game : screen == SCREEN_GAME ? item : screen == SCREEN_MAZES ? maze : setting;
+        selection = native_selection();
         drawn_screen = screen;
         drawn_selection = selection;
     }

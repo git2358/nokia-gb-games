@@ -1,5 +1,6 @@
 #include "games.h"
 
+#include "pairs2.h"
 #include "si.h"
 #include "snake2.h"
 #include "sound.h"
@@ -54,6 +55,8 @@ static int handle(int event)
 {
     if (playing == GAME_SNAKE)
         return snake2_handler(event, &ctx);
+    if (playing == GAME_PAIRS)
+        return pairs2_handler(event, &ctx);
     return si_handler(event, &ctx);
 }
 
@@ -139,9 +142,11 @@ void games_start(uint8_t game, uint8_t level, uint8_t option)
 
 void games_continue(void)
 {
-    if (playing != GAME_SNAKE)
+    if (playing == GAME_SPACE_IMPACT)
         return;
     deliver(GAME_EVENT_RESUME, FROM_OTHER);
+    if (games_over)
+        return;
     /* The phone stops the game's timers when it leaves it and starts the
        tick again at the first key. A snake that has died has no period to
        wait for, and its timers run on here. */
@@ -234,7 +239,9 @@ uint8_t games_event(int event)
 void games_render(void)
 {
     /* Snake II draws into the picture as it goes. */
-    if (playing != GAME_SNAKE)
+    if (playing == GAME_PAIRS)
+        pairs2_render();
+    else if (playing != GAME_SNAKE)
         sprite_render();
 }
 

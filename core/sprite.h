@@ -14,7 +14,10 @@
 
 #include <stdint.h>
 
-#define SPRITE_COUNT 60
+/* The table's size, and how many of its sprites Space Impact uses, as the
+   phone's engine for it has; Pairs II has more (sprite_reset). */
+#define SPRITE_COUNT 76
+#define SPRITE_COUNT_DEFAULT 60
 
 /* What a sprite is. */
 enum {
@@ -60,7 +63,10 @@ extern struct sprite sprites[SPRITE_COUNT + 1];
 #define sprite_kind(s) ((s)->flags & 7)
 #define sprite_mode(s) (((s)->flags >> 3) & 7)
 
-void sprite_reset_all(void);
+/* Clears every sprite and makes `count` of them free, ids 1 to count, as
+   the phone's engine does when a game asks it for that many. */
+void sprite_reset(uint8_t count);
+#define sprite_reset_all() sprite_reset(SPRITE_COUNT_DEFAULT)
 uint16_t sprite_create(const struct sprite_image *image, uint8_t mode, uint8_t layer, int x, int y);
 uint16_t sprite_create_line(uint8_t mode, uint8_t layer, int x, int y, int x2, int y2);
 uint16_t sprite_create_fill(uint8_t mode, uint8_t layer, int x, int y, int w, int h);

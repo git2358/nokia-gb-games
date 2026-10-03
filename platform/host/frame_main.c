@@ -32,6 +32,7 @@ uint8_t platform_settings_load(uint8_t game, struct game_settings *out)
     (void)game;
     out->top_score = 0;
     out->level = 0;
+    out->option = 0;
     return 0;
 }
 

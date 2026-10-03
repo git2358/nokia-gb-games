@@ -2,6 +2,7 @@
 
 #define SI_SETUP_IMPL /* the real functions' names, not the far_ ones */
 #include "si_state.h"
+#include "pairs2.h"
 #include "snake2.h"
 #include "strip.h"
 #include "title.h"
@@ -85,6 +86,27 @@ int far_snake2_handler(int event, struct game_context *ctx)
     result = snake2_handler(event, ctx);
     far_bank(was);
     return result;
+}
+
+int far_pairs2_handler(int event, struct game_context *ctx)
+{
+    uint8_t was = mapped;
+    int result;
+
+    far_bank(BANK_PAIRS);
+    result = pairs2_handler(event, ctx);
+    far_bank(was);
+    return result;
+}
+
+/* The sprites' pictures are Pairs II's, in its bank. */
+void far_pairs2_render(void)
+{
+    uint8_t was = mapped;
+
+    far_bank(BANK_PAIRS);
+    pairs2_render();
+    far_bank(was);
 }
 
 void far_strip_present(uint8_t all)

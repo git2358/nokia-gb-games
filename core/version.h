@@ -3,6 +3,6 @@
 #ifndef CORE_VERSION_H
 #define CORE_VERSION_H
 
-#define GAME_VERSION "v0.3"
+#define GAME_VERSION "v0.4"
 
 #endif

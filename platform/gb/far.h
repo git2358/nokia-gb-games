@@ -4,7 +4,8 @@
    0  startup, this layer, the framebuffer, the sprite layer, the game's
       timers and the sounds, which play from an interrupt;
    1  the menus, the fonts, the text and what the cartridge RAM keeps;
-   2  Snake II and its data, the score's digits among it.
+   2  Snake II and its data, the score's digits among it, and its title
+      and game-over pictures.
 
    The main loop runs with bank 1 mapped. A call into bank 2 goes through
    one of the far_ functions here, which map that bank for the call and

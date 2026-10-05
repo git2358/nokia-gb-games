@@ -180,13 +180,18 @@ uint8_t games_advance(uint16_t n)
     return draw;
 }
 
-void games_vibrate(void)
+void games_vibrate_for(uint8_t units)
 {
     if (!games_options.shakes)
         return;
     if (!vibrate_timer)
         platform_rumble(1);
-    vibrate_timer = GAMES_VIBRATE_UNITS;
+    vibrate_timer = units;
+}
+
+void games_vibrate(void)
+{
+    games_vibrate_for(GAMES_VIBRATE_UNITS);
 }
 
 void games_rumble_elapse(uint16_t us)

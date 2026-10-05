@@ -8,6 +8,7 @@
 #include "rand.h"
 #include "snake2.h"
 #include "sprite.h"
+#include "title.h"
 #include "version.h"
 
 /* The phone's menu pages: a header line with the page's title in the
@@ -40,6 +41,7 @@ enum {
     SCREEN_ABOUT,         /* the full-screen list's last entry: version and repository */
     SCREEN_SETTINGS,      /* the games' Settings: one page per setting */
     SCREEN_SETTING_VALUE, /* a setting's Off and On */
+    SCREEN_TITLE,         /* Snake II's title animation, before its menu */
     SCREEN_GAME,          /* Snake II's own menu */
     SCREEN_OPTIONS,       /* its Game options: Mazes, Level */
     SCREEN_MAZES,
@@ -93,10 +95,9 @@ enum {
 /* Microseconds per scheduler tick of the phone. */
 #define PHONE_TICK_US 7781
 
-/* The High scores and Game over pages close by themselves after about
-   three seconds. In menu_tick calls. */
+/* The High scores page closes by itself after about three seconds. In
+   menu_tick calls. */
 #define HIGH_SCORES_TICKS ((uint16_t)(385ul * PHONE_TICK_US / MENU_FRAME_US))
-#define GAME_OVER_TICKS ((uint16_t)(385ul * PHONE_TICK_US / MENU_FRAME_US))
 
 /* The Level page: nine bars, each three rows taller than the one before,
    a line on its right and a shadow below; the levels up to the one chosen
@@ -134,6 +135,7 @@ static uint8_t full_screen;    /* the full-screen variant was chosen */
 static uint8_t view_mode;      /* which of the views below the LCD is set up for */
 static uint8_t surround_used;  /* something is drawn around the phone's LCD */
 static struct game_settings settings;
+static uint16_t top_score;     /* the chosen maze's, which the 3410 keeps apart */
 static uint16_t page_ticks;    /* ticks left on a timed page */
 
 /* The phone's LCD; the full-screen variant's own menus. */
@@ -185,6 +187,15 @@ static const char text_about_body[] = "Nokia 3410 games " GAME_VERSION "\ngithub
 static const char text_full_screen_hint[] = "START: full screen";
 #endif
 
+/* The chosen maze's top score. */
+static void top_score_load(void)
+{
+    struct game_settings maze_record;
+
+    platform_settings_load(GAME_SLOT_SNAKE_MAZE(settings.option), &maze_record);
+    top_score = maze_record.top_score;
+}
+
 /* The settings of Snake II, the one game here. */
 static void settings_load(void)
 {
@@ -193,6 +204,7 @@ static void settings_load(void)
         settings.level = 0;
     if (settings.option >= SNAKE2_MAZE_COUNT)
         settings.option = 0;
+    top_score_load();
 }
 
 static const char *maze_name(uint8_t which)
@@ -577,15 +589,18 @@ static void game_menu_open(void)
 static void play_over(void)
 {
     final_score = (uint16_t)games_score;
-    new_top_score = final_score > settings.top_score;
+    new_top_score = final_score > top_score;
     if (new_top_score) {
-        settings.top_score = final_score;
-        platform_settings_save(GAME_SNAKE, &settings);
+        struct game_settings maze_record = { 0, 0, 0 };
+
+        top_score = maze_record.top_score = final_score;
+        platform_settings_save(GAME_SLOT_SNAKE_MAZE(settings.option), &maze_record);
     }
     paused = 0;
     held = NO_KEY;
     screen = SCREEN_GAME_OVER;
-    page_ticks = GAME_OVER_TICKS;
+    board_drawn = 0;
+    over_start(final_score, new_top_score);
 }
 
 static void play_start(void)
@@ -761,7 +776,9 @@ static uint8_t handle_key(uint8_t key)
             /* Snake II is the one game here so far. */
             if (game == GAME_SNAKE) {
                 paused = 0;
-                game_menu_open();
+                screen = SCREEN_TITLE;
+                board_drawn = 0;
+                title_start();
             } else if (game == GAME_COUNT) {
                 screen = SCREEN_ABOUT;
             }
@@ -771,6 +788,14 @@ static uint8_t handle_key(uint8_t key)
         break;
     case SCREEN_ABOUT:
         screen = SCREEN_SELECT;
+        break;
+    case SCREEN_TITLE:
+        /* A key ends the title: C back to the list, any other into the
+           game's menu. */
+        if (key == MENU_KEY_BACK)
+            screen = SCREEN_SELECT;
+        else
+            game_menu_open();
         break;
     case SCREEN_SETTINGS:
         if (key == MENU_KEY_DOWN) {
@@ -836,6 +861,7 @@ static uint8_t handle_key(uint8_t key)
         } else if (key == MENU_KEY_SELECT) {
             settings.option = maze;
             platform_settings_save(GAME_SNAKE, &settings);
+            top_score_load();
             screen = SCREEN_OPTIONS;
         } else if (key == MENU_KEY_BACK) {
             screen = SCREEN_OPTIONS;
@@ -851,7 +877,9 @@ static uint8_t handle_key(uint8_t key)
         screen = SCREEN_GAME;
         break;
     case SCREEN_GAME_OVER:
-        game_menu_open();
+        /* The phone's Navi key cuts the picture short. */
+        if (key == MENU_KEY_SELECT)
+            game_menu_open();
         break;
     default:
         if (key == MENU_KEY_DOWN || key == MENU_KEY_UP)
@@ -901,12 +929,26 @@ uint8_t menu_tick(void)
             return 1;
         }
         break;
-    case SCREEN_GAME_OVER:
-        if (--page_ticks == 0) {
+    case SCREEN_TITLE: {
+        uint8_t what = title_elapse(MENU_FRAME_US);
+
+        if (what & TITLE_OVER) {
             game_menu_open();
             return 1;
         }
+        changed = what;
         break;
+    }
+    case SCREEN_GAME_OVER: {
+        uint8_t what = over_elapse(MENU_FRAME_US);
+
+        if (what & TITLE_OVER) {
+            game_menu_open();
+            return 1;
+        }
+        changed = what;
+        break;
+    }
     case SCREEN_PLAY:
         changed = games_elapse(MENU_FRAME_US);
         if (games_over) {
@@ -961,12 +1003,8 @@ static void draw_phone(void)
         break;
     case SCREEN_HIGH_SCORES:
         draw_header(text_high_scores, 1);
-        draw_number(&font_large_bold, 0, 24, settings.top_score, 1, LCD_WIDTH);
+        draw_number(&font_large_bold, 0, 24, top_score, 1, LCD_WIDTH);
         draw_softkeys(text_back, 0);
-        break;
-    case SCREEN_GAME_OVER:
-        draw_header(text_snake, 1);
-        draw_number(&font_large_bold, 0, 24, final_score, 1, LCD_WIDTH);
         break;
     case SCREEN_HELP:
         draw_header(text_instructions, (uint8_t)(help_page + 1));
@@ -1009,11 +1047,8 @@ static void draw_native(void)
         native_hint(text_hint_select);
         break;
     case SCREEN_HIGH_SCORES:
-        native_note(text_high_scores, "%N", settings.top_score);
+        native_note(text_high_scores, "%N", top_score);
         native_hint(text_hint_back);
-        break;
-    case SCREEN_GAME_OVER:
-        native_note(text_snake, "%N", final_score);
         break;
     case SCREEN_HELP:
         native_title(text_instructions);
@@ -1032,9 +1067,10 @@ void menu_draw(void)
     /* The full-screen variant has its own menus over the whole framebuffer;
        all else is drawn in the phone's LCD. Changing between them, or
        leaving a screen that drew around the LCD, clears everything. */
-    uint8_t mode = full_screen && screen != SCREEN_MAIN && screen != SCREEN_PLAY ? VIEW_NATIVE : VIEW_PHONE;
+    uint8_t picture = screen == SCREEN_PLAY || screen == SCREEN_TITLE || screen == SCREEN_GAME_OVER;
+    uint8_t mode = full_screen && screen != SCREEN_MAIN && !picture ? VIEW_NATIVE : VIEW_PHONE;
 
-    menu_drew_picture = screen == SCREEN_PLAY;
+    menu_drew_picture = picture;
     if (mode != view_mode || surround_used) {
         lcd_view_full();
         lcd_clear();
@@ -1057,6 +1093,17 @@ void menu_draw(void)
 
     if (screen == SCREEN_PLAY) {
         games_draw(!board_drawn);
+        board_drawn = 1;
+        return;
+    }
+    /* The title and the game-over picture are the phone's, shown as the
+       game is. */
+    if (screen == SCREEN_TITLE || screen == SCREEN_GAME_OVER) {
+        if (screen == SCREEN_TITLE)
+            title_draw();
+        else
+            over_draw();
+        sprite_present(!board_drawn);
         board_drawn = 1;
         return;
     }

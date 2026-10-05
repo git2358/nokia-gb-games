@@ -16,10 +16,11 @@
 #define SAVE_OPTIONS (2 + GAME_COUNT * 4)
 #define OPTIONS_CHECK(flags) ((uint8_t)((flags) ^ 0xa5))
 
-/* Where a game's record is: the games' in order. */
+/* Where a slot's record is: the games' in order, then after the switches
+   Snake II's mazes' top scores. */
 static uint8_t save_record(uint8_t slot)
 {
-    return (uint8_t)(2 + slot * 4);
+    return (uint8_t)(slot < GAME_COUNT ? 2 + slot * 4 : SAVE_OPTIONS + 2 + (slot - GAME_COUNT) * 4);
 }
 
 uint8_t platform_settings_load(uint8_t game, struct game_settings *out)

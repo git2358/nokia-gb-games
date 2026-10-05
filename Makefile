@@ -52,7 +52,7 @@ GB_TEST_ROM := $(BUILD)/nokia3410-keys.gb
 # The banks of the Game Boy ROM (see platform/gb/far.h).
 GB_BANK0 := platform/gb/main.c platform/gb/far.c platform/gb/screen.c core/lcd.c core/sprite.c core/games.c core/rand.c core/sound.c $(ASSETS)/game_tables.c
 GB_BANK1 := core/menu.c core/font.c platform/gb/save.c $(ASSETS)/game_assets.c
-GB_BANK2 := core/snake2.c $(ASSETS)/snake2_data.c
+GB_BANK2 := core/snake2.c core/title.c $(ASSETS)/snake2_data.c
 gb_rels = $(patsubst %.c,$(BUILD)/gb/$(1)/%.rel,$(notdir $(2)))
 GB_RELS := $(call gb_rels,0,$(filter-out platform/gb/main.c,$(GB_BANK0))) $(call gb_rels,1,$(GB_BANK1)) \
 	$(call gb_rels,2,$(GB_BANK2))
@@ -174,8 +174,11 @@ FORCE:
 
 vpath %.c core platform/gb $(ASSETS)
 
-# games.c reaches the game in bank 2 through far.c.
+# games.c reaches the game in bank 2 through far.c, and menu.c the title
+# and the game-over picture.
 $(BUILD)/gb/0/games.rel: GB_EXTRA := -Dsnake2_handler=far_snake2_handler
+$(BUILD)/gb/1/menu.rel: GB_EXTRA := -Dtitle_start=far_title_start -Dtitle_elapse=far_title_elapse -Dtitle_draw=far_title_draw \
+	-Dover_start=far_over_start -Dover_elapse=far_over_elapse -Dover_draw=far_over_draw
 
 $(BUILD)/gb/0/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
 	@mkdir -p $(BUILD)/gb/0
@@ -201,13 +204,13 @@ $(BUILD)/gb/%.rel: platform/gb/%.s
 # MBC5 with its rumble pin and battery-backed RAM, four ROM banks (three
 # used) and 8 KiB of RAM. The linker does not mind the first bank running
 # over into the second, so its end is checked here.
-$(BUILD)/nokia3410%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
+$(BUILD)/nokia3410%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
 	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 \
 		-o $(BUILD)/gb/$(basename $(notdir $@)).ihx $^
 	@$(PYTHON) tools/gb_bank_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
 	$(MAKEBIN) -Z -yn NOKIA3410 -yt 0x1e -yo 4 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
 
-.SECONDARY: $(GB_RELS) $(BUILD)/gb/crt0.rel
+.SECONDARY: $(GB_RELS) $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel
 
 gb: $(GB_ROM)
 

@@ -6,7 +6,8 @@ Usage: extract_assets.py DUMP OUT_DIR
 DUMP is the 0x370000-byte flash image the MAME fork's `make normalize-3410`
 writes (3410f546e.fls), or the 16-bit byte-swapped form the static tools
 use; it is identified by hash. Writes OUT_DIR/game_assets.h, snake2_data.c
-(Snake II's pictures, mazes and speeds, and the score's digits),
+(Snake II's pictures, mazes and speeds, its title pictures and score box,
+and the score's digits),
 game_tables.c (the sounds) and game_assets.c (the menus' fonts and text),
 apart so that a platform can place them apart. The output is derived from the firmware and must stay in an ignored
 directory.
@@ -30,6 +31,13 @@ SHA256_RAW = "4b0e815a07dc18b3b5f1cff1134de55aa514eaa7ce5a0eecc44a270867562b04"
 SNAKE2_PICTURES = (0x4B2E50, 0x4B323C)
 SNAKE2_MAZES = (0x4973B8, 0x4974A0)
 SNAKE2_SPEEDS = (0x4BEF64, 9)
+# The title: a 96x65 picture and five more the animation lays over it, 0x300
+# bytes apart, so that the last row of each is the first of the next (and
+# of the last, the start of their descriptors), as the phone shows them.
+SNAKE2_TITLE = (0x4974A0, 0x498700)
+# The score box the game-over picture shows: its two 6x12 ends, then ten
+# 6x8 digits.
+SNAKE2_BOX = (0x4B47D4, 0x4B4828)
 DIGIT_GLYPHS = (0x49017C, 40)  # ten 4x5 digits, 4 bytes each
 
 # The phone's sounds, by id: 8-byte records that start with the address of
@@ -274,6 +282,10 @@ extern const uint8_t snake2_pictures[SNAKE2_PICTURES_SIZE];
 #define SNAKE2_MAZES_SIZE {len(mazes)}
 extern const uint8_t snake2_mazes[SNAKE2_MAZES_SIZE];
 extern const uint8_t snake2_speeds[{SNAKE2_SPEEDS[1]}];
+#define SNAKE2_TITLE_BASE 0x{SNAKE2_TITLE[0]:06x}ul
+extern const uint8_t snake2_title[{SNAKE2_TITLE[1] - SNAKE2_TITLE[0]}];
+#define SNAKE2_BOX_BASE 0x{SNAKE2_BOX[0]:06x}ul
+extern const uint8_t snake2_box[{SNAKE2_BOX[1] - SNAKE2_BOX[0]}];
 
 extern const uint8_t game_digit_glyphs[{DIGIT_GLYPHS[1]}];
 /* The games' sounds: pairs of note, in semitones above 440 Hz, and length
@@ -290,6 +302,8 @@ extern const uint8_t game_sound_places[{len(sound_places)}];
         c_bytes("snake2_mazes", mazes),
         c_bytes("snake2_speeds", at(*SNAKE2_SPEEDS)),
         c_bytes("game_digit_glyphs", at(*DIGIT_GLYPHS)),
+        c_bytes("snake2_title", at(SNAKE2_TITLE[0], SNAKE2_TITLE[1] - SNAKE2_TITLE[0])),
+        c_bytes("snake2_box", at(SNAKE2_BOX[0], SNAKE2_BOX[1] - SNAKE2_BOX[0])),
     ]) + "\n")
     (out / "game_tables.c").write_text("\n\n".join([
         banner,

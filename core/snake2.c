@@ -44,6 +44,10 @@ typedef uint16_t cell_t;
 #define BLINK_PERIOD 500
 #define BLINKS 8
 
+/* The vibrator runs from the death to the second blink: 1100 ms, 141 of
+   the timer's units. A meal does not run it. */
+#define DEATH_VIBRATE_UNITS 141
+
 enum {
     LEFT,
     UP,
@@ -669,7 +673,7 @@ static int tick(struct game_context *ctx)
             ctx->period = 100;
             return GAME_RESULT_RESTART_TICK;
         }
-        games_vibrate();
+        games_vibrate_for(DEATH_VIBRATE_UNITS);
         s.crash = CRASH_DEAD;
         ctx->sound = SNAKE2_SOUND_DEATH;
         return GAME_RESULT_SOUND;
@@ -727,7 +731,6 @@ static int tick(struct game_context *ctx)
     }
     s.swallow = 1;
     draw_score();
-    games_vibrate();
     ctx->sound = SNAKE2_SOUND_EAT;
     s.crash = CRASH_NONE;
     return recovered ? GAME_RESULT_RESTART_TICK : GAME_RESULT_SOUND;

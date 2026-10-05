@@ -3,7 +3,8 @@
    NAME: testcard, outline, start (a new game, before any time passes),
    run-N (a new game after N screen frames with no key pressed), or
    menu-KEYS, the screen after the scripted keys of menu_script, or
-   menu-KEYS+N, the same N screen frames later. */
+   menu-KEYS+N, the same N screen frames later, or over-SCORE+N, the
+   game-over picture for a new top score of SCORE, N screen frames in. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,7 +15,9 @@
 #include "menu.h"
 #include "pgm.h"
 #include "sound.h"
+#include "sprite.h"
 #include "testcard.h"
+#include "title.h"
 
 void platform_tone(uint8_t note)
 {
@@ -71,6 +74,15 @@ int main(int argc, char **argv)
         while (frames-- > 0)
             games_elapse(16743);
         games_draw(1);
+    } else if (strncmp(argv[1], "over-", 5) == 0) {
+        char *plus = strchr(argv[1], '+');
+        long frames = plus ? strtol(plus + 1, 0, 10) : 0;
+
+        over_start((uint16_t)strtol(argv[1] + 5, 0, 10), 1);
+        while (frames-- > 0)
+            over_elapse(16743);
+        over_draw();
+        sprite_present(1);
     } else if (strncmp(argv[1], "menu-", 5) == 0) {
         /* menu-KEYS+N lets N more screen frames pass after the keys. */
         char *plus = strchr(argv[1], '+');

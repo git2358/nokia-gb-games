@@ -40,18 +40,10 @@ void screen_cuts(void)
 static uint8_t shown[LCD_WIDTH * SPRITE_SCREEN_BANDS];
 
 /* One 8x8 block: eight column bytes of a band, bit y of byte x the pixel
-   (x, y), to eight row bytes of lcd_fb, bit 7 - x of byte y. */
-static void block_to_rows(const uint8_t *columns, uint8_t *row, uint8_t rows)
-{
-    uint8_t y, x, bits, mask;
-
-    for (y = 0, mask = 1; y < rows; y++, mask <<= 1, row += LCD_STRIDE) {
-        bits = 0;
-        for (x = 0; x < 8; x++)
-            bits = (uint8_t)(bits << 1 | ((columns[x] & mask) != 0));
-        *row = bits;
-    }
-}
+   (x, y), to eight row bytes of lcd_fb, bit 7 - x of byte y (blocks.s).
+   lcd_fb's rows are 20 bytes apart. */
+void gb_block_rows(const uint8_t *columns, uint8_t *row);
+typedef char lcd_fb_stride[LCD_STRIDE == 20 ? 1 : -1];
 
 void sprite_present(uint8_t all)
 {
@@ -65,7 +57,17 @@ void sprite_present(uint8_t all)
             if (!all && memcmp(now, was, 8) == 0)
                 continue;
             memcpy(was, now, 8);
-            block_to_rows(now, lcd_fb + (LCD_PHONE_Y + band * 8) * LCD_STRIDE + (LCD_PHONE_X / 8) + block, rows);
+            if (rows == 8) {
+                gb_block_rows(now, lcd_fb + (LCD_PHONE_Y + band * 8) * LCD_STRIDE + (LCD_PHONE_X / 8) + block);
+            } else {
+                /* The last band: only its rows on the screen, the rest
+                   of the block clear. */
+                uint8_t part[8], i;
+
+                for (i = 0; i < 8; i++)
+                    part[i] = (uint8_t)(now[i] & ((1u << rows) - 1));
+                gb_block_rows(part, lcd_fb + (LCD_PHONE_Y + band * 8) * LCD_STRIDE + (LCD_PHONE_X / 8) + block);
+            }
             lcd_dirty[(LCD_PHONE_X / 8) + block + LCD_CELLS_X * (LCD_PHONE_Y / 8 + band)] = 1;
         }
     }

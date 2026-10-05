@@ -72,6 +72,11 @@ struct game_context {
     uint8_t option;    /* Snake II's maze plus one */
 };
 
+/* The slots of the settings: one per game, GAME_SNAKE and so on, then one
+   per Snake II maze for its top score, which the 3410 keeps per maze. */
+#define GAME_SLOT_SNAKE_MAZE(maze) (GAME_COUNT + (maze))
+#define GAME_SLOT_COUNT (GAME_COUNT + 6)
+
 /* Load reports whether anything had been saved, and gives zeros if not. */
 uint8_t platform_settings_load(uint8_t game, struct game_settings *out);
 void platform_settings_save(uint8_t game, const struct game_settings *in);

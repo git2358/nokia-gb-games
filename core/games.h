@@ -62,6 +62,8 @@ void games_draw(uint8_t all);
    timer units, started afresh by every call, when Shakes is on. */
 #define GAMES_VIBRATE_UNITS 62
 void games_vibrate(void);
+/* The same for this many timer units. */
+void games_vibrate_for(uint8_t units);
 
 /* Lets this much time pass for the vibrator, in microseconds; a platform
    or the menus call it once per screen frame whether or not a game is

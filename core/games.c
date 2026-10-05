@@ -240,5 +240,11 @@ void games_render(void)
 void games_draw(uint8_t all)
 {
     games_render();
+    /* The full-screen board is drawn into the LCD view as it goes. */
+    if (snake2_full) {
+        if (all)
+            snake2_redraw();
+        return;
+    }
     sprite_present(all);
 }

@@ -30,7 +30,7 @@ SDCC ?= sdcc
 MAKEBIN ?= makebin
 SDAS ?= sdasgb
 GB_FB := -DLCD_FB_WIDTH=160 -DLCD_FB_HEIGHT=144 -DLCD_PHONE_X=32 -DLCD_PHONE_Y=40
-GB_CFLAGS = -msm83 --opt-code-speed $(GB_FB) -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_PRESENT -Icore -Iplatform/gb -I$(ASSETS)
+GB_CFLAGS = -msm83 --opt-code-speed $(GB_FB) -DSNAKE2_STATE_AT=0xa100 -DSNAKE2_STATE_END=0xc000 -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_PRESENT -Icore -Iplatform/gb -I$(ASSETS)
 # The SameBoy clone scripts/setup-sameboy.sh makes: its boot ROM, and its
 # core as a library (`make -C tools/SameBoy lib`) for tools/gb_run.
 SAMEBOY ?= tools/SameBoy
@@ -176,7 +176,7 @@ vpath %.c core platform/gb $(ASSETS)
 
 # games.c reaches the game in bank 2 through far.c, and menu.c the title
 # and the game-over picture.
-$(BUILD)/gb/0/games.rel: GB_EXTRA := -Dsnake2_handler=far_snake2_handler
+$(BUILD)/gb/0/games.rel: GB_EXTRA := -Dsnake2_handler=far_snake2_handler -Dsnake2_redraw=far_snake2_redraw
 $(BUILD)/gb/1/menu.rel: GB_EXTRA := -Dtitle_start=far_title_start -Dtitle_elapse=far_title_elapse -Dtitle_draw=far_title_draw \
 	-Dover_start=far_over_start -Dover_elapse=far_over_elapse -Dover_draw=far_over_draw
 

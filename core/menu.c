@@ -138,11 +138,19 @@ static struct game_settings settings;
 static uint16_t top_score;     /* the chosen maze's, which the 3410 keeps apart */
 static uint16_t page_ticks;    /* ticks left on a timed page */
 
-/* The phone's LCD; the full-screen variant's own menus. */
+/* The phone's LCD; the full-screen variant's own menus; its board. */
 enum {
     VIEW_PHONE,
-    VIEW_NATIVE
+    VIEW_NATIVE,
+    VIEW_BOARD
 };
+
+/* The full-screen board's part of the framebuffer: all of it, or the
+   middle 1/LCD_ZOOM of it magnified, on whole 8x8 cells. */
+#define BOARD_AREA_W (LCD_FB_WIDTH / LCD_ZOOM)
+#define BOARD_AREA_H (LCD_FB_HEIGHT / LCD_ZOOM)
+#define BOARD_AREA_X ((LCD_FB_WIDTH - BOARD_AREA_W) / 2 / 8 * 8)
+#define BOARD_AREA_Y ((LCD_FB_HEIGHT - BOARD_AREA_H) / 2 / 8 * 8)
 
 /* The full-screen variant's menus: a title bar, a list with every entry
    visible, and a line of button hints. The port's own design and words; the
@@ -187,12 +195,18 @@ static const char text_about_body[] = "Nokia 3410 games " GAME_VERSION "\ngithub
 static const char text_full_screen_hint[] = "START: full screen";
 #endif
 
-/* The chosen maze's top score. */
+/* Where the chosen maze's top score is kept: the full-screen variant's
+   board has its own. */
+static uint8_t top_score_slot(void)
+{
+    return full_screen ? GAME_SLOT_SNAKE_FULL_MAZE(settings.option) : GAME_SLOT_SNAKE_MAZE(settings.option);
+}
+
 static void top_score_load(void)
 {
     struct game_settings maze_record;
 
-    platform_settings_load(GAME_SLOT_SNAKE_MAZE(settings.option), &maze_record);
+    platform_settings_load(top_score_slot(), &maze_record);
     top_score = maze_record.top_score;
 }
 
@@ -594,7 +608,7 @@ static void play_over(void)
         struct game_settings maze_record = { 0, 0, 0 };
 
         top_score = maze_record.top_score = final_score;
-        platform_settings_save(GAME_SLOT_SNAKE_MAZE(settings.option), &maze_record);
+        platform_settings_save(top_score_slot(), &maze_record);
     }
     paused = 0;
     held = NO_KEY;
@@ -610,6 +624,7 @@ static void play_start(void)
     if (!seed_fixed)
         game_srand((uint32_t)uptime + 1);
     held = NO_KEY;
+    snake2_full = full_screen;
     games_start(GAME_SNAKE, (uint8_t)(settings.level + 1), (uint8_t)(settings.option + 1));
     board_drawn = 0;
     screen = SCREEN_PLAY;
@@ -1070,6 +1085,9 @@ void menu_draw(void)
     uint8_t picture = screen == SCREEN_PLAY || screen == SCREEN_TITLE || screen == SCREEN_GAME_OVER;
     uint8_t mode = full_screen && screen != SCREEN_MAIN && !picture ? VIEW_NATIVE : VIEW_PHONE;
 
+    if (full_screen && screen == SCREEN_PLAY && LCD_HAS_SURROUND)
+        mode = VIEW_BOARD;
+
     menu_drew_picture = picture;
     if (mode != view_mode || surround_used) {
         lcd_view_full();
@@ -1084,6 +1102,12 @@ void menu_draw(void)
         lcd_view_phone();
         if (LCD_ZOOM > 1)
             lcd_zoom_set(LCD_PHONE_X, LCD_PHONE_Y, LCD_WIDTH, LCD_HEIGHT, LCD_ZOOM);
+        else
+            lcd_zoom_set(0, 0, 0, 0, 1);
+    } else if (mode == VIEW_BOARD) {
+        lcd_view_set(BOARD_AREA_X, BOARD_AREA_Y, BOARD_AREA_W, BOARD_AREA_H);
+        if (LCD_ZOOM > 1)
+            lcd_zoom_set(BOARD_AREA_X, BOARD_AREA_Y, BOARD_AREA_W, BOARD_AREA_H, LCD_ZOOM);
         else
             lcd_zoom_set(0, 0, 0, 0, 1);
     } else {

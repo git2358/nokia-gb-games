@@ -81,3 +81,12 @@ void far_over_draw(void)
     over_draw();
     far_bank(was);
 }
+
+void far_snake2_redraw(void)
+{
+    uint8_t was = mapped;
+
+    far_bank(BANK_SNAKE);
+    snake2_redraw();
+    far_bank(was);
+}

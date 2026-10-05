@@ -33,7 +33,11 @@ highlight.
 
 The game is shown at the phone's size, in the middle of the Game Boy's
 screen. Start on the first screen picks the full-screen variant, whose
-menus fill the screen; the game stays at the phone's size.
+menus fill the screen and in which Snake II is played on a bigger board:
+the phone's own rule for the board's size applied to the Game Boy's
+screen, 39 by 33 cells, with the snake, the food, the creatures and the
+score at the phone's size and speed, the mazes moved out in proportion to
+fill it, and top scores of its own.
 
 | | Menus | Snake II |
 |---|---|---|

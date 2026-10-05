@@ -3,7 +3,7 @@
 # derived from your firmware dump.
 
 # Your own NSE-8/9 v6.00 dump (raw .fls or the swap16 image); see README.md.
-DUMP ?= ../nokia-dct3-re/roms/3210f600a.fls
+DUMP ?= ../../roms/3210f600a.fls
 
 PYTHON ?= python3
 CC ?= cc

@@ -7,27 +7,48 @@
 #include "snake2_data.h"
 #include "sprite.h"
 
-/* The board: 20 by 9 cells of 4x4 pixels, cell (x, y) at pixel
-   (2 + 4x, 10 + 4y). The phone works the size out from the screen's. */
-#define W 20
-#define H 9
-#define CELLS (W * H)
-#define CELL_X(x) ((uint8_t)(2 + 4 * (x)))
-#define CELL_Y(y) ((uint8_t)(10 + 4 * (y)))
+/* The board: cells of 4x4 pixels, as many as the screen holds. The phone
+   works the size and the place out from the screen's: w = (width - 6) / 4,
+   one more unless (width - 2) is a multiple of 4, h likewise from
+   (height - 14), and the board centred in what is left, below the score.
+   On its 84x48 screen that is 20 by 9 cells, cell (x, y) at pixel
+   (2 + 4x, 10 + 4y). The full-screen variant's board is the same rule
+   applied to the part of the console's screen the platform shows for it:
+   all of it, or the middle 1/LCD_ZOOM of it magnified. */
+#define BOARD_W(sw) ((uint8_t)(((sw) - 6) / 4 + (((sw) - 2) % 4 != 0)))
+#define BOARD_H(sh) ((uint8_t)(((sh) - 14) / 4 + (((sh) - 2) % 4 != 0)))
+#define FULL_SCREEN_W (LCD_FB_WIDTH / LCD_ZOOM)
+#define FULL_SCREEN_H (LCD_FB_HEIGHT / LCD_ZOOM)
+#define PHONE_W BOARD_W(LCD_WIDTH)
+#define PHONE_H BOARD_H(LCD_HEIGHT)
+#define MAX_W (BOARD_W(FULL_SCREEN_W) > PHONE_W ? BOARD_W(FULL_SCREEN_W) : PHONE_W)
+#define MAX_H (BOARD_H(FULL_SCREEN_H) > PHONE_H ? BOARD_H(FULL_SCREEN_H) : PHONE_H)
+#define MAX_CELLS ((uint16_t)MAX_W * MAX_H)
+#define W (s.w)
+#define H (s.h)
+#define CELLS (s.count)
+#define CELL_X(x) ((uint8_t)(s.ox + 2 + 4 * (x)))
+#define CELL_Y(y) ((uint8_t)(s.oy + 10 + 4 * (y)))
 
 /* The ring of segments, tail to head, counted modulo 299 as the phone's
    is: when the head index has gone round past the tail's, the dying snake
-   no longer blinks. */
-#define RING 299
-#define NO_CELL 0xff /* the segment the phone leaves off the screen */
+   no longer blinks. The full-screen board's ring is two longer than it
+   has cells, so that it never fills either. */
+#define PHONE_RING 299
+#define MAX_RING (MAX_CELLS + 2 > PHONE_RING ? MAX_CELLS + 2 : PHONE_RING)
+#define RING (s.ring_size)
+#define NO_CELL 0xffff /* the segment the phone leaves off the screen */
+
+/* A cell's number, x + W * y; more than a byte holds on a big board. */
+typedef uint16_t cell_t;
 
 /* Where the phone draws what is not on the board. */
 #define DIGIT_W 4
 #define DIGIT_H 5
 #define SCORE_DIGITS 4
-#define COUNTDOWN_UNITS_X 79
-#define COUNTDOWN_TENS_X 75
-#define ICON_X 66
+#define COUNTDOWN_UNITS_X (s.sw - 5)
+#define COUNTDOWN_TENS_X (s.sw - 9)
+#define ICON_X (s.sw - 18)
 #define ICON_Y 1
 #define LINE_Y 6
 #define HIDDEN 0xff /* a sprite's x when it is off the screen */
@@ -46,8 +67,15 @@ enum {
 };
 
 uint16_t snake2_mask;
+uint8_t snake2_full;
 
-static struct {
+struct snake2_state {
+    uint8_t full;          /* the full-screen variant's board */
+    uint8_t w, h;          /* the board's cells */
+    uint16_t count;        /* w x h */
+    uint16_t ring_size;
+    uint8_t ox, oy;        /* where it is: cell (x, y) at (ox + 2 + 4x, oy + 10 + 4y) */
+    uint8_t sw;            /* the screen's width, for what is above the board */
     uint16_t tail, head;   /* ring places */
     int8_t head_x, head_y; /* cells */
     int8_t tail_x, tail_y;
@@ -68,14 +96,26 @@ static struct {
     /* The creature's sprite and the countdown's icon: picture and place. */
     uint8_t creature_pic, creature_px, creature_py;
     uint8_t icon_pic, countdown;
-    uint8_t occupied[(H + 7) / 8 * W]; /* a bit per cell, walls and segments, in bands as the LCD */
-    uint8_t ring[RING];    /* cell of each segment */
-    uint8_t picture[CELLS];
-} s;
+    uint8_t occupied[(MAX_H + 7) / 8 * MAX_W]; /* a bit per cell, walls and segments, in bands as the LCD */
+    cell_t ring[MAX_RING]; /* cell of each segment */
+    uint8_t picture[MAX_CELLS];
+};
+
+/* A platform short of work RAM may keep the state elsewhere: SDCC places
+   it there itself (a cast of the address instead leads its sm83 code
+   generator to read the wrong byte after some stores). */
+#ifdef SNAKE2_STATE_AT
+static __at(SNAKE2_STATE_AT) struct snake2_state s;
+typedef char snake2_state_fits[SNAKE2_STATE_AT + sizeof(struct snake2_state) <= SNAKE2_STATE_END ? 1 : -1];
+#else
+static struct snake2_state s;
+#endif
 
 static struct game_context *game;
 
-/* Drawing into sprite_screen, which is 84 columns of 8-row bands. */
+/* Drawing: the phone-sized board into sprite_screen, which is 84 columns
+   of 8-row bands; the full-screen board straight into the LCD view, which
+   the menus set to the screen the platform shows for it. */
 
 enum {
     PUT_SET,    /* set bits set: the phone's mode 1 */
@@ -84,6 +124,28 @@ enum {
     PUT_FILL    /* the rectangle set */
 };
 
+/* A bitmap of up to 8 rows, a byte per column, on the full-screen board. */
+static void put_view(uint8_t x, uint8_t y, uint8_t w, uint8_t h, const uint8_t *bits, uint8_t how)
+{
+    uint8_t i, j;
+
+    switch (how) {
+    case PUT_FILL:
+    case PUT_CLEAR:
+        lcd_fill_rect(x, y, w, h, how == PUT_FILL);
+        break;
+    case PUT_OPAQUE:
+        lcd_blit_strips(x, y, w, h, bits);
+        break;
+    default:
+        for (i = 0; i < w; i++)
+            for (j = 0; j < h; j++)
+                if (bits[i] >> j & 1)
+                    lcd_fill_rect(x + i, y + j, 1, 1, 1);
+        break;
+    }
+}
+
 /* A bitmap of up to 8 rows, a byte per column. */
 static void put(uint8_t x, uint8_t y, uint8_t w, uint8_t h, const uint8_t *bits, uint8_t how)
 {
@@ -91,6 +153,10 @@ static void put(uint8_t x, uint8_t y, uint8_t w, uint8_t h, const uint8_t *bits,
     uint16_t mask = (uint16_t)(rows << shift);
     uint8_t *p;
 
+    if (s.full) {
+        put_view(x, y, w, h, bits, how);
+        return;
+    }
     if (x >= LCD_WIDTH || y >= LCD_HEIGHT)
         return;
     p = sprite_screen + (y >> 3) * LCD_WIDTH + x;
@@ -139,12 +205,12 @@ static void put_picture(uint8_t picture, uint8_t x, uint8_t y, uint8_t how)
 /* A picture by set and index. */
 #define PICTURE(set, index) ((uint8_t)(SNAKE2_PICTURE(set) + (index)))
 
-static uint8_t cell_of(int8_t x, int8_t y)
+static cell_t cell_of(int8_t x, int8_t y)
 {
-    return (uint8_t)(x + W * y);
+    return (cell_t)(x + W * y);
 }
 
-static void draw_cell(uint8_t cell)
+static void draw_cell(cell_t cell)
 {
     uint8_t x = CELL_X(cell % W), y = CELL_Y(cell / W);
 
@@ -153,7 +219,7 @@ static void draw_cell(uint8_t cell)
         put_picture(s.picture[cell], x, y, PUT_OPAQUE);
 }
 
-static void set_picture(uint8_t cell, uint8_t picture)
+static void set_picture(cell_t cell, uint8_t picture)
 {
     if (cell == NO_CELL)
         return;
@@ -174,7 +240,7 @@ static void take_away(uint8_t picture, uint8_t px, uint8_t py)
     put(px, py, d[8], d[9], 0, PUT_CLEAR);
     for (y = 0; y < d[9]; y = (uint8_t)(y + 4))
         for (x = 0; x < d[8]; x = (uint8_t)(x + 4))
-            draw_cell(cell_of((int8_t)((px + x - 2) / 4), (int8_t)((py + y - 10) / 4)));
+            draw_cell(cell_of((int8_t)((px + x - 2 - s.ox) / 4), (int8_t)((py + y - 10 - s.oy) / 4)));
 }
 
 static void draw_digit(uint8_t x, uint8_t y, uint8_t digit)
@@ -236,11 +302,32 @@ static void clear_cells(void)
         s.cells[i] = -1;
 }
 
-/* A maze record's runs of wall. The pointer lies within 64 KiB of the
-   data's start. */
+/* A maze record and its runs of wall. The pointer lies within 64 KiB of
+   the data's start. */
+static const uint8_t *maze_record(void)
+{
+    return SNAKE2_ROM(SNAKE2_REF(SNAKE2_MAZES) + (uint16_t)(game->option - 1) * 16);
+}
+
 static const uint8_t *maze_runs(const uint8_t *maze)
 {
     return SNAKE2_ROM((snake2_ref)(((uint16_t)maze[6] << 8 | maze[7]) - (uint16_t)SNAKE2_DATA_BASE));
+}
+
+/* The phone's mazes are for its own board; on the full-screen board every
+   cell of them is moved out in proportion, the edges to the edges. */
+static int8_t maze_x(int8_t x)
+{
+    if (!s.full || x < 0)
+        return x;
+    return (int8_t)(((uint16_t)x * (W - 1) + (PHONE_W - 1) / 2) / (PHONE_W - 1));
+}
+
+static int8_t maze_y(int8_t y)
+{
+    if (!s.full || y < 0)
+        return y;
+    return (int8_t)(((uint16_t)y * (H - 1) + (PHONE_H - 1) / 2) / (PHONE_H - 1));
 }
 
 /* The frame round the board, then a 2-pixel line through the middle of
@@ -250,19 +337,22 @@ static void draw_walls(const uint8_t *maze)
     const uint8_t *run;
     uint8_t n;
 
-    fill(0, 8, 4 * W + 3, 1);
-    fill(0, 8, 1, 4 * H + 3);
-    fill(4 * W + 3, 8, 1, 4 * H + 4);
-    fill(0, 4 * H + 11, 4 * W + 3, 1);
+    fill(s.ox, s.oy + 8, 4 * W + 3, 1);
+    fill(s.ox, s.oy + 8, 1, 4 * H + 3);
+    fill(s.ox + 4 * W + 3, s.oy + 8, 1, 4 * H + 4);
+    fill(s.ox, s.oy + 4 * H + 11, 4 * W + 3, 1);
     run = maze_runs(maze);
     for (n = maze[0]; n; n--, run += 8) {
-        int8_t x1 = (int8_t)run[0], y1 = (int8_t)run[1], x2 = (int8_t)run[4], y2 = (int8_t)run[5];
+        int8_t x1 = maze_x((int8_t)run[0]), y1 = maze_y((int8_t)run[1]);
+        int8_t x2 = maze_x((int8_t)run[4]), y2 = maze_y((int8_t)run[5]);
 
         /* No maze is one run at (-1, -1), which lands off the screen. */
+        if (x1 < 0)
+            continue;
         if (y1 == y2)
-            fill((uint8_t)(4 * x1 + 3), (uint8_t)(4 * y1 + 11), (uint8_t)(4 * (x2 - x1) + 2), 2);
+            fill((uint8_t)(s.ox + 4 * x1 + 3), (uint8_t)(s.oy + 4 * y1 + 11), (uint8_t)(4 * (x2 - x1) + 2), 2);
         else if (x1 == x2)
-            fill((uint8_t)(4 * x1 + 3), (uint8_t)(4 * y1 + 11), 2, (uint8_t)(4 * (y2 - y1) + 2));
+            fill((uint8_t)(s.ox + 4 * x1 + 3), (uint8_t)(s.oy + 4 * y1 + 11), 2, (uint8_t)(4 * (y2 - y1) + 2));
     }
 }
 
@@ -294,7 +384,8 @@ static void build_maze(const uint8_t *maze)
     int8_t i;
 
     for (n = maze[0]; n; n--, run += 8) {
-        int8_t x1 = (int8_t)run[0], y1 = (int8_t)run[1], x2 = (int8_t)run[4], y2 = (int8_t)run[5];
+        int8_t x1 = maze_x((int8_t)run[0]), y1 = maze_y((int8_t)run[1]);
+        int8_t x2 = maze_x((int8_t)run[4]), y2 = maze_y((int8_t)run[5]);
 
         if (y1 == y2)
             for (i = x1; i <= x2; i++)
@@ -318,12 +409,12 @@ static int8_t step_y(int8_t y, uint8_t dir)
     return (int8_t)((H + y + (dir == UP ? -1 : dir == DOWN ? 1 : 0)) % H);
 }
 
-static uint8_t pixel_x(uint8_t cell)
+static uint8_t pixel_x(cell_t cell)
 {
     return cell == NO_CELL ? HIDDEN : CELL_X(cell % W);
 }
 
-static uint8_t pixel_y(uint8_t cell)
+static uint8_t pixel_y(cell_t cell)
 {
     return cell == NO_CELL ? HIDDEN : CELL_Y(cell / W);
 }
@@ -332,7 +423,7 @@ static uint8_t pixel_y(uint8_t cell)
    where their sprites are: a jump of more than a cell is the way round
    the edge. The segment it leaves off the screen therefore counts as left
    of everything. */
-static uint8_t way(uint8_t from, uint8_t to)
+static uint8_t way(cell_t from, cell_t to)
 {
     int16_t dx = (int16_t)pixel_x(to) - pixel_x(from), dy;
 
@@ -356,7 +447,7 @@ static uint16_t ring_next(uint16_t place)
    after it. */
 static void tail_remove(void)
 {
-    uint8_t old = s.ring[s.tail], now;
+    cell_t old = s.ring[s.tail], now;
 
     s.tail = ring_next(s.tail);
     now = s.ring[s.tail];
@@ -413,7 +504,8 @@ static uint8_t mouth_open(void)
    then. Returns 100 when the ring is full. */
 static uint8_t head_step(uint8_t objects)
 {
-    uint8_t result = 0, cell, neck, prev = s.prev_dir, dir = s.dir, picture;
+    uint8_t result = 0, prev = s.prev_dir, dir = s.dir, picture;
+    cell_t cell, neck;
 
     if ((uint16_t)((s.head + 2) % RING) == s.tail)
         result = 100;
@@ -584,16 +676,26 @@ static void collect(void)
 
 /* The picture from nothing: frame, walls, segments, food, creature and
    what is above the board. */
-void snake2_redraw(void)
+/* The picture blank. */
+static void clear_picture(void)
 {
-    const uint8_t *maze = SNAKE2_ROM(SNAKE2_REF(SNAKE2_MAZES) + (uint16_t)(game->option - 1) * 16);
     uint16_t i;
-    uint8_t cell;
 
+    if (s.full) {
+        lcd_clear();
+        return;
+    }
     for (i = 0; i < sizeof sprite_screen; i++)
         sprite_screen[i] = 0;
-    draw_walls(maze);
-    fill(0, LINE_Y, LCD_WIDTH, 1);
+}
+
+void snake2_redraw(void)
+{
+    cell_t cell;
+
+    clear_picture();
+    draw_walls(maze_record());
+    fill(0, LINE_Y, s.sw, 1);
     for (cell = 0; cell < CELLS; cell++)
         if (s.picture[cell] && !s.hidden)
             put_picture(s.picture[cell], CELL_X(cell % W), CELL_Y(cell / W), PUT_OPAQUE);
@@ -604,21 +706,38 @@ void snake2_redraw(void)
     draw_countdown(s.countdown);
 }
 
+/* The board for a screen of sw x sh pixels, by the phone's rule. */
+static void board_setup(uint8_t full)
+{
+    uint8_t sw = full ? FULL_SCREEN_W : LCD_WIDTH, sh = full ? FULL_SCREEN_H : LCD_HEIGHT;
+
+    s.full = full;
+    s.sw = sw;
+    s.w = BOARD_W(sw);
+    s.h = BOARD_H(sh);
+    s.count = (uint16_t)s.w * s.h;
+    s.ring_size = full ? s.count + 2 : PHONE_RING;
+    s.ox = (uint8_t)((sw - 4 * s.w - 3) / 2);
+    s.oy = (uint8_t)((sh - 4 * s.h - 11) / 2);
+}
+
 static void new_game(void)
 {
-    const uint8_t *maze = SNAKE2_ROM(SNAKE2_REF(SNAKE2_MAZES) + (uint16_t)(game->option - 1) * 16);
+    const uint8_t *maze;
     uint16_t i;
     uint8_t n;
 
+    board_setup(snake2_full);
+    maze = maze_record();
     s.level = game->level;
     s.period = (uint16_t)(SNAKE2_ROM(SNAKE2_REF(SNAKE2_SPEEDS))[s.level - 1] * 10);
     game->period = s.period;
     game->one_shot = 0;
     game->score = 0;
     s.dir = s.prev_dir = RIGHT;
-    s.head_x = s.tail_x = (int8_t)maze[8];
-    s.head_y = s.tail_y = (int8_t)maze[9];
-    s.head = s.tail = (uint16_t)maze[8];
+    s.head_x = s.tail_x = maze_x((int8_t)maze[8]);
+    s.head_y = s.tail_y = maze_y((int8_t)maze[9]);
+    s.head = s.tail = (uint16_t)s.head_x;
     s.crash = CRASH_NONE;
     s.mode = 1;
     s.blink = 0;
@@ -637,8 +756,7 @@ static void new_game(void)
     s.creature_pic = s.icon_pic = PICTURE(SNAKE2_CREATURES, 0);
     s.countdown = 0;
     /* The picture starts blank but for the walls. */
-    for (i = 0; i < sizeof sprite_screen; i++)
-        sprite_screen[i] = 0;
+    clear_picture();
     build_maze(maze);
 
     /* The first segment is made off the screen on the start cell; seven
@@ -660,7 +778,7 @@ static void new_game(void)
     s.counter = 0;
     s.creature_out = 0;
     draw_score();
-    fill(0, LINE_Y, LCD_WIDTH, 1);
+    fill(0, LINE_Y, s.sw, 1);
 }
 
 static int tick(struct game_context *ctx)
@@ -770,7 +888,7 @@ static int tick(struct game_context *ctx)
    gone round so that the tail's place is past the head's. */
 static int blink(struct game_context *ctx)
 {
-    uint8_t cell;
+    cell_t cell;
 
     if (s.blink > 10)
         return GAME_RESULT_ONE_SHOT;

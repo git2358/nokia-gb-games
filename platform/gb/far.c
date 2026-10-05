@@ -7,6 +7,10 @@
 #include "strip.h"
 #include "title.h"
 
+#include <string.h>
+
+#include "game_assets.h"
+
 #define MBC_ROM_BANK (*(volatile uint8_t *)0x2000)
 
 static uint8_t mapped = BANK_MENU;
@@ -161,5 +165,37 @@ void far_title_draw(void)
 
     far_bank(BANK_SETUP);
     title_draw();
+    far_bank(was);
+}
+
+/* Space Impact's data in cartridge RAM, from its image in bank 3. */
+void far_si_data_restore(void)
+{
+    uint8_t was = mapped;
+
+    far_bank(BANK_SETUP);
+    memcpy((uint8_t *)SI_DATA_AT, si_data, SI_DATA_SIZE);
+    far_bank(was);
+}
+
+/* Snake II's state lies over Space Impact's data in cartridge RAM. */
+static uint8_t si_data_overwritten;
+
+void platform_game_starts(uint8_t game)
+{
+    if (game == GAME_SNAKE) {
+        si_data_overwritten = 1;
+    } else if (game == GAME_SPACE_IMPACT && si_data_overwritten) {
+        far_si_data_restore();
+        si_data_overwritten = 0;
+    }
+}
+
+void far_snake2_redraw(void)
+{
+    uint8_t was = mapped;
+
+    far_bank(BANK_SNAKE);
+    snake2_redraw();
     far_bank(was);
 }

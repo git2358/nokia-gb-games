@@ -79,4 +79,9 @@ void games_quiet(void);
 /* The platform's vibrator or rumble motor, on or off. */
 void platform_rumble(uint8_t on);
 
+/* Called as a game starts, a GAME_ code: a platform that keeps one game's
+   data where another's state goes, as the Game Boy keeps Space Impact's
+   where Snake II's goes, makes it whole again here. */
+void platform_game_starts(uint8_t game);
+
 #endif

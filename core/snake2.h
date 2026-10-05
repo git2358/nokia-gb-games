@@ -35,6 +35,14 @@ int snake2_handler(int event, struct game_context *ctx);
    port does not have, so it stays 0 and the large creature never comes. */
 extern uint16_t snake2_mask;
 
+/* Nonzero to have new games played on the full-screen variant's board:
+   the phone's rule for its size applied to the console's screen, the
+   pictures as they are and the mazes moved out to fit. That board is drawn
+   straight into the LCD view, which the menus set to all of the screen
+   (or the part of it a platform magnifies); the phone-sized one into
+   sprite_screen. */
+extern uint8_t snake2_full;
+
 /* Draws the whole picture into sprite_screen again. */
 void snake2_redraw(void);
 

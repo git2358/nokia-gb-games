@@ -71,9 +71,11 @@ struct game_context {
     uint8_t option;    /* Snake II's maze plus one */
 };
 
-/* The slots of the settings: one per game, GAME_SNAKE and so on, and one
-   more for Pairs II's Puzzle, whose record is its own as on the phone. */
+/* The slots of the settings: one per game, GAME_SNAKE and so on, one more
+   for Pairs II's Puzzle, whose record is its own as on the phone, and one
+   for the top score of Snake II on the full-screen variant's board. */
 #define GAME_SLOT_PAIRS_PUZZLE GAME_COUNT
+#define GAME_SLOT_SNAKE_FULL (GAME_COUNT + 1)
 
 /* Load reports whether anything had been saved, and gives zeros if not. */
 uint8_t platform_settings_load(uint8_t game, struct game_settings *out);

@@ -181,11 +181,20 @@ static uint8_t view_mode;      /* which of the views below the LCD is set up for
 #define GAME_ZOOM_WIDTH (LCD_FB_WIDTH / LCD_GAME_ZOOM < LCD_WIDTH ? LCD_FB_WIDTH / LCD_GAME_ZOOM : LCD_WIDTH)
 #define GAME_ZOOM_X ((LCD_FB_WIDTH - GAME_ZOOM_WIDTH) / 2 / 8 * 8)
 
-/* The phone's LCD; the full-screen variant's own menus. */
+/* The phone's LCD; the full-screen variant's own menus; its Snake II
+   board. */
 enum {
     VIEW_PHONE,
-    VIEW_NATIVE
+    VIEW_NATIVE,
+    VIEW_BOARD
 };
+
+/* The full-screen Snake II board's part of the framebuffer: all of it, or
+   the middle 1/LCD_ZOOM of it magnified, on whole 8x8 cells. */
+#define BOARD_AREA_W (LCD_FB_WIDTH / LCD_ZOOM)
+#define BOARD_AREA_H (LCD_FB_HEIGHT / LCD_ZOOM)
+#define BOARD_AREA_X ((LCD_FB_WIDTH - BOARD_AREA_W) / 2 / 8 * 8)
+#define BOARD_AREA_Y ((LCD_FB_HEIGHT - BOARD_AREA_H) / 2 / 8 * 8)
 
 /* The full-screen variant's menus: a title bar, a list with every entry
    visible, and a line of button hints. The port's own design and words; the
@@ -258,10 +267,26 @@ static uint8_t settings_slot(void)
 }
 
 /* The settings of the game whose menu is open. */
+/* The top score shown and beaten: the record's, or for Snake II on the
+   full-screen variant's board one kept apart. */
+static uint16_t top_score;
+
+static uint8_t full_snake(void)
+{
+    return (uint8_t)(full_screen && game == GAME_SNAKE && LCD_HAS_SURROUND);
+}
+
 static void settings_load(void)
 {
+    struct game_settings full;
+
     if (!platform_settings_load(settings_slot(), &settings))
         settings.top_score = DEFAULT_TOP_SCORE;
+    top_score = settings.top_score;
+    if (full_snake()) {
+        platform_settings_load(GAME_SLOT_SNAKE_FULL, &full);
+        top_score = full.top_score;
+    }
     if (game == GAME_SNAKE) {
         /* The phone's own default: the fastest level, no maze. */
         if (settings.level >= SNAKE2_LEVELS)
@@ -908,10 +933,18 @@ static void title_over(void)
 static void play_over(void)
 {
     final_score = (uint16_t)games_score;
-    new_top_score = final_score > settings.top_score;
+    new_top_score = final_score > top_score;
     if (new_top_score) {
-        settings.top_score = final_score;
-        platform_settings_save(settings_slot(), &settings);
+        top_score = final_score;
+        if (full_snake()) {
+            struct game_settings full = { 0, 0, 0 };
+
+            full.top_score = final_score;
+            platform_settings_save(GAME_SLOT_SNAKE_FULL, &full);
+        } else {
+            settings.top_score = final_score;
+            platform_settings_save(settings_slot(), &settings);
+        }
     }
     paused = 0;
     held = NO_KEY;
@@ -926,6 +959,7 @@ static void play_start(void)
     if (!seed_fixed)
         game_rand16_seed = (uint16_t)(uptime % 0xfff0 + 1);
     held = NO_KEY;
+    snake2_full = full_snake();
     games_start(game, (uint8_t)(settings.level + 1), game == GAME_PAIRS ? pairs_mode : (uint8_t)(settings.option + 1));
     board_drawn = 0;
     screen = SCREEN_PLAY;
@@ -1360,7 +1394,11 @@ void menu_draw(void)
 
     uint8_t selection;
 
-    menu_drew_picture = screen == SCREEN_PLAY || screen == SCREEN_TITLE;
+    /* Snake II in the full-screen variant has a board of its own, drawn
+       into the framebuffer as the menus are. */
+    if (screen == SCREEN_PLAY && snake2_full && games_playing == GAME_SNAKE)
+        mode = VIEW_BOARD;
+    menu_drew_picture = (screen == SCREEN_PLAY && mode != VIEW_BOARD) || screen == SCREEN_TITLE;
     /* A step of the Games icon's animation changes only the icon, and the
        first screen's hint around the LCD stays as it is. */
     if (sparkle_only && screen == SCREEN_MAIN) {
@@ -1391,6 +1429,12 @@ void menu_draw(void)
         } else {
             lcd_zoom_set(0, 0, 0, 0, 1);
         }
+    } else if (mode == VIEW_BOARD) {
+        lcd_view_set(BOARD_AREA_X, BOARD_AREA_Y, BOARD_AREA_W, BOARD_AREA_H);
+        if (LCD_ZOOM > 1)
+            lcd_zoom_set(BOARD_AREA_X, BOARD_AREA_Y, BOARD_AREA_W, BOARD_AREA_H, LCD_ZOOM);
+        else
+            lcd_zoom_set(0, 0, 0, 0, 1);
     } else {
         lcd_view_full();
         lcd_zoom_set(0, 0, 0, 0, 1);
@@ -1429,9 +1473,9 @@ void menu_draw(void)
         break;
     case SCREEN_TOP_SCORE:
         if (full_screen) {
-            native_note(text_top_score, "%N", settings.top_score);
+            native_note(text_top_score, "%N", top_score);
         } else {
-            draw_note(text_top_score_value, settings.top_score);
+            draw_note(text_top_score_value, top_score);
             draw_sparkle();
         }
         break;

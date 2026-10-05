@@ -130,6 +130,7 @@ void games_setup(uint8_t game, uint8_t level, uint8_t option)
 
 void games_start(uint8_t game, uint8_t level, uint8_t option)
 {
+    platform_game_starts(game);
     games_setup(game, level, option);
     games_over = 0;
     games_score = 0;
@@ -248,6 +249,12 @@ void games_render(void)
 void games_draw(uint8_t all)
 {
     games_render();
+    /* Snake II's full-screen board is drawn into the LCD view as it goes. */
+    if (playing == GAME_SNAKE && snake2_full) {
+        if (all)
+            snake2_redraw();
+        return;
+    }
     games_strip = playing == GAME_SPACE_IMPACT;
     sprite_present(all);
 }

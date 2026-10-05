@@ -100,7 +100,7 @@
    after the switches. */
 static uint8_t save_record(uint8_t slot)
 {
-    return (uint8_t)(slot < GAME_COUNT ? 2 + slot * 4 : SAVE_OPTIONS + 2);
+    return (uint8_t)(slot < GAME_COUNT ? 2 + slot * 4 : SAVE_OPTIONS + 2 + (slot - GAME_COUNT) * 4);
 }
 
 /* Emulators and flash carts find the save type by this string. */
@@ -206,6 +206,11 @@ void platform_options_save(const struct game_options *in)
 void platform_rumble(uint8_t on)
 {
     GPIO_DATA = on ? GPIO_RUMBLE : 0;
+}
+
+void platform_game_starts(uint8_t game)
+{
+    (void)game;
 }
 
 /* The magnified rectangle the screen currently shows, and by how much:

@@ -50,12 +50,17 @@ What is there so far:
 
 Start on the first screen picks a full-screen mode instead, as in the 3210
 project: the port's own menus laid out for the console's whole screen in
-the phone's large font. In that mode the game is shown at 2x on the Game
-Boy and at 3x on the GBA, where the display hardware does the scaling.
-Either way the phone's 84 columns are four too many for the screen's
-width, so the last four are left off: nothing of the score, which ends at
-column 75, but enemies come on four columns late and the ship can fly its
-nose out of sight.
+the phone's large font. In that mode Snake II, as the 3210 project's Snake,
+is played on a bigger board: the phone's own rule for the board's size
+applied to the console's screen, 39 by 33 cells on the Game Boy and 29 by
+17 on the GBA (which shows it at 2x), with the snake, the food, the
+creatures and the score at the phone's size and speed, the mazes moved
+out in proportion to fill it, and a top score of its own. Space Impact and
+Pairs II are shown at 2x on the Game Boy and at 3x on the GBA, where the
+display hardware does the scaling. Either way the phone's 84 columns are
+four too many for the screen's width, so the last four are left off:
+nothing of the score, which ends at column 75, but enemies come on four
+columns late and the ship can fly its nose out of sight.
 
 | | Menus | Space Impact | Snake II | Pairs II |
 |---|---|---|---|---|

@@ -27,6 +27,11 @@ void platform_rumble(uint8_t on)
     (void)on;
 }
 
+void platform_game_starts(uint8_t game)
+{
+    (void)game;
+}
+
 uint8_t platform_settings_load(uint8_t game, struct game_settings *out)
 {
     (void)game;

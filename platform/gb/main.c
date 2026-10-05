@@ -80,7 +80,9 @@
    layout is in save.c; from SI_DATA_AT on it holds Space Impact's data,
    copied there from bank 3 at every power-on: that is 7 KiB the game and
    the sprite code both read, more than the always-mapped part of the ROM
-   or work RAM has room for. */
+   or work RAM has room for. Snake II keeps its state in the same place
+   (snake2.c), and the data is copied again before Space Impact is played
+   after it (far.c). */
 #define MBC_RAM_ENABLE REG(0x0000)
 
 /* The MBC5's RAM bank register: bit 3 is the motor of a rumble cartridge.
@@ -344,8 +346,7 @@ void main(void)
 
     MBC_RAM_ENABLE = 0x0a;
     MBC_RAM_BANK = 0;
-    far_bank(BANK_SETUP);
-    memcpy((uint8_t *)SI_DATA_AT, si_data, SI_DATA_SIZE);
+    far_si_data_restore();
     far_bank(BANK_MENU);
 
     menu_init();

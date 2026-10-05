@@ -28,4 +28,7 @@ enum {
 
 void far_bank(uint8_t bank);
 
+/* Space Impact's data copied into cartridge RAM again. */
+void far_si_data_restore(void);
+
 #endif

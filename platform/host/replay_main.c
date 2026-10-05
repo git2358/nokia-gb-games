@@ -32,6 +32,11 @@ void platform_rumble(uint8_t on)
     (void)on;
 }
 
+void platform_game_starts(uint8_t game)
+{
+    (void)game;
+}
+
 int main(int argc, char **argv)
 {
     static uint8_t last[sizeof sprite_screen];

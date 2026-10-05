@@ -1,6 +1,6 @@
 # Nokia 3410 games for Game Boy
 
-![The first screen, the Select game list, and Snake II's title, a game under way and its High scores page on the Game Boy, at the phone's size and in full screen, where Snake II has its bigger board](docs/banner.png)
+![The first screen, the Select game list and Snake II being played on the Game Boy, at the phone's size and in full screen, where Snake II has its bigger board; Space Impact, Bumper, Bantumi and Link5's panels are blank, as they are not here yet](docs/banner.png)
 
 The Nokia 3410 (NHM-2 v5.46) follow-up to
 <https://github.com/lukesau/nokia-3310-games>: the 3410's built-in games

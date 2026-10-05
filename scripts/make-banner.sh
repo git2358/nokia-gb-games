@@ -6,9 +6,10 @@
 # scripted key sequence, runs it in SameBoy's core (tools/gb_run) and
 # stitches the pictures into a labelled grid: the phone-sized mode and
 # under it the full-screen mode; columns for the first screen, the Select
-# game list, and Snake II's title, a game under way and its High scores
-# page. The full-screen row leaves the first screen out, which is the same
-# for both modes. There is no GBA build yet, so no GBA rows.
+# game list, and each of the phone's five games being played. The
+# full-screen row leaves the first screen out, which is the same for both
+# modes. Only Snake II is here so far, so the other games' panels are left
+# blank, and there is no GBA build yet, so no GBA rows.
 #
 #   ./scripts/make-banner.sh [output.png]     # default: docs/banner.png
 #
@@ -39,39 +40,29 @@ build() { make -C "$ROOT" SAMEBOY="$SAMEBOY" "$@" >/dev/null; }
 # game, t a tenth of one.
 SELECT_PHONE="ss"
 SELECT_FULL="as"
-# The title, once all its pictures are laid over: it plays as soon as the
-# keys are done, so it is caught TITLE_AFTER shots in.
-TITLE_PHONE="sss"
-TITLE_FULL="ass"
-TITLE_AFTER=18
 # Snake II from the power-on seed: a few seconds of the snake turning
 # about the board, on the bigger board in full screen.
 SNAKE_PLAY="wwutttttttdtttttttt"
 SNAKE_PHONE="zsssss${SNAKE_PLAY}"
 SNAKE_FULL="zassss${SNAKE_PLAY}"
-# High scores, the snake on its way to the creature.
-SCORES_PHONE="zssssdswtttt"
-SCORES_FULL="zasssdswtttt"
 
 # The ROM plays its keys before it shows anything, which takes the Game Boy
 # a good ten seconds for a game under way, so each screenshot is taken a
-# few frames after the screen first has something on it (or AFTER shots,
-# GB_STEP frames apart), after the boot ROM's logo, which is gone by frame
-# GB_BOOT.
+# few frames after the screen first has something on it, after the boot
+# ROM's logo, which is gone by frame GB_BOOT.
 blank() { [ "$(magick "$1" -format '%k' info:)" -le 1 ]; }
 
-# gb_shot KEYS OUT [AFTER]: a Game Boy screenshot at 3x, in the console's
-# own green.
+# gb_shot KEYS OUT: a Game Boy screenshot at 3x, in the console's own green.
 GB_BOOT=100
 GB_STEP=5
 gb_shot() {
-  local steps=() n after="${3:-2}"
+  local steps=() n
   build build/nokia3410-keys.gb KEYS="$1"
   for n in $(seq 1 300); do steps+=("$GB_STEP" "shot:$TMP/gb-frame-$n.pgm"); done
   "$BUILD/gb_run" "$BUILD/nokia3410-keys.gb" "$BOOT" "$GB_BOOT" "${steps[@]}" >/dev/null 2>&1
-  for n in $(seq 1 $((300 - after))); do
+  for n in $(seq 1 298); do
     blank "$TMP/gb-frame-$n.pgm" && continue
-    magick "$TMP/gb-frame-$((n + after)).pgm" -filter point -resize 300% +level-colors "$DARK","$GREEN" "$2"
+    magick "$TMP/gb-frame-$((n + 2)).pgm" -filter point -resize 300% +level-colors "$DARK","$GREEN" "$2"
     return
   done
   echo "error: the Game Boy ROM showed nothing after keys '$1'"; exit 1
@@ -79,23 +70,20 @@ gb_shot() {
 
 build build/gb_run
 
-# Panel 0 is the first screen, 1 the Select game list, 2 to 4 Snake II.
+# Panel 0 is the first screen, 1 the Select game list, 2 to 6 the games in
+# the order of the phone's list.
 gb_shot "" "$TMP/gb-0.png"
 gb_shot "$SELECT_PHONE" "$TMP/gb-1.png"
-gb_shot "$TITLE_PHONE" "$TMP/gb-2.png" "$TITLE_AFTER"
-gb_shot "$SNAKE_PHONE" "$TMP/gb-3.png"
-gb_shot "$SCORES_PHONE" "$TMP/gb-4.png"
+gb_shot "$SNAKE_PHONE" "$TMP/gb-2.png"
 gb_shot "$SELECT_FULL" "$TMP/gbfull-1.png"
-gb_shot "$TITLE_FULL" "$TMP/gbfull-2.png" "$TITLE_AFTER"
-gb_shot "$SNAKE_FULL" "$TMP/gbfull-3.png"
-gb_shot "$SCORES_FULL" "$TMP/gbfull-4.png"
+gb_shot "$SNAKE_FULL" "$TMP/gbfull-2.png"
 
 # --- layout: 480 px panels, a label column on the left, headers on top ------
 PANEL=480
 GUT=12
 SIDE=56
 HEAD=44
-PANELS="0 1 2 3 4"
+PANELS="0 1 2 3 4 5 6"
 
 row() { # row PREFIX HEIGHT LABEL OUT
   local prefix="$1" h="$2" label="$3" out="$4" i files=()
@@ -116,7 +104,7 @@ header() { # header OUT
   local files=("$TMP/head.png") i=0 title
   magick -size "${SIDE}x${HEAD}" xc:black "$TMP/head.png"
   magick -size "${GUT}x${HEAD}" xc:black "$TMP/hg.png"
-  for title in "First screen" "Select game" "Snake II" "Snake II, playing" "High scores"; do
+  for title in "First screen" "Select game" "Snake II" "Space Impact" "Bumper" "Bantumi" "Link5"; do
     magick -size "${PANEL}x${HEAD}" xc:black -font "$FONT" -pointsize 24 -fill "$GREEN" \
       -gravity center -annotate 0 "$title" "$TMP/h-$i.png"
     [ "$i" = 0 ] || files+=("$TMP/hg.png")

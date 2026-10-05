@@ -1,16 +1,57 @@
-# Nokia 3410 games for Game Boy and Game Boy Advance
+# Nokia 3410 games for Game Boy
 
 The Nokia 3410 (NHM-2 v5.46) follow-up to
 <https://github.com/lukesau/nokia-3310-games>: the 3410's built-in games
 re-implemented in C from a map of the firmware, with their data read from
-your own dump at build time.
+your own dump at build time. One portable core runs on the host and as a
+Game Boy ROM (`.gb`); a GBA build is to come.
 
-Nothing is ported yet. The 3410 has Space Impact, Snake and Bantumi, which
-are the 3310's games adapted to the 3410's 96 x 65 screen (a bigger Snake
-board with the mazes redrawn, a re-laid-out Bantumi board, taller Space
-Impact paths), plus Link5 and one Java game, Munkiki's Castles. See
-[docs/plan.md](docs/plan.md) and, in the RE fork,
-`docs/games_survey_3410.md`.
+What is there so far:
+
+- the phone's menus: the main menu's Games entry, Games (Select game and
+  Settings; not the phone's Download game and More games), the Select game
+  list with all five games, and Snake II's own menu with New game, High
+  scores, Options (Game options: the six mazes and the nine levels) and
+  Instructions, drawn with the phone's fonts and text. The Select game
+  list, Snake II's menu, Game options, the mazes and the Level page equal
+  the phone's to the pixel;
+- Snake II: the 3410's game, the 3310's on a 23 by 13 board with the mazes
+  redrawn, its creatures, scoring, speeds and the dead snake's blinking,
+  frame for frame as the phone plays it;
+- the games' Settings (Game sounds, Game lights, Shakes, Club Nokia ID),
+  the vibrator as a rumble motor, and the 3310's eat and death sounds,
+  which the 3410 holds too but which have not been checked against it yet;
+- the top score and the chosen level and maze, kept in battery-backed
+  cartridge RAM.
+
+Not yet: the other four games, the title animations, the High scores
+page's animation (a plain page for now), the picture the phone shows at
+game over (a plain page with the score for now), the main menu's Games
+icon and the lists' sliding highlight.
+
+The game is shown at the phone's size, in the middle of the Game Boy's
+screen. Start on the first screen picks the full-screen variant, whose
+menus fill the screen; the game stays at the phone's size.
+
+| | Menus | Snake II |
+|---|---|---|
+| D-pad | up and down | steer (2, 4, 6, 8) |
+| A | select | turn clockwise (#) |
+| B | back | turn anticlockwise (*) |
+| Start, Select | select | pause |
+
+See [docs/plan.md](docs/plan.md) and, in the RE fork,
+`docs/games_applications_3410.md` and `docs/games_snake2_3410.md`.
+
+## Building
+
+`make dump` makes the flash image from the Wintesla files below (it needs
+the RE fork, in whose `ports/` directory this repository is kept, or
+`DCT3_RE=` pointing at it), `make gb` the ROM, `make run-gb` opens it in SameBoy. `make test` runs the host
+checks; `make check-gb` runs the ROM headlessly against the host's frames.
+`make golden-snake` records Snake II games in the fork's MAME and `make
+check-golden` replays them through the core; `make check-menus` compares
+the menu pages with the phone's in `golden/menus/`.
 
 ## Firmware policy
 

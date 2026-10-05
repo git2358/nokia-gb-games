@@ -21,6 +21,6 @@ build/
 __pycache__/
 .DS_Store
 # Emulators cloned by scripts/
-tools/SameBoy/
-tools/mgba/
+tools/SameBoy
+tools/mgba
 *.pmm

@@ -1,6 +1,6 @@
 # Nokia 3310 games for Game Boy and Game Boy Advance
 
-![The first screen, the list of games and Space Impact being played, on the Game Boy and the Game Boy Advance, each in the phone-sized mode and in full screen, with blank panels for the games not here yet: Snake II, Bantumi and Pairs II](docs/banner.png)
+![The first screen, the list of games, and Snake II, Space Impact and Pairs II being played, on the Game Boy and the Game Boy Advance, each in the phone-sized mode and in full screen, where Snake II has its bigger board; Bantumi's panels are blank, as it is not here yet](docs/banner.png)
 
 The Nokia 3310 (NHM-5 v6.39) follow-up to
 <https://github.com/lukesau/nokia-3210-games>: Space Impact, Snake II and

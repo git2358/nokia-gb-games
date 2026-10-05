@@ -7,8 +7,9 @@ DUMP ?= roms/noki3310/3310f639e.fls
 
 # The Wintesla flash files the dump is made from, and the MAME fork that
 # holds the extractor and the emulator (https://github.com/lukesau/nokia-dct3-re).
+# This repository is kept in the fork's ports/ directory.
 FLASH_FILES ?= roms/3310-nhm5-v639
-DCT3_RE ?= ../nokia-dct3-re
+DCT3_RE ?= ../..
 ROM_SET := roms/noki3310
 PMM := 3310 v2 pmm.bin
 # What the fork's noki3310 driver declares for BIOS 639.

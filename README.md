@@ -106,8 +106,9 @@ their flash addresses (MCU `0x200000`, PPM `0x340000`, PMM `0x3d0000`):
 
 These are the files the `noki3310` driver of the MAME fork
 <https://github.com/lukesau/nokia-dct3-re> declares as BIOS `639`. The
-extractor and the emulator are the fork's; it is expected next to this
-directory (`DCT3_RE=../nokia-dct3-re`) with its MAME already built.
+extractor and the emulator are the fork's; this directory is expected in
+the fork's `ports/` directory (`DCT3_RE=../..`), with its MAME already
+built.
 
 ## Running the phone
 

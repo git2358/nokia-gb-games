@@ -13,13 +13,15 @@ What is there so far:
   list with all five games, and Snake II's own menu with New game, High
   scores, Options (Game options: the six mazes and the nine levels) and
   Instructions, drawn with the phone's fonts and text. The Select game
-  list, Snake II's menu, Game options, the mazes, the Level page, the title
-  and the game-over picture equal the phone's to the pixel;
+  list, Snake II's menu, Game options, the mazes, the Level page, the title,
+  the game-over picture and the High scores page equal the phone's to the
+  pixel;
 - Snake II: the 3410's game, the 3310's on a 23 by 13 board with the mazes
   redrawn, its creatures, scoring, speeds and the dead snake's blinking,
   frame for frame as the phone plays it; its title animation, and the
   game-over picture with the score in its box, blinking for a new top
-  score, kept for each maze as on the 3410;
+  score, kept for each maze as on the 3410; and the High scores page with
+  its boxes and the snake that eats a creature on its way across;
 - the games' Settings (Game sounds, Game lights, Shakes, Club Nokia ID),
   the vibrator as a rumble motor (from a death to the second blink, as on
   the 3410), and the 3310's eat and death sounds, which the 3410 holds too
@@ -27,9 +29,8 @@ What is there so far:
 - the top score and the chosen level and maze, kept in battery-backed
   cartridge RAM.
 
-Not yet: the other four games, the High scores page's animation (a plain
-page for now), the main menu's Games icon and the lists' sliding
-highlight.
+Not yet: the other four games, the main menu's Games icon and the lists'
+sliding highlight.
 
 The game is shown at the phone's size, in the middle of the Game Boy's
 screen. Start on the first screen picks the full-screen variant, whose

@@ -92,13 +92,6 @@ enum {
 #define HELP_LINES 5
 #define HELP_PAGES 4
 
-/* Microseconds per scheduler tick of the phone. */
-#define PHONE_TICK_US 7781
-
-/* The High scores page closes by itself after about three seconds. In
-   menu_tick calls. */
-#define HIGH_SCORES_TICKS ((uint16_t)(385ul * PHONE_TICK_US / MENU_FRAME_US))
-
 /* The Level page: nine bars, each three rows taller than the one before,
    a line on its right and a shadow below; the levels up to the one chosen
    are filled. */
@@ -136,7 +129,10 @@ static uint8_t view_mode;      /* which of the views below the LCD is set up for
 static uint8_t surround_used;  /* something is drawn around the phone's LCD */
 static struct game_settings settings;
 static uint16_t top_score;     /* the chosen maze's, which the 3410 keeps apart */
-static uint16_t page_ticks;    /* ticks left on a timed page */
+/* The last game's score, the maze it was played on and whether on the
+   full-screen board, for the High scores page; none until a game ends. */
+static uint8_t last_played, last_maze, last_full;
+static uint16_t last_score;
 
 /* The phone's LCD; the full-screen variant's own menus; its board. */
 enum {
@@ -610,6 +606,10 @@ static void play_over(void)
         top_score = maze_record.top_score = final_score;
         platform_settings_save(top_score_slot(), &maze_record);
     }
+    last_played = 1;
+    last_score = final_score;
+    last_maze = settings.option;
+    last_full = full_screen;
     paused = 0;
     held = NO_KEY;
     screen = SCREEN_GAME_OVER;
@@ -708,8 +708,12 @@ static void game_menu_select(void)
         play_start();
         break;
     case ITEM_HIGH_SCORES:
+        /* The creature the snake eats is one of six, at random. */
         screen = SCREEN_HIGH_SCORES;
-        page_ticks = HIGH_SCORES_TICKS;
+        board_drawn = 0;
+        scores_start(top_score, last_score,
+                     (uint8_t)(last_played && last_maze == settings.option && last_full == full_screen),
+                     (uint8_t)((unsigned)game_rand() % 6));
         break;
     case ITEM_OPTIONS:
         screen = SCREEN_OPTIONS;
@@ -939,10 +943,7 @@ uint8_t menu_tick(void)
     games_rumble_elapse(MENU_FRAME_US);
     switch (screen) {
     case SCREEN_HIGH_SCORES:
-        if (--page_ticks == 0) {
-            screen = SCREEN_GAME;
-            return 1;
-        }
+        changed = scores_elapse(MENU_FRAME_US);
         break;
     case SCREEN_TITLE: {
         uint8_t what = title_elapse(MENU_FRAME_US);
@@ -1016,11 +1017,7 @@ static void draw_phone(void)
     case SCREEN_LEVEL:
         draw_level();
         break;
-    case SCREEN_HIGH_SCORES:
-        draw_header(text_high_scores, 1);
-        draw_number(&font_large_bold, 0, 24, top_score, 1, LCD_WIDTH);
-        draw_softkeys(text_back, 0);
-        break;
+
     case SCREEN_HELP:
         draw_header(text_instructions, (uint8_t)(help_page + 1));
         draw_wrapped(&font_small_plain, 0, LIST_Y, HELP_LINE_HEIGHT, HELP_LINES, LCD_WIDTH, help_text(help_page));
@@ -1061,10 +1058,7 @@ static void draw_native(void)
         native_note(text_level, "%N", (uint16_t)(level + 1));
         native_hint(text_hint_select);
         break;
-    case SCREEN_HIGH_SCORES:
-        native_note(text_high_scores, "%N", top_score);
-        native_hint(text_hint_back);
-        break;
+
     case SCREEN_HELP:
         native_title(text_instructions);
         draw_wrapped(&NATIVE_BODY_FONT, NATIVE_MARGIN, NATIVE_LIST_Y, NATIVE_ROW_HEIGHT,
@@ -1082,7 +1076,8 @@ void menu_draw(void)
     /* The full-screen variant has its own menus over the whole framebuffer;
        all else is drawn in the phone's LCD. Changing between them, or
        leaving a screen that drew around the LCD, clears everything. */
-    uint8_t picture = screen == SCREEN_PLAY || screen == SCREEN_TITLE || screen == SCREEN_GAME_OVER;
+    uint8_t picture = screen == SCREEN_PLAY || screen == SCREEN_TITLE || screen == SCREEN_GAME_OVER
+                      || screen == SCREEN_HIGH_SCORES;
     uint8_t mode = full_screen && screen != SCREEN_MAIN && !picture ? VIEW_NATIVE : VIEW_PHONE;
 
     if (full_screen && screen == SCREEN_PLAY && LCD_HAS_SURROUND)
@@ -1120,13 +1115,15 @@ void menu_draw(void)
         board_drawn = 1;
         return;
     }
-    /* The title and the game-over picture are the phone's, shown as the
-       game is. */
-    if (screen == SCREEN_TITLE || screen == SCREEN_GAME_OVER) {
+    /* The title, the game-over picture and the High scores page are the
+       phone's, shown as the game is. */
+    if (screen == SCREEN_TITLE || screen == SCREEN_GAME_OVER || screen == SCREEN_HIGH_SCORES) {
         if (screen == SCREEN_TITLE)
             title_draw();
-        else
+        else if (screen == SCREEN_GAME_OVER)
             over_draw();
+        else
+            scores_draw();
         sprite_present(!board_drawn);
         board_drawn = 1;
         return;

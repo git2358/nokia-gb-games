@@ -35,9 +35,10 @@ SNAKE2_SPEEDS = (0x4BEF64, 9)
 # bytes apart, so that the last row of each is the first of the next (and
 # of the last, the start of their descriptors), as the phone shows them.
 SNAKE2_TITLE = (0x4974A0, 0x498700)
-# The score box the game-over picture shows: its two 6x12 ends, then ten
-# 6x8 digits.
-SNAKE2_BOX = (0x4B47D4, 0x4B4828)
+# The score box the game-over picture and the High scores page show: its
+# two 6x12 ends, then ten 6x8 digits; and further on, the 11x11 medal the
+# High scores page puts beside its box.
+SNAKE2_BOX = (0x4B47D4, 0x4B4AC6)
 DIGIT_GLYPHS = (0x49017C, 40)  # ten 4x5 digits, 4 bytes each
 
 # The phone's sounds, by id: 8-byte records that start with the address of

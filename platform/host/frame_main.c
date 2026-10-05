@@ -4,7 +4,9 @@
    run-N (a new game after N screen frames with no key pressed), or
    menu-KEYS, the screen after the scripted keys of menu_script, or
    menu-KEYS+N, the same N screen frames later, or over-SCORE+N, the
-   game-over picture for a new top score of SCORE, N screen frames in. */
+   game-over picture for a new top score of SCORE, N screen frames in, or
+   scores-TOP-LAST-KIND+N, the High scores page N screen frames in (LAST
+   shown when it is not -). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -82,6 +84,25 @@ int main(int argc, char **argv)
         while (frames-- > 0)
             over_elapse(16743);
         over_draw();
+        sprite_present(1);
+    } else if (strncmp(argv[1], "scores-", 7) == 0) {
+        char *p = argv[1] + 7, *plus = strchr(argv[1], '+');
+        long frames = plus ? strtol(plus + 1, 0, 10) : 0;
+        uint16_t top = (uint16_t)strtol(p, &p, 10), last = 0;
+        uint8_t show_last = 0, kind;
+
+        p++;
+        if (*p == '-') {
+            p++;
+        } else {
+            last = (uint16_t)strtol(p, &p, 10);
+            show_last = 1;
+        }
+        kind = (uint8_t)strtol(p + 1, 0, 10);
+        scores_start(top, last, show_last, kind);
+        while (frames-- > 0)
+            scores_elapse(16743);
+        scores_draw();
         sprite_present(1);
     } else if (strncmp(argv[1], "menu-", 5) == 0) {
         /* menu-KEYS+N lets N more screen frames pass after the keys. */

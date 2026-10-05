@@ -28,8 +28,7 @@ do not fit. The GBA (240 x 160) shows it whole at 2x (192 x 130).
 1. Done: the games' handlers and how they are reached (MAME and Ghidra).
 2. Done: the core and the Game Boy layer at 96 x 65, the 3410's menus,
    and Snake II, checked against the phone frame for frame.
-3. Snake II's High scores page; the main menu's Games icon; the sounds
-   checked against the phone.
+3. The main menu's Games icon; the sounds checked against the phone.
 4. The GBA layer at 2x.
 5. Bantumi (closest to the 3310), then Space Impact, then Link5, Bumper
    and Munkiki's Castles.

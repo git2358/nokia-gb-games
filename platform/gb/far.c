@@ -90,3 +90,31 @@ void far_snake2_redraw(void)
     snake2_redraw();
     far_bank(was);
 }
+
+void far_scores_start(uint16_t top, uint16_t last, uint8_t show_last, uint8_t kind)
+{
+    uint8_t was = mapped;
+
+    far_bank(BANK_SNAKE);
+    scores_start(top, last, show_last, kind);
+    far_bank(was);
+}
+
+uint8_t far_scores_elapse(uint16_t us)
+{
+    uint8_t was = mapped, what;
+
+    far_bank(BANK_SNAKE);
+    what = scores_elapse(us);
+    far_bank(was);
+    return what;
+}
+
+void far_scores_draw(void)
+{
+    uint8_t was = mapped;
+
+    far_bank(BANK_SNAKE);
+    scores_draw();
+    far_bank(was);
+}

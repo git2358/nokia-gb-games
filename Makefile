@@ -178,7 +178,8 @@ vpath %.c core platform/gb $(ASSETS)
 # and the game-over picture.
 $(BUILD)/gb/0/games.rel: GB_EXTRA := -Dsnake2_handler=far_snake2_handler -Dsnake2_redraw=far_snake2_redraw
 $(BUILD)/gb/1/menu.rel: GB_EXTRA := -Dtitle_start=far_title_start -Dtitle_elapse=far_title_elapse -Dtitle_draw=far_title_draw \
-	-Dover_start=far_over_start -Dover_elapse=far_over_elapse -Dover_draw=far_over_draw
+	-Dover_start=far_over_start -Dover_elapse=far_over_elapse -Dover_draw=far_over_draw \
+	-Dscores_start=far_scores_start -Dscores_elapse=far_scores_elapse -Dscores_draw=far_scores_draw
 
 $(BUILD)/gb/0/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
 	@mkdir -p $(BUILD)/gb/0

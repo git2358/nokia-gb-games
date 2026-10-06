@@ -102,6 +102,9 @@ uint8_t staged_count;
 const uint8_t *staged_from; /* flush_tiles' place in staged */
 
 void flush_tiles(void);
+/* Whether any cell of lcd_dirty is set (blocks.s). */
+uint8_t gb_any_dirty(void);
+typedef char lcd_dirty_cells[sizeof lcd_dirty == 360 ? 1 : -1];
 
 /* The buzzer is pulse channel 2: a 50% square wave at full volume, of
    131072 / (2048 - its frequency register) hertz. These are eight times
@@ -163,6 +166,11 @@ static uint8_t *tile_address(uint8_t tx, uint8_t ty)
     return tile_row[ty] + (uint16_t)(tx << 4);
 }
 
+uint8_t *gb_tile_address(uint8_t tx, uint8_t ty)
+{
+    return tile_address(tx, ty);
+}
+
 /* Brings video RAM up to date with the cells of lcd_fb drawn to since the
    last call. The LCD stays on: the tiles go in a few at a time between the
    lines being drawn, so a changed screen fills in over a few frames instead
@@ -172,6 +180,8 @@ static void present(void)
     uint8_t tx, ty, n = 0;
     uint8_t *dirty = lcd_dirty;
 
+    if (!gb_any_dirty())
+        return;
     for (ty = 0; ty < TILES_Y; ty++) {
         for (tx = 0; tx < TILES_X; tx++, dirty++) {
             if (!*dirty)
@@ -224,13 +234,7 @@ void platform_native_blank(void)
 /* Something was drawn into lcd_fb since it was last shown. */
 static uint8_t lcd_drawn(void)
 {
-    const uint8_t *dirty = lcd_dirty;
-    uint16_t n;
-
-    for (n = sizeof lcd_dirty; n; n--)
-        if (*dirty++)
-            return 1;
-    return 0;
+    return gb_any_dirty();
 }
 
 /* Puts what menu_draw drew on the screen: the menus through lcd_fb, the

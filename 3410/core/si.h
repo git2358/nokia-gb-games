@@ -63,5 +63,7 @@ void si_render(void) SI_FAR;
    the picture, in their boxes (title.h's draw_score_box), from
    si_top_score and so on. */
 uint8_t si_scores_shown(void) SI_FAR;
+/* Draws the picture into si_rows' tiles instead (si_rows.h). */
+void si_render_rows(void) SI_FAR;
 
 #endif

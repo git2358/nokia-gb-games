@@ -143,29 +143,6 @@ void si_pic_next_frame(uint8_t id) SI_FAR
         p->frame = 0;
 }
 
-/* What a mode does: the high nibble 1 or 2 draws (anything else nothing), a
-   low nibble with 2 in it xors, else 1 copies and 2 ors (0x3652c0). */
-enum {
-    OP_NONE,
-    OP_COPY,
-    OP_OR,
-    OP_XOR
-};
-
-static uint8_t mode_op(uint8_t mode)
-{
-    uint8_t high = mode >> 4;
-
-    /* 0x30, the shield's in the chapters drawn with 0x20, shows in MAME as
-       the others there do. */
-    if (high == 3)
-        return OP_OR;
-    if (high != 1 && high != 2)
-        return OP_NONE;
-    if (mode & 2)
-        return OP_XOR;
-    return high == 1 ? OP_COPY : OP_OR;
-}
 
 static void plot(int x, int y, uint8_t set, uint8_t op)
 {
@@ -176,14 +153,14 @@ static void plot(int x, int y, uint8_t set, uint8_t op)
     d = &sprite_screen[(y >> 3) * LCD_WIDTH + x];
     bit = (uint8_t)(1u << (y & 7));
     switch (op) {
-    case OP_COPY:
+    case SI_OP_COPY:
         *d = set ? (uint8_t)(*d | bit) : (uint8_t)(*d & ~bit);
         break;
-    case OP_OR:
+    case SI_OP_OR:
         if (set)
             *d |= bit;
         break;
-    case OP_XOR:
+    case SI_OP_XOR:
         if (set)
             *d ^= bit;
         break;
@@ -217,7 +194,7 @@ static void put_column_bits(uint8_t *d, const uint8_t *src, uint8_t count, uint8
     sprite_band_n = count;
     sprite_band_up = (int8_t)(left ? shift : -shift);
     sprite_band_valid = mask;
-    sprite_band_mode = op == OP_COPY ? SPRITE_MODE_OPAQUE : op == OP_OR ? SPRITE_MODE_SET : SPRITE_MODE_XOR;
+    sprite_band_mode = op == SI_OP_COPY ? SPRITE_MODE_OPAQUE : op == SI_OP_OR ? SPRITE_MODE_SET : SPRITE_MODE_XOR;
     sprite_band();
 }
 #else
@@ -232,13 +209,13 @@ static void put_column_bits(uint8_t *d, const uint8_t *src, uint8_t count, uint8
         bits = src ? (uint8_t)(left ? *src++ << shift : *src++ >> shift) : 0xff;
         bits &= mask;
         switch (op) {
-        case OP_COPY:
+        case SI_OP_COPY:
             *d = (uint8_t)((*d & ~mask) | bits);
             break;
-        case OP_OR:
+        case SI_OP_OR:
             *d |= bits;
             break;
-        case OP_XOR:
+        case SI_OP_XOR:
             *d ^= bits;
             break;
         }
@@ -333,7 +310,7 @@ static void draw_fill(const struct si_pic *p, uint8_t op)
         first = band * 8 > top ? band * 8 : top;
         last = band * 8 + 8 < bottom ? band * 8 + 8 : bottom;
         /* A whole band set is a plain fill. */
-        if (last - first == 8 && op != OP_XOR)
+        if (last - first == 8 && op != SI_OP_XOR)
             memset(&sprite_screen[band_start[band] + x], 0xff, (uint8_t)(end - x));
         else
             put_column_bits(&sprite_screen[band_start[band] + x], 0, (uint8_t)(end - x), 0, 1,
@@ -370,9 +347,9 @@ void si_pic_render(void) SI_FAR
     memset(sprite_screen, 0, sizeof sprite_screen);
     for (id = FIRST; id; id = si_pics[id].next) {
         const struct si_pic *p = &si_pics[id];
-        uint8_t op = mode_op(p->mode);
+        uint8_t op = si_pic_op(p->mode);
 
-        if (op == OP_NONE)
+        if (op == SI_OP_NONE)
             continue;
         switch (p->kind) {
         case SI_PIC_BITMAP:

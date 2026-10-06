@@ -31,7 +31,7 @@ MAKEBIN ?= makebin
 SDAS ?= sdasgb
 GB_FB := -DLCD_FB_WIDTH=160 -DLCD_FB_HEIGHT=144 -DLCD_PHONE_X=32 -DLCD_PHONE_Y=40
 GB_CFLAGS = -msm83 --opt-code-speed $(GB_FB) -DSNAKE2_STATE_AT=0xa100 -DSNAKE2_STATE_END=0xc000 \
-	-DSI_BANKED -DSI_PICS_AT=0xa100 -DSI_STATE_AT=0xa900 -DSI_STATE_END=0xc000 -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_BAND -DSPRITE_PLATFORM_PRESENT -DNATIVE_PLATFORM_TILES -Icore -I$(COMMON)/core -Iplatform/gb -I$(COMMON)/platform/gb -I$(ASSETS)
+	-DSI_BANKED -DSI_PLATFORM_ROWS -DSI_ROWS_FAR=9 -DSI_ROWS_AT=0xb300 -DSI_ROWS_END=0xc000 -DSI_ROWS_BLOCK=gb_block_rows -DSI_ROWS_PUT=gb_rows_put -DSI_ROWS_FILL=gb_fill -DSI_ROWS_MADE=gb_rows_made -DSI_ROWS_TERRAIN -DSI_PICS_AT=0xa100 -DSI_STATE_AT=0xa900 -DSI_STATE_END=0xb300 -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_BAND -DSPRITE_PLATFORM_PRESENT -DNATIVE_PLATFORM_TILES -Icore -I$(COMMON)/core -Iplatform/gb -I$(COMMON)/platform/gb -I$(ASSETS)
 # The SameBoy clone scripts/setup-sameboy.sh makes: its boot ROM, and its
 # core as a library (`make -C $(SAMEBOY) lib`) for tools/gb_run.
 SAMEBOY ?= ../tools/SameBoy
@@ -45,7 +45,8 @@ BUILD := build
 # The code the three ports share.
 COMMON := ../common
 ASSETS := $(BUILD)/assets
-ASSET_SRC := $(ASSETS)/game_assets.c $(ASSETS)/snake2_data.c $(ASSETS)/game_tables.c $(ASSETS)/si_data.c
+ASSET_SRC := $(ASSETS)/game_assets.c $(ASSETS)/snake2_data.c $(ASSETS)/game_tables.c $(ASSETS)/si_data.c \
+	$(ASSETS)/si_rows_a.c $(ASSETS)/si_rows_b.c $(ASSETS)/si_rows_index.c
 CORE_SRC := $(wildcard core/*.c) $(wildcard $(COMMON)/core/*.c)
 CORE_HDR := $(wildcard core/*.h) $(wildcard $(COMMON)/core/*.h)
 INCLUDES := -Icore -I$(COMMON)/core -Iplatform/host -I$(COMMON)/platform/host -I$(ASSETS)
@@ -54,8 +55,8 @@ GB_ROM := $(BUILD)/nokia3410.gb
 GB_TEST_ROM := $(BUILD)/nokia3410-keys.gb
 # The banks of the Game Boy ROM (see platform/gb/far.h).
 GB_BANK0 := platform/gb/main.c platform/gb/far.c platform/gb/screen.c $(COMMON)/core/lcd.c core/sprite.c core/games.c core/rand.c core/sound.c $(ASSETS)/game_tables.c \
-	$(COMMON)/core/font.c platform/gb/save.c
-GB_BANK1 := core/menu.c $(ASSETS)/game_assets.c
+	platform/gb/save.c $(ASSETS)/si_rows_index.c
+GB_BANK1 := core/menu.c $(COMMON)/core/font.c $(ASSETS)/game_assets.c
 GB_BANK2 := core/snake2.c core/title.c $(ASSETS)/snake2_data.c
 GB_BANK3 := $(COMMON)/platform/gb/native_tiles.c $(ASSETS)/native_data.c
 GB_BANK4 := $(ASSETS)/native_data.c
@@ -65,9 +66,13 @@ GB_BANK5 := core/si.c
 GB_BANK6 := core/si_move.c
 GB_BANK7 := core/si_hit.c
 GB_BANK8 := core/si_screens.c core/si_pic.c
+# The pictures as the Game Boy draws them (core/si_rows.h): what draws
+# them in the first bank, their rows in two of their own.
+GB_ROWS_BANK := 9
 gb_rels = $(patsubst %.c,$(BUILD)/gb/$(1)/%.rel,$(notdir $(2)))
 GB_RELS := $(call gb_rels,0,$(filter-out platform/gb/main.c,$(GB_BANK0))) $(call gb_rels,1,$(GB_BANK1)) \
 	$(call gb_rels,2,$(GB_BANK2)) $(call gb_rels,3,$(GB_BANK3)) $(call gb_rels,4,$(GB_BANK4)) \
+	$(BUILD)/gb/$(GB_ROWS_BANK)/si_rows_a.rel $(BUILD)/gb/$(GB_ROWS_BANK)/si_rows_b.rel $(BUILD)/gb/4/si_rows.rel \
 	$(foreach n,$(GB_SI_BANKS),$(BUILD)/gb/$(n)/si_data.rel $(call gb_rels,$(n),$(GB_BANK$(n))))
 
 # Keys a test ROM presses at power-on (see menu_script in core/menu.c), for
@@ -120,7 +125,8 @@ assets: $(ASSET_SRC)
 $(ASSETS)/game_assets.c: tools/extract_assets.py tools/extract_si.py
 	$(PYTHON) tools/extract_assets.py "$(DUMP)" $(ASSETS)
 
-$(ASSETS)/snake2_data.c $(ASSETS)/game_tables.c $(ASSETS)/si_data.c: $(ASSETS)/game_assets.c
+$(ASSETS)/snake2_data.c $(ASSETS)/game_tables.c $(ASSETS)/si_data.c $(ASSETS)/si_rows_a.c $(ASSETS)/si_rows_b.c \
+	$(ASSETS)/si_rows_index.c: $(ASSETS)/game_assets.c
 
 $(BUILD)/test_core: tests/test_core.c $(COMMON)/core/lcd.c core/rand.c core/sprite.c $(CORE_HDR)
 	@mkdir -p $(BUILD)
@@ -272,6 +278,21 @@ $(BUILD)/gb/4/%.rel: %.c
 	@mkdir -p $(BUILD)/gb/4
 	$(SDCC) $(GB_CFLAGS) -DNATIVE_PART_TILES --codeseg CODE_4 -c $< -o $@
 
+# The pictures' drawing, each tick, as Space Impact's code, in the bank of
+# the made menus' tiles, which has the room; it is called banked.
+$(BUILD)/gb/4/si_rows.rel: core/si_rows.c $(CORE_HDR) $(ASSET_SRC)
+	@mkdir -p $(@D)
+	$(SDCC) $(GB_CFLAGS) $(GB_SI_OPT) --codeseg CODE_4 -bo 4 -c $< -o $@
+
+# The two banks of picture rows, one array each.
+$(BUILD)/gb/$(GB_ROWS_BANK)/si_rows_a.rel: $(ASSETS)/si_rows_a.c
+	@mkdir -p $(@D)
+	$(SDCC) $(GB_CFLAGS) --codeseg CODE_9 -c $< -o $@
+
+$(BUILD)/gb/$(GB_ROWS_BANK)/si_rows_b.rel: $(ASSETS)/si_rows_b.c
+	@mkdir -p $(@D)
+	$(SDCC) $(GB_CFLAGS) --codeseg CODE_10 -c $< -o $@
+
 # Space Impact's code is the most the Game Boy runs in a tick: the compiler
 # is given longer to place its registers (a full build's minutes).
 GB_SI_OPT ?= --max-allocs-per-node 100000
@@ -306,7 +327,7 @@ $(BUILD)/gb/%.rel: $(COMMON)/platform/gb/%.s
 # over into the second, so its end is checked here.
 $(BUILD)/nokia3410%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/native_put.rel $(BUILD)/gb/band.rel $(BUILD)/gb/bcall.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
 	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 -Wl-b_CODE_3=0x34000 -Wl-b_CODE_4=0x44000 \
-		$(foreach n,$(GB_SI_BANKS),-Wl-b_CODE_$(n)=0x$(n)4000) \
+		$(foreach n,$(GB_SI_BANKS),-Wl-b_CODE_$(n)=0x$(n)4000) -Wl-b_CODE_9=0x94000 -Wl-b_CODE_10=0xA4000 \
 		-o $(BUILD)/gb/$(basename $(notdir $@)).ihx $^
 	@$(PYTHON) $(COMMON)/tools/gb_bank_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
 	@$(PYTHON) tools/gb_mirror_check.py $(BUILD)/gb/$(basename $(notdir $@)).map

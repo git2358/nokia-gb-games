@@ -1,6 +1,7 @@
 /* Space Impact: the keys, the title and the High scores page
    (si_int.h). */
 #include "si_int.h"
+#include "si_rows.h"
 
 /* 0x25a068 */
 static void ship_clamp_y(void)
@@ -254,4 +255,9 @@ uint8_t si_screen_event(uint8_t event) SI_FAR
     if (page.running && event <= SI_EVENT_PAUSE)
         return si_scores_event(event);
     return SI_NO_SCREEN;
+}
+
+void si_render_rows(void) SI_FAR
+{
+    si_rows_render();
 }

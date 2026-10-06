@@ -3,8 +3,8 @@
 
    0  startup, this layer, the framebuffer, the sprite layer, the game's
       timers and the sounds, which play from an interrupt;
-   1  the menus, the fonts and the text (what draws the text and what the
-      cartridge RAM keeps are in bank 0);
+   1  the menus, the fonts and the text (what the cartridge RAM keeps is
+      in bank 0);
    2  Snake II and its data, the score's digits among it, its title, its
       game-over picture and its High scores page;
    3  the full-screen menus made at build time and what shows them;

@@ -29,9 +29,10 @@ What is there so far:
   title, its menu (Continue after a pause, New game, High scores,
   Chapters, Instructions) and its High scores page, all to the pixel. The
   Instructions are the phone's text without its demos, and the Chapters
-  note "Done" is there without its tick. On the Game Boy the game keeps
-  the phone's pace but shows a picture about every other tick, about five
-  a second, where the phone shows ten;
+  note "Done" is there without its tick. On the Game Boy the game is
+  drawn straight into the tiles' rows from pictures the build makes
+  ready, the same to the pixel, and keeps the phone's pace with a picture
+  nearly every tick, about nine a second where the phone shows ten;
 - the games' Settings (Game sounds, Game lights, Shakes, Club Nokia ID),
   the vibrator as a rumble motor (from a death to the second blink, as on
   the 3410, but half as long, see `../common/core/rumble.h`), and the 3310's eat and death sounds, which the 3410 holds too

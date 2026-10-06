@@ -8,6 +8,9 @@
 #include "lcd.h"
 #include "rand.h"
 #include "si.h"
+#ifdef SI_PLATFORM_ROWS
+#include "si_rows.h"
+#endif
 #include "snake2.h"
 #include "sprite.h"
 #include "title.h"
@@ -1627,6 +1630,15 @@ void menu_draw(void)
         board_drawn = 1;
         return;
     }
+#ifdef SI_PLATFORM_ROWS
+    /* A platform that shows the game from si_rows' tiles. */
+    if (screen == SCREEN_SI_PLAY) {
+        si_render_rows();
+        si_rows_present(!board_drawn);
+        board_drawn = 1;
+        return;
+    }
+#endif
     if (screen == SCREEN_SI_TITLE || screen == SCREEN_SI_PLAY || screen == SCREEN_SI_SCORES) {
         si_render();
         if (si_scores_shown()) {

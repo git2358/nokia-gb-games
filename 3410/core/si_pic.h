@@ -68,6 +68,35 @@ void si_pic_next_frame(uint8_t id) SI_FAR;
                                     si_pics[id].y = (int16_t)(si_pics[id].y + (dy)))
 #define si_pic_image(id) (&si_pics[id].frames[si_pics[id].frame])
 
+/* What a mode does: the high nibble 1 or 2 draws (anything else nothing), a
+   low nibble with 2 in it xors, else 1 copies and 2 ors (0x3652c0). */
+enum {
+    SI_OP_NONE,
+    SI_OP_COPY,
+    SI_OP_OR,
+    SI_OP_XOR
+};
+
+#ifdef __SDCC
+static
+#else
+static inline
+#endif
+uint8_t si_pic_op(uint8_t mode)
+{
+    uint8_t high = mode >> 4;
+
+    /* 0x30, the shield's in the chapters drawn with 0x20, shows in MAME as
+       the others there do. */
+    if (high == 3)
+        return SI_OP_OR;
+    if (high != 1 && high != 2)
+        return SI_OP_NONE;
+    if (mode & 2)
+        return SI_OP_XOR;
+    return high == 1 ? SI_OP_COPY : SI_OP_OR;
+}
+
 /* Draws the list into sprite_screen, cleared first. */
 void si_pic_render(void) SI_FAR;
 

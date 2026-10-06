@@ -17,6 +17,7 @@
 #include "rand.h"
 #include "si.h"
 #include "si_pic.h"
+#include "si_rows.h"
 #include "sprite.h"
 #include "title.h"
 
@@ -37,7 +38,7 @@ int main(int argc, char **argv)
 {
     static uint8_t last[sizeof sprite_screen];
     char path[1024];
-    unsigned event, a, b, keys, n = 0, written = 0;
+    unsigned event, a, b, keys, n = 0, written = 0, i;
     FILE *events;
 
     if (argc != 4) {
@@ -79,6 +80,17 @@ int main(int argc, char **argv)
         if (!(done & SI_DONE_REDRAW) || (event == SI_EVENT_NEW_GAME && next == SI_EVENT_CONTINUE))
             continue;
         si_render();
+        /* The Game Boy's way of drawing the same pictures must give the
+           same picture. */
+        si_rows_render();
+        for (i = 0; i < LCD_WIDTH * LCD_HEIGHT; i++) {
+            unsigned x = i % LCD_WIDTH, y = i / LCD_WIDTH;
+
+            if ((sprite_screen[(y >> 3) * LCD_WIDTH + x] >> (y & 7) & 1) != si_rows_pixel(x, y)) {
+                fprintf(stderr, "event %u: si_rows differs from si_pic at (%u, %u)\n", n, x, y);
+                return 1;
+            }
+        }
         if (si_scores_shown()) {
             draw_score_box(si_top_score, 1, 1);
             if (si_show_last)

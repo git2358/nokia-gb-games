@@ -12,6 +12,9 @@
 #include <string.h>
 
 #include "lcd.h"
+#include "native_gb.h"
+#include "si_data.h"
+#include "si_rows.h"
 #include "sprite.h"
 
 #define LCDC_HIGH 0x81 /* LCD on, tiles 0..127 at 0x9000 */
@@ -71,6 +74,57 @@ void sprite_present(uint8_t all)
                 gb_block_rows(part, lcd_fb + (LCD_PHONE_Y + band * 8) * LCD_STRIDE + (LCD_PHONE_X / 8) + block);
             }
             lcd_dirty[(LCD_PHONE_X / 8) + block + LCD_CELLS_X * (LCD_PHONE_Y / 8 + band)] = 1;
+        }
+    }
+}
+
+
+/* Where each row of tiles starts in lcd_fb and in video RAM, for
+   gb_rows_present (blocks.s), which puts what changed on the screen
+   itself. */
+uint8_t *gb_rows_fb[SI_ROWS_TILES_Y];
+uint8_t *gb_rows_tiles[SI_ROWS_TILES_Y];
+void gb_rows_present(void);
+/* How many pictures si_pictures holds, for gb_rows_made (blocks.s), in
+   the first bank with it. */
+const uint8_t gb_rows_count = sizeof si_pictures / sizeof si_pictures[0];
+typedef char gb_rows_size[SI_ROWS_TILES_X == 12 && SI_ROWS_TILES_Y == 9 && SI_ROWS_ROW_BYTES == 128
+                          && LCD_STRIDE == 20 ? 1 : -1];
+
+void si_rows_present(uint8_t all)
+{
+    uint8_t tx, ty, r;
+    const uint8_t *now = si_rows_screen;
+    uint8_t *was = si_rows_ram.shown, *fb, *dirty;
+
+    /* Only what changed: straight to the tiles. All of it (a new screen),
+       or while a made screen is still up for show() to leave: through the
+       dirty cells, as everything else. */
+    if (!all && !native_up) {
+        if (!gb_rows_fb[0])
+            for (ty = 0; ty < SI_ROWS_TILES_Y; ty++) {
+                gb_rows_fb[ty] = lcd_fb + (LCD_PHONE_Y + ty * 8) * LCD_STRIDE + LCD_PHONE_X / 8;
+                gb_rows_tiles[ty] = gb_tile_address(LCD_PHONE_X / 8, (uint8_t)(LCD_PHONE_Y / 8 + ty));
+            }
+        gb_rows_present();
+        return;
+    }
+
+    for (ty = 0; ty < SI_ROWS_TILES_Y; ty++) {
+        now = si_rows_screen + ty * SI_ROWS_ROW_BYTES;
+        was = si_rows_ram.shown + ty * SI_ROWS_ROW_BYTES;
+        fb = lcd_fb + (LCD_PHONE_Y + ty * 8) * LCD_STRIDE + LCD_PHONE_X / 8;
+        dirty = lcd_dirty + LCD_CELLS_X * (LCD_PHONE_Y / 8 + ty) + LCD_PHONE_X / 8;
+        for (tx = 0; tx < SI_ROWS_TILES_X; tx++, now += 8, was += 8, fb++, dirty++) {
+            uint8_t *d = fb;
+
+            if (all)
+                memcpy(was, now, 8);
+            else if (!gb_block_changed(now, was))
+                continue;
+            for (r = 0; r < 8; r++, d += LCD_STRIDE)
+                *d = now[r];
+            *dirty = 1;
         }
     }
 }

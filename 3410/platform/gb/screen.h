@@ -22,4 +22,7 @@ void lcd_cuts(uint8_t scx, uint8_t line0, uint8_t lcdc0, uint8_t scx0, uint8_t l
    at 0x8000 and the rest at 0x9000. */
 void screen_cuts(void);
 
+/* The video RAM of a cell's tile (main.c). */
+uint8_t *gb_tile_address(uint8_t tx, uint8_t ty);
+
 #endif

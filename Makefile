@@ -65,7 +65,7 @@ KEYS ?= sssss
 # The game without the menus, for tools that drive it directly.
 GAME_SRC := $(filter-out core/menu.c core/font.c,$(CORE_SRC))
 
-.PHONY: help dump install-roms assets test frames golden-snake check-golden check-menus gb check-gb shot-gb run-gb cards clean
+.PHONY: help dump install-roms assets test frames golden-snake golden-si check-golden check-menus gb check-gb shot-gb run-gb cards clean
 
 help:
 	@echo "make dump      rebuild $(DUMP) from the Wintesla files in FLASH_FILES=$(FLASH_FILES)"
@@ -151,6 +151,30 @@ golden-snake:
 			RUN_EXTRA_ARGS="-autoboot_script $(abspath $(DCT3_RE))/mame_nokia_3410_snake2_probe.lua -debug -debugger none" || exit 1; \
 		cp run_golden_snake/nokia_dct3_lcdmirror_*.pgm $$dir/ && \
 		$(PYTHON) tools/snake2_events.py run_golden_snake/error.log $$dir; \
+	done
+
+# Space Impact's reference runs: the firmware's own game played by the
+# fork's autopilot, which lines the ship up with the nearest enemy and
+# fires, logging every event the game is handed. A run is NAME:SECONDS
+# [:SWITCHES], the switches more of the autopilot's, comma-separated: a
+# plays on through its continues, b fires the special weapon and pauses
+# once, c stays put without firing and is left to lose, through the
+# continue screen to the end of the game. Not replayed yet: the port's
+# Space Impact is to come.
+SI_GOLDENS ?= a:120:SI_CONTINUE=1 b:90:SI_SPECIAL_AT=10+25+40,SI_PAUSE_AT=30 c:150:SI_IDLE=1,SI_FIRE_EVERY=0
+SI_KEYS := enter,wait1500,up,wait300,up,wait300,up,wait300,up,wait1000,enter,wait1500,enter,wait1500,down,wait500,enter,wait5000,enter,wait3000
+
+golden-si:
+	@test -x $(DCT3_RE)/mame/mame || { echo "Missing $(DCT3_RE)/mame/mame: build the fork first"; exit 1; }
+	@for run in $(SI_GOLDENS); do \
+		set -- $$(echo $$run | tr : ' '); dir=golden/si-$$1; \
+		rm -rf run_golden_si $$dir && mkdir -p run_golden_si $$dir && \
+		$(MAKE) -C $(DCT3_RE) run-keys GAMES_PRODUCT=3410 RUN_DIR=$(abspath run_golden_si) SECONDS=$$2 KEYS=$(SI_KEYS) \
+			RUN_NVRAM_DIR=$(abspath run_golden_si)/nvram \
+			RUN_ENV="$$(echo $$3 | tr , ' ' | tr + ,)" \
+			RUN_EXTRA_ARGS="-autoboot_script $(abspath $(DCT3_RE))/mame_nokia_3410_si_bot.lua -debug -debugger none" || exit 1; \
+		cp run_golden_si/nokia_dct3_lcdmirror_*.pgm $$dir/ && \
+		$(PYTHON) tools/si_events.py run_golden_si/error.log $$dir; \
 	done
 
 # Skipped when the reference runs have not been recorded.

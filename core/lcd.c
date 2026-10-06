@@ -217,6 +217,22 @@ void lcd_blit_strips(int x, int y, int w, int h, const uint8_t *data)
 {
     int i, j;
 
+    if (x >= 0 && y >= 0 && x + w <= lcd_view_w && y + h <= lcd_view_h) {
+        /* All of it is inside the view: a band of 8 rows at a time, a byte
+           of it a column of the band, as lcd_blit_bitmap does. */
+        uint8_t fx = (uint8_t)(x + lcd_view_x), fy = (uint8_t)(y + lcd_view_y), cx, columns, left;
+        uint8_t *top = lcd_fb + fy * LCD_STRIDE;
+
+        lcd_mark_dirty(fx, fy, (uint8_t)w, (uint8_t)h);
+        for (left = (uint8_t)h; left; left -= lcd_column_rows, top += 8 * LCD_STRIDE) {
+            lcd_column_rows = left > 8 ? 8 : left;
+            for (columns = (uint8_t)w, cx = fx; columns; columns--, cx++) {
+                lcd_column_bits = *data++;
+                lcd_column_blit(top + (cx >> 3), lcd_bit[cx & 7]);
+            }
+        }
+        return;
+    }
     for (j = 0; j < h; j++)
         for (i = 0; i < w; i++)
             put_pixel(x + i, y + j, (data[i + w * (j >> 3)] >> (j & 7)) & 1);

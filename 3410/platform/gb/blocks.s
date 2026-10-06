@@ -8,8 +8,13 @@
 	.globl	_gb_rows_present, _gb_rows_fb, _gb_rows_tiles, _si_rows_ram, _gb_any_dirty, _lcd_dirty
 	.globl	_gb_rows_made, _gb_rows_count, _si_pictures, _si_rows_bank, _si_rows_at, _si_rows_a, _si_rows_b
 	.globl	_far_mapped, _gb_shifted_left, _gb_terrain_shift
+	.globl	_gb_palette, _gb_cgb
 
 	.area	_DATA
+;; What the boot ROM left in A (crt0.s keeps it): 0x11 on a Game Boy Color
+;; or Advance, where the ROM runs in Color mode (main.c).
+_gb_cgb::
+	.ds	1
 ;; core/si_rows.c's struct si_rows_put: src, dst, stride, n, h, y, first,
 ;; last, op.
 _gb_rows::
@@ -1452,3 +1457,49 @@ _gb_terrain_shift::
 	pop	hl
 	inc	sp
 	jp	(hl)
+
+;; void gb_palette(uint8_t shades): the background palette, the shade of
+;; each of the colours 0 to 3 as BGP takes it (shades in a). In Color mode
+;; (gb_cgb), where BGP is not used, background palette 0 too, the shades in
+;; black and white: written in the vertical blank, as the palette is not
+;; there to write while a line is drawn (at once with the LCD off).
+_gb_palette::
+	ld	(#0xff47), a
+	ld	c, a
+	ld	a, (#_gb_cgb)
+	cp	a, #0x11
+	ret	nz
+	ld	a, (#0xff40)
+	bit	7, a
+	jr	z, 2$
+1$:
+	ld	a, (#0xff44)
+	cp	a, #144
+	jr	c, 1$
+	cp	a, #152
+	jr	nc, 1$
+2$:
+	ld	a, #0x80		; colour 0 of palette 0, then on by itself
+	ld	(#0xff68), a
+	ld	b, #4
+3$:
+	ld	a, c
+	and	a, #3
+	add	a, a
+	ld	e, a
+	ld	d, #0
+	ld	hl, #shade_colours
+	add	hl, de
+	ld	a, (hl+)
+	ld	(#0xff69), a
+	ld	a, (hl)
+	ld	(#0xff69), a
+	srl	c
+	srl	c
+	dec	b
+	jr	nz, 3$
+	ret
+
+;; White, light grey, dark grey, black, as RGB555.
+shade_colours:
+	.dw	0x7fff, 0x56b5, 0x294a, 0x0000

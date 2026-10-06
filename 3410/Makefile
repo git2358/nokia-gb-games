@@ -31,7 +31,7 @@ MAKEBIN ?= makebin
 SDAS ?= sdasgb
 GB_FB := -DLCD_FB_WIDTH=160 -DLCD_FB_HEIGHT=144 -DLCD_PHONE_X=32 -DLCD_PHONE_Y=40
 GB_CFLAGS = -msm83 --opt-code-speed $(GB_FB) -DSNAKE2_STATE_AT=0xa100 -DSNAKE2_STATE_END=0xc000 \
-	-DSI_BANKED -DSI_PLATFORM_ROWS -DSI_ROWS_FAR=9 -DSI_ROWS_AT=0xb300 -DSI_ROWS_END=0xc000 -DSI_ROWS_BLOCK=gb_block_rows -DSI_ROWS_PUT=gb_rows_put -DSI_ROWS_FILL=gb_fill -DSI_ROWS_MADE=gb_rows_made -DSI_ROWS_TERRAIN -DSI_PLATFORM_FIND_HIT -DSI_PICS_AT=0xa100 -DSI_STATE_AT=0xa900 -DSI_STATE_END=0xb300 -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_BAND -DSPRITE_PLATFORM_PRESENT -DNATIVE_PLATFORM_TILES -Icore -I$(COMMON)/core -Iplatform/gb -I$(COMMON)/platform/gb -I$(ASSETS)
+	-DSI_BANKED -DSI_PLATFORM_ROWS -DSI_ROWS_FAR=9 -DSI_ROWS_AT=0xb300 -DSI_ROWS_END=0xc000 -DSI_ROWS_BLOCK=gb_block_rows -DSI_ROWS_PUT=gb_rows_put -DSI_ROWS_FILL=gb_fill -DSI_ROWS_MADE=gb_rows_made -DSI_ROWS_TERRAIN -DSI_PLATFORM_FIND_HIT -DSI_PICS_AT=0xa100 -DSI_STATE_AT=0xa900 -DSI_STATE_END=0xb300 -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_BAND -DSPRITE_PLATFORM_PRESENT -DNATIVE_PLATFORM_TILES -DNATIVE_PLATFORM_PALETTE -Icore -I$(COMMON)/core -Iplatform/gb -I$(COMMON)/platform/gb -I$(ASSETS)
 # The SameBoy clone scripts/setup-sameboy.sh makes: its boot ROM, and its
 # core as a library (`make -C $(SAMEBOY) lib`) for tools/gb_run.
 SAMEBOY ?= ../tools/SameBoy
@@ -331,7 +331,7 @@ $(BUILD)/nokia3410%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/n
 		-o $(BUILD)/gb/$(basename $(notdir $@)).ihx $^
 	@$(PYTHON) $(COMMON)/tools/gb_bank_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
 	@$(PYTHON) tools/gb_mirror_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
-	$(MAKEBIN) -Z -yn NOKIA3410 -yt 0x1e -yo 16 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
+	$(MAKEBIN) -Z -yn NOKIA3410 -yc -yt 0x1e -yo 16 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
 
 # A benchmark ROM: a recorded game (BENCH, one of golden/si-*) played as
 # fast as the Game Boy goes, drawing whenever the game asks, its events in
@@ -361,7 +361,7 @@ $(GB_BENCH_ROM): $(GB_BASE_RELS) $(BUILD)/gb/0/main-bench.rel $(BENCH_DIR)/si_be
 		-o $(BUILD)/gb/nokia3410-bench.ihx $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/native_put.rel \
 		$(BUILD)/gb/band.rel $(BUILD)/gb/bcall.rel $(BUILD)/gb/si_fast.rel $(BUILD)/gb/0/main-bench.rel $(GB_RELS) $$rels
 	@$(PYTHON) $(COMMON)/tools/gb_bank_check.py $(BUILD)/gb/nokia3410-bench.map
-	$(MAKEBIN) -Z -yn NOKIA3410 -yt 0x1e -yo 32 -ya 1 $(BUILD)/gb/nokia3410-bench.ihx $@
+	$(MAKEBIN) -Z -yn NOKIA3410 -yc -yt 0x1e -yo 32 -ya 1 $(BUILD)/gb/nokia3410-bench.ihx $@
 
 bench-gb: $(GB_BENCH_ROM)
 

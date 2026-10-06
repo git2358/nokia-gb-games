@@ -25,7 +25,12 @@
 #include "native_tiles.h"
 
 #define REG(addr) (*(volatile uint8_t *)(addr))
+#ifdef NATIVE_PLATFORM_PALETTE
+#define set_palette(shades) gb_palette(shades)
+#else
 #define BGP REG(0xff47)
+#define set_palette(shades) (BGP = (shades))
+#endif
 
 #define CELLS_X 20
 #define CELLS_Y 18
@@ -105,7 +110,7 @@ uint8_t native_show(uint16_t id)
         native_put_row(MAP + ty * 32, native_map_row);
     }
     /* In case the screen was blanked (platform_native_blank). */
-    BGP = NATIVE_PALETTE;
+    set_palette(NATIVE_PALETTE);
     return 1;
 }
 
@@ -160,7 +165,7 @@ uint8_t native_leave(void)
     /* The screen blanked at once by the palette, every colour light, while
        the cells' own tiles are made from lcd_fb and the tile map is put
        back; then it all comes up together. */
-    BGP = 0;
+    set_palette(0);
     for (ty = 0; ty < CELLS_Y; ty++, fb += 8 * LCD_STRIDE) {
         uint8_t first = row_first(ty);
 
@@ -169,7 +174,7 @@ uint8_t native_leave(void)
             native_map_row[tx] = (uint8_t)(first + tx);
         native_put_row(MAP + ty * 32, native_map_row);
     }
-    BGP = NATIVE_PALETTE;
+    set_palette(NATIVE_PALETTE);
     memset(lcd_dirty, 0, sizeof lcd_dirty);
     return 1;
 }

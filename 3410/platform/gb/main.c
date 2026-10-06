@@ -228,7 +228,7 @@ void platform_native_cursor(uint8_t row, uint8_t on)
 void platform_native_blank(void)
 {
     if (native_up)
-        BGP = 0;
+        gb_palette(0);
 }
 
 /* Something was drawn into lcd_fb since it was last shown. */
@@ -406,6 +406,25 @@ static void si_bench(void)
 }
 #endif
 
+/* On a Game Boy Color or Advance the ROM runs in Color mode (its header
+   says it can), and there at double speed: the CPU twice as fast, the
+   screen as it was, the picture the same. Its tiles' attributes, in video
+   RAM's second bank, are cleared (palette 0, the first bank's tiles, as
+   they stand). With the LCD off and interrupts held. */
+#define KEY1 REG(0xff4d)
+#define VBK REG(0xff4f)
+#define P1 REG(0xff00)
+
+static void color_start(void)
+{
+    VBK = 1;
+    memset((uint8_t *)0x9800, 0, 0x800);
+    VBK = 0;
+    P1 = 0x30;
+    KEY1 = 0x01;
+    __asm__("stop");
+}
+
 void main(void)
 {
     uint8_t tx, ty, pressed, changed, seen = 0;
@@ -422,7 +441,9 @@ void main(void)
             VRAM_MAP[ty * 32 + tx] = (uint8_t)((ty * TILES_X + tx) % SPLIT_TILE);
     SCX = 0;
     SCY = 0;
-    BGP = PALETTE;
+    if (gb_cgb == GB_CGB)
+        color_start();
+    gb_palette(PALETTE);
     screen_cuts();
     STAT = 0x40; /* interrupt when LY reaches LYC: the cuts in crt0.s */
 
@@ -434,8 +455,9 @@ void main(void)
     NR50 = 0x77;
     NR51 = 0x22;
     /* The timer interrupts once per unit of the phone's timers, for the
-       sounds: 4096 Hz over 32 is every 7.8 ms. */
-    TMA = 0xe0;
+       sounds: 4096 Hz over 32 is every 7.8 ms (at double speed the timer
+       counts twice as fast, so over 64). */
+    TMA = gb_cgb == GB_CGB ? 0xc0 : 0xe0;
     TAC = 0x04;
 
     MBC_RAM_ENABLE = 0x0a;

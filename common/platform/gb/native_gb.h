@@ -25,6 +25,16 @@ uint8_t native_leave(void);
    native_tiles.c writes. */
 #define NATIVE_PALETTE 0xcc
 
+/* A port that runs in Color mode on a Game Boy Color or Advance (the
+   3410's) sets the palette with gb_palette, which also sets the Color
+   palette that stands for BGP's shades, and defines
+   NATIVE_PLATFORM_PALETTE; gb_cgb is 0x11 then. */
+#ifdef NATIVE_PLATFORM_PALETTE
+void gb_palette(uint8_t shades);
+extern uint8_t gb_cgb;
+#define GB_CGB 0x11
+#endif
+
 /* native_put.s. Video RAM is written between the lines being drawn, four
    bytes at a time, as flush_tiles does. */
 /* 8 bytes to the first bit plane of the tile at `tile`. */

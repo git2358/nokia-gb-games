@@ -13,6 +13,7 @@
 	.globl	_lcd_column_fill, _lcd_column_blit
 	.globl	_lcd_column_rows, _lcd_column_color, _lcd_column_bits
 	.globl	s__INITIALIZER, s__INITIALIZED, l__INITIALIZER
+	.globl	_gb_cgb
 
 	.area	_HEADER (ABS)
 	.org	0x40		; vertical blank
@@ -34,6 +35,8 @@
 init:
 	di
 	ld	sp, #0xe000
+	ld	e, a			; 0x11 from a Game Boy Color's boot ROM
+
 
 	;; Clear work RAM.
 	ld	hl, #0xc000
@@ -45,6 +48,8 @@ init:
 	ld	a, b
 	or	a, c
 	jr	nz, 1$
+	ld	a, e
+	ld	(#_gb_cgb), a
 
 	;; Copy the initial values of initialised variables.
 	ld	hl, #s__INITIALIZER

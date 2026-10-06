@@ -16,6 +16,7 @@
 
 #define REG16(addr) (*(volatile uint16_t *)(addr))
 #define REG_DISPCNT REG16(0x04000000)
+#define REG_VCOUNT REG16(0x04000006)
 #define REG_DISPSTAT REG16(0x04000004)
 #define REG_SOUND2CNT_L REG16(0x04000068)
 #define REG_SOUND2CNT_H REG16(0x0400006c)
@@ -248,23 +249,31 @@ static int cell_magnified(int cx, int cy)
    the middle of the screen, or the framebuffer as it is. */
 static void zoom_hardware(uint8_t on)
 {
+    /* What was last written: the registers cannot be read back. */
+    static uint16_t was_step;
+    static uint32_t was_x = 1, was_y = 1;
     int zx = (SCREEN_W - shown_w * LCD_GAME_ZOOM) / 2, zy = (SCREEN_H - shown_h * LCD_GAME_ZOOM) / 2;
-
-    REG_BG2PB = 0;
-    REG_BG2PC = 0;
-    if (!on) {
-        REG_BG2PA = 0x100;
-        REG_BG2PD = 0x100;
-        REG_BG2X = 0;
-        REG_BG2Y = 0;
-        return;
-    }
-    REG_BG2PA = ZOOM_STEP;
-    REG_BG2PD = ZOOM_STEP;
+    uint16_t step = on ? ZOOM_STEP : 0x100;
     /* Where in the framebuffer the screen's top-left pixel samples, in 20.8
        fixed point: the rectangle's corner less the bars, which lie before it. */
-    REG_BG2X = (uint32_t)((shown_x << 8) + ZOOM_START - zx * ZOOM_STEP) & 0x0fffffff;
-    REG_BG2Y = (uint32_t)((shown_y << 8) + ZOOM_START - zy * ZOOM_STEP) & 0x0fffffff;
+    uint32_t x = on ? (uint32_t)((shown_x << 8) + ZOOM_START - zx * ZOOM_STEP) & 0x0fffffff : 0;
+    uint32_t y = on ? (uint32_t)((shown_y << 8) + ZOOM_START - zy * ZOOM_STEP) & 0x0fffffff : 0;
+
+    if (step == was_step && x == was_x && y == was_y)
+        return;
+    was_step = step;
+    was_x = x;
+    was_y = y;
+    /* Written during a line the LCD is drawing, the reference point starts
+       the picture over from that line on: only in the vertical blank. */
+    while (REG_VCOUNT < SCREEN_H)
+        ;
+    REG_BG2PB = 0;
+    REG_BG2PC = 0;
+    REG_BG2PA = step;
+    REG_BG2PD = step;
+    REG_BG2X = x;
+    REG_BG2Y = y;
 }
 
 /* Redraws the 8x8 cells of lcd_fb drawn to since the last call, or the

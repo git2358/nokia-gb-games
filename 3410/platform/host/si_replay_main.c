@@ -22,7 +22,6 @@
 #include "title.h"
 
 void si_debug(void);
-void si_debug_lives(int8_t lives);
 
 void platform_tone(uint8_t note)
 {

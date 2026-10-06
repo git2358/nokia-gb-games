@@ -293,6 +293,119 @@ static uint8_t held_keys(void)
     return keys;
 }
 
+#ifdef SI_BENCH
+/* The benchmark ROM (make bench-gb): a recorded game played as fast as
+   the Game Boy can, as platform/host/si_replay_main.c plays it, drawing
+   whenever the game asks. The empty functions mark each part of each
+   step for tools/bench_report.py, which times them in SameBoy. */
+#include "rand.h"
+#include "si.h"
+#include "si_bench.h"
+#include "si_rows.h"
+
+#define BENCH_BANK 16
+
+void bench_step(void) { __asm__("nop"); }
+void bench_render(void) { __asm__("nop"); __asm__("nop"); }
+void bench_present(void) { __asm__("nop"); __asm__("nop"); __asm__("nop"); }
+void bench_drawn(void) { __asm__("nop"); __asm__("nop"); __asm__("nop"); __asm__("nop"); }
+void bench_end(void) { __asm__("nop"); __asm__("nop"); __asm__("nop"); __asm__("nop"); __asm__("nop"); }
+
+static const uint8_t *const bench_chunks[SI_BENCH_CHUNKS] = { SI_BENCH_LIST };
+static uint8_t bench_chunk, bench_run;
+static uint16_t bench_at, bench_keys;
+
+static uint8_t bench_byte(void)
+{
+    uint8_t b, was = far_mapped;
+
+    far_bank((uint8_t)(BENCH_BANK + bench_chunk));
+    b = bench_chunks[bench_chunk][bench_at];
+    far_bank(was);
+    if (++bench_at == SI_BENCH_CHUNK) {
+        bench_at = 0;
+        bench_chunk++;
+    }
+    return b;
+}
+
+/* The next event, 0xff for the lives, and the keys held for it; 0 at the
+   end. */
+static uint8_t bench_decode(uint8_t *e, uint8_t *a, uint16_t *keys)
+{
+    uint8_t op;
+
+    for (;;) {
+        if (bench_run) {
+            bench_run--;
+            *e = 0;
+            *a = 0;
+            *keys = bench_keys;
+            return 1;
+        }
+        op = bench_byte();
+        if (op < 0x40) {
+            bench_run = (uint8_t)(op + 1);
+            continue;
+        }
+        if (op == 0x80) {
+            bench_keys = bench_byte();
+            bench_keys |= (uint16_t)bench_byte() << 8;
+            continue;
+        }
+        if (op == 0xfe)
+            return 0;
+        *keys = bench_keys;
+        if (op == 0xff) {
+            *e = 0xff;
+            *a = bench_byte();
+        } else if (op == 0xc0) {
+            *e = bench_byte();
+            *a = bench_byte();
+        } else {
+            *e = op & 0x20 ? SI_EVENT_KEY_UP : SI_EVENT_KEY_DOWN;
+            *a = op & 0x0f;
+        }
+        return 1;
+    }
+}
+
+static void show(void);
+
+static void si_bench(void)
+{
+    uint8_t e, a, ne = 0, na = 0, more, next, first = 1, done;
+    uint16_t keys, nk = 0;
+
+    game_srand(SI_BENCH_SEED);
+    more = bench_decode(&e, &a, &keys);
+    while (more) {
+        next = bench_decode(&ne, &na, &nk);
+        if (e == 0xff) {
+            si_debug_lives((int8_t)a);
+        } else {
+            si_keys_held = keys;
+            bench_step();
+            done = si_event(e, a);
+            if ((done & SI_DONE_REDRAW) && !(e == SI_EVENT_NEW_GAME && next && ne == SI_EVENT_CONTINUE)) {
+                bench_render();
+                si_render_rows();
+                bench_present();
+                si_rows_present(first);
+                show();
+                first = 0;
+                bench_drawn();
+            }
+        }
+        e = ne;
+        a = na;
+        keys = nk;
+        more = next;
+    }
+    bench_end();
+}
+#endif
+
 void main(void)
 {
     uint8_t tx, ty, pressed, changed, seen = 0;
@@ -338,6 +451,11 @@ void main(void)
     IF = 0;
     IE = 0x07; /* vertical blank, LCD status and timer */
     __asm__("ei");
+#ifdef SI_BENCH
+    si_bench();
+    for (;;)
+        __asm__("halt");
+#endif
 
     for (;;) {
         uint8_t frames;

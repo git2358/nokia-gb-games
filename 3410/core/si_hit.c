@@ -233,10 +233,24 @@ static int overlap(uint8_t a, uint8_t b)
            && ax <= (uint8_t)(bx + width(b));
 }
 
-/* 0x25bae6 */
+/* 0x25bae6. A platform may do it faster (SI_PLATFORM_FIND_HIT, the Game
+   Boy's gb_find_hit in platform/gb/si_fast.s). */
+#ifdef SI_PLATFORM_FIND_HIT
+#include <stddef.h>
+uint8_t gb_find_hit(const struct object *rec, uint8_t a);
+typedef char find_hit_layout[sizeof(struct object) == 13 && offsetof(struct object, frame) == 1
+                             && offsetof(struct object, type) == 2 && offsetof(struct object, pic) == 7
+                             && offsetof(struct object, side) == 11 && sizeof(struct si_pic) == 16
+                             && offsetof(struct si_pic, x) == 4 && offsetof(struct si_pic, y) == 6
+                             && sizeof(struct sprite_image) == 4 && offsetof(struct sprite_image, w) == 2 ? 1 : -1];
+#endif
+
 static uint8_t find_hit(uint8_t a)
 {
     uint8_t k;
+#ifdef SI_PLATFORM_FIND_HIT
+    return gb_find_hit(si.rec, a);
+#endif
     const struct object *o = si.rec;
 
     for (k = 0; k < RECORDS; k++, o++) {

@@ -31,7 +31,7 @@ MAKEBIN ?= makebin
 SDAS ?= sdasgb
 GB_FB := -DLCD_FB_WIDTH=160 -DLCD_FB_HEIGHT=144 -DLCD_PHONE_X=32 -DLCD_PHONE_Y=40
 GB_CFLAGS = -msm83 --opt-code-speed $(GB_FB) -DSNAKE2_STATE_AT=0xa100 -DSNAKE2_STATE_END=0xc000 \
-	-DSI_BANKED -DSI_PLATFORM_ROWS -DSI_ROWS_FAR=9 -DSI_ROWS_AT=0xb300 -DSI_ROWS_END=0xc000 -DSI_ROWS_BLOCK=gb_block_rows -DSI_ROWS_PUT=gb_rows_put -DSI_ROWS_FILL=gb_fill -DSI_ROWS_MADE=gb_rows_made -DSI_ROWS_TERRAIN -DSI_PICS_AT=0xa100 -DSI_STATE_AT=0xa900 -DSI_STATE_END=0xb300 -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_BAND -DSPRITE_PLATFORM_PRESENT -DNATIVE_PLATFORM_TILES -Icore -I$(COMMON)/core -Iplatform/gb -I$(COMMON)/platform/gb -I$(ASSETS)
+	-DSI_BANKED -DSI_PLATFORM_ROWS -DSI_ROWS_FAR=9 -DSI_ROWS_AT=0xb300 -DSI_ROWS_END=0xc000 -DSI_ROWS_BLOCK=gb_block_rows -DSI_ROWS_PUT=gb_rows_put -DSI_ROWS_FILL=gb_fill -DSI_ROWS_MADE=gb_rows_made -DSI_ROWS_TERRAIN -DSI_PLATFORM_FIND_HIT -DSI_PICS_AT=0xa100 -DSI_STATE_AT=0xa900 -DSI_STATE_END=0xb300 -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_BAND -DSPRITE_PLATFORM_PRESENT -DNATIVE_PLATFORM_TILES -Icore -I$(COMMON)/core -Iplatform/gb -I$(COMMON)/platform/gb -I$(ASSETS)
 # The SameBoy clone scripts/setup-sameboy.sh makes: its boot ROM, and its
 # core as a library (`make -C $(SAMEBOY) lib`) for tools/gb_run.
 SAMEBOY ?= ../tools/SameBoy
@@ -83,7 +83,7 @@ KEYS ?= sssss
 # The game without the menus, for tools that drive it directly.
 GAME_SRC := $(filter-out core/menu.c $(COMMON)/core/font.c,$(CORE_SRC))
 
-.PHONY: help dump install-roms assets test frames golden-snake golden-si golden-si-menus check-golden check-menus gb check-gb shot-gb run-gb cards clean
+.PHONY: help dump install-roms assets test frames golden-snake golden-si golden-si-menus check-golden check-menus gb check-gb bench-gb bench-report shot-gb run-gb cards clean
 
 help:
 	@echo "make dump      rebuild $(DUMP) from the Wintesla files in FLASH_FILES=$(FLASH_FILES)"
@@ -325,7 +325,7 @@ $(BUILD)/gb/%.rel: $(COMMON)/platform/gb/%.s
 # MBC5 with its rumble pin and battery-backed RAM, sixteen ROM banks (nine
 # used) and 8 KiB of RAM. The linker does not mind the first bank running
 # over into the second, so its end is checked here.
-$(BUILD)/nokia3410%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/native_put.rel $(BUILD)/gb/band.rel $(BUILD)/gb/bcall.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
+$(BUILD)/nokia3410%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/native_put.rel $(BUILD)/gb/band.rel $(BUILD)/gb/bcall.rel $(BUILD)/gb/si_fast.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
 	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 -Wl-b_CODE_3=0x34000 -Wl-b_CODE_4=0x44000 \
 		$(foreach n,$(GB_SI_BANKS),-Wl-b_CODE_$(n)=0x$(n)4000) -Wl-b_CODE_9=0x94000 -Wl-b_CODE_10=0xA4000 \
 		-o $(BUILD)/gb/$(basename $(notdir $@)).ihx $^
@@ -333,7 +333,45 @@ $(BUILD)/nokia3410%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/n
 	@$(PYTHON) tools/gb_mirror_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
 	$(MAKEBIN) -Z -yn NOKIA3410 -yt 0x1e -yo 16 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
 
-.SECONDARY: $(GB_RELS) $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/native_put.rel $(BUILD)/gb/band.rel $(BUILD)/gb/bcall.rel
+# A benchmark ROM: a recorded game (BENCH, one of golden/si-*) played as
+# fast as the Game Boy goes, drawing whenever the game asks, its events in
+# banks 16 on; make bench-report times every step of it in SameBoy.
+BENCH ?= golden/si-d
+BENCH_DIR := $(BUILD)/bench
+GB_BENCH_ROM := $(BUILD)/nokia3410-bench.gb
+GB_BASE_RELS := $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/native_put.rel $(BUILD)/gb/band.rel \
+	$(BUILD)/gb/bcall.rel $(BUILD)/gb/si_fast.rel $(GB_RELS)
+
+$(BENCH_DIR)/si_bench.h: $(BENCH)/events.txt $(BENCH)/setup.txt tools/si_bench.py
+	rm -rf $(BENCH_DIR)
+	$(PYTHON) tools/si_bench.py $(BENCH) $(BENCH_DIR)
+
+$(BUILD)/gb/0/main-bench.rel: platform/gb/main.c $(CORE_HDR) $(ASSET_SRC) $(BENCH_DIR)/si_bench.h
+	@mkdir -p $(@D)
+	$(SDCC) $(GB_CFLAGS) -DSI_BENCH -I$(BENCH_DIR) '-DSTART_KEYS=""' -c $< -o $@
+
+$(GB_BENCH_ROM): $(GB_BASE_RELS) $(BUILD)/gb/0/main-bench.rel $(BENCH_DIR)/si_bench.h
+	@set -e; rels=; banks=; for c in $(BENCH_DIR)/si_bench_*.c; do \
+		n=$${c##*_}; n=$${n%.c}; b=$$((16 + n)); \
+		$(SDCC) $(GB_CFLAGS) -I$(BENCH_DIR) --codeseg CODE_$$b -c $$c -o $(BENCH_DIR)/si_bench_$$n.rel; \
+		rels="$$rels $(BENCH_DIR)/si_bench_$$n.rel"; banks="$$banks -Wl-b_CODE_$$b=0x$$(printf %X $$b)4000"; \
+	done; \
+	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 -Wl-b_CODE_3=0x34000 -Wl-b_CODE_4=0x44000 \
+		$(foreach n,$(GB_SI_BANKS),-Wl-b_CODE_$(n)=0x$(n)4000) -Wl-b_CODE_9=0x94000 -Wl-b_CODE_10=0xA4000 $$banks \
+		-o $(BUILD)/gb/nokia3410-bench.ihx $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/native_put.rel \
+		$(BUILD)/gb/band.rel $(BUILD)/gb/bcall.rel $(BUILD)/gb/si_fast.rel $(BUILD)/gb/0/main-bench.rel $(GB_RELS) $$rels
+	@$(PYTHON) $(COMMON)/tools/gb_bank_check.py $(BUILD)/gb/nokia3410-bench.map
+	$(MAKEBIN) -Z -yn NOKIA3410 -yt 0x1e -yo 32 -ya 1 $(BUILD)/gb/nokia3410-bench.ihx $@
+
+bench-gb: $(GB_BENCH_ROM)
+
+bench-report: $(GB_BENCH_ROM) $(BUILD)/gb_run $(BUILD)/si_replay
+	rm -rf $(BENCH_DIR)/host && mkdir -p $(BENCH_DIR)/host
+	$(BUILD)/si_replay $(BENCH)/events.txt $(BENCH_DIR)/host $$(cat $(BENCH)/setup.txt) >/dev/null
+	$(PYTHON) tools/bench_report.py $(BUILD)/gb_run $(GB_BENCH_ROM) $(SAMEBOY_BOOT) $(BUILD)/gb/nokia3410-bench.map \
+		$(BENCH)/events.txt $$(ls $(BENCH_DIR)/host/*.pgm | tail -1)
+
+.SECONDARY: $(GB_RELS) $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/native_put.rel $(BUILD)/gb/band.rel $(BUILD)/gb/bcall.rel $(BUILD)/gb/si_fast.rel
 
 gb: $(GB_ROM)
 

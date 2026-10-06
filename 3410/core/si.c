@@ -579,16 +579,17 @@ static uint8_t tick(uint8_t event, uint8_t a)
     return SI_DONE_REDRAW;
 }
 
-#ifdef SI_DEBUG
-#include <stdio.h>
-
-/* For the host's replay: what the autopilot wrote (the lives), and the
-   live objects. */
-void si_debug_lives(int8_t lives)
+/* For the replays (the host's, the Game Boy's benchmark): what the
+   autopilot wrote, the lives. */
+void si_debug_lives(int8_t lives) SI_FAR
 {
     si.lives = lives;
 }
 
+#ifdef SI_DEBUG
+#include <stdio.h>
+
+/* For the host's replay: the live objects. */
 void si_debug(void)
 {
     uint8_t k;

@@ -63,6 +63,8 @@ void si_render(void) SI_FAR;
    the picture, in their boxes (title.h's draw_score_box), from
    si_top_score and so on. */
 uint8_t si_scores_shown(void) SI_FAR;
+/* For the replays: the lives as the autopilot set them. */
+void si_debug_lives(int8_t lives) SI_FAR;
 /* Draws the picture into si_rows' tiles instead (si_rows.h). */
 void si_render_rows(void) SI_FAR;
 

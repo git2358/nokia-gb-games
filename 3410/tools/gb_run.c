@@ -2,6 +2,9 @@
 
    Usage: gb_run ROM.gb BOOT_ROM STEP...
 
+   The boot ROM picks the model: cgb_boot.bin a Game Boy Color, agb_boot.bin
+   a Game Boy Advance, anything else the original Game Boy.
+
    Each STEP is one of:
      N            run N screen frames
      +B / -B      press / release a button: a b s(elect) t(start) u d l r
@@ -18,7 +21,7 @@
                   at hexadecimal ADDR was reached
      times:N:ADDR,ADDR...  run N screen frames and print the cycle at
                   which each of the instructions at those addresses is
-                  reached
+                  reached; one written !ADDR ends the step when reached
      prof:N:FILE  run N screen frames, then write where the time went: a
                   line "BANK ADDR CYCLES" per instruction address, the bank
                   being the ROM bank mapped at 0x4000 (see common/tools/gb_profile.py)
@@ -98,7 +101,10 @@ int main(int argc, char **argv)
         fprintf(stderr, "usage: gb_run ROM.gb BOOT_ROM STEP...\n");
         return 2;
     }
-    gb = GB_init(GB_alloc(), GB_MODEL_DMG_B);
+    /* The model the boot ROM is for: a Game Boy Color's or a Game Boy
+       Advance's (cgb_boot.bin, agb_boot.bin), else the original. */
+    gb = GB_init(GB_alloc(), strstr(argv[2], "agb_boot") ? GB_MODEL_AGB
+                             : strstr(argv[2], "cgb_boot") ? GB_MODEL_CGB_E : GB_MODEL_DMG_B);
     if (GB_load_boot_rom(gb, argv[2]) || GB_load_rom(gb, argv[1])) {
         fprintf(stderr, "cannot load %s or %s\n", argv[2], argv[1]);
         return 1;
@@ -106,6 +112,8 @@ int main(int argc, char **argv)
     GB_set_pixels_output(gb, pixels);
     GB_set_rgb_encode_callback(gb, rgb);
     GB_set_sample_rate(gb, 32768);
+    /* As fast as it goes, not at the Game Boy's own pace. */
+    GB_set_turbo_mode(gb, true, true);
     GB_apu_set_sample_callback(gb, on_sample);
     for (i = 3; i < argc; i++) {
         const char *step = argv[i];
@@ -196,19 +204,33 @@ int main(int argc, char **argv)
                instructions at those hexadecimal addresses is reached. */
             char *p = NULL;
             long frames = strtol(step + 6, &p, 10);
-            unsigned addrs[8], n = 0, i;
+            unsigned addrs[8], n = 0, i, stop = 0x10000;
             uint64_t left = (uint64_t)frames * 70224 * 2, at = 0;
 
             while (p && *p && n < 8) {
+                if (p[1] == '!') {
+                    /* !ADDR: stop when it is reached. */
+                    p++;
+                    stop = (unsigned)strtoul(p + 1, &p, 16);
+                    addrs[n++] = stop;
+                    continue;
+                }
                 addrs[n++] = (unsigned)strtoul(p + 1, &p, 16);
             }
             while (left > 0) {
-                unsigned cycles, pc = GB_get_registers(gb)->pc;
+                unsigned cycles, pc = GB_get_registers(gb)->pc, now;
 
-                for (i = 0; i < n; i++)
-                    if (pc == addrs[i])
-                        printf("%04x at %llu\n", pc, (unsigned long long)(at / 2));
                 cycles = GB_run(gb);
+                /* Reached, unless an interrupt was taken instead, which
+                   comes back to it later. */
+                now = GB_get_registers(gb)->pc;
+                if (!(now >= 0x40 && now <= 0x60 && !(now & 7) && pc != now - 1)) {
+                    for (i = 0; i < n; i++)
+                        if (pc == addrs[i])
+                            printf("%04x at %llu\n", pc, (unsigned long long)(at / 2));
+                    if (pc == stop)
+                        break;
+                }
                 at += cycles;
                 left = left > cycles ? left - cycles : 0;
             }

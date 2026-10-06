@@ -204,7 +204,7 @@ void platform_native_blank(void)
        key script with no show in between, is not what show puts up. */
     native_drew = 0;
     if (native_up)
-        BGP = 0;
+        far_native_palette(0);
 }
 
 /* Something was drawn into lcd_fb since it was last shown. */
@@ -381,7 +381,8 @@ void main(void)
             VRAM_MAP[ty * 32 + tx] = (uint8_t)((ty * TILES_X + tx) % SPLIT_TILE);
     SCX = 0;
     SCY = 0;
-    BGP = PALETTE;
+    /* On a Game Boy Color or Advance also Color mode, at double speed. */
+    far_native_palette(PALETTE);
     strip_leave(0, 0);
     STAT = 0x40; /* interrupt when LY reaches LYC: the cuts in crt0.s */
 
@@ -392,8 +393,9 @@ void main(void)
     NR50 = 0x77;
     NR51 = 0x22;
     /* The timer interrupts once per unit of the phone's timers, for the
-       sounds: 4096 Hz over 32 is every 7.8 ms. */
-    TMA = 0xe0;
+       sounds: 4096 Hz over 32 is every 7.8 ms (at double speed the timer
+       counts twice as fast, so over 64). */
+    TMA = gb_cgb == GB_CGB ? 0xc0 : 0xe0;
     TAC = 0x04;
 
     MBC_RAM_ENABLE = 0x0a;

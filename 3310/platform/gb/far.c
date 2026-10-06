@@ -266,3 +266,14 @@ uint8_t far_native_leave(void)
     far_bank(was);
     return result;
 }
+
+/* The palette, and on a Game Boy Color or Advance double speed at the
+   first call (native_gb.h). */
+void far_native_palette(uint8_t shades)
+{
+    uint8_t was = mapped;
+
+    far_bank(BANK_NATIVE);
+    native_palette(shades);
+    far_bank(was);
+}

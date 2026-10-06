@@ -4,7 +4,7 @@
 ;; Everything here is in the first 16 KiB of the ROM, which is always
 ;; mapped; the rest of the program is in banks 1 to 3 (see far.c).
 	.module crt0
-	.globl	_main
+	.globl	_main, _gb_cgb
 	.globl	_flush_tiles
 	.globl	_frame_count, _pad_last, _pad_latch
 	.globl	_sound_active, _sound_tick
@@ -34,6 +34,7 @@
 init:
 	di
 	ld	sp, #0xe000
+	ld	e, a			; 0x11 from a Game Boy Color's boot ROM
 
 	;; Clear work RAM.
 	ld	hl, #0xc000
@@ -45,6 +46,8 @@ init:
 	ld	a, b
 	or	a, c
 	jr	nz, 1$
+	ld	a, e
+	ld	(#_gb_cgb), a
 
 	;; Copy the initial values of initialised variables.
 	ld	hl, #s__INITIALIZER

@@ -25,14 +25,19 @@ uint8_t native_leave(void);
    native_tiles.c writes. */
 #define NATIVE_PALETTE 0xcc
 
-/* A port that runs in Color mode on a Game Boy Color or Advance (the
-   3410's) sets the palette with gb_palette, which also sets the Color
-   palette that stands for BGP's shades, and defines
-   NATIVE_PLATFORM_PALETTE; gb_cgb is 0x11 then. */
+/* A port that runs in Color mode on a Game Boy Color or Advance, at double
+   speed (the 3310's and the 3410's: its header says it can, makebin -yc),
+   defines NATIVE_PLATFORM_PALETTE, keeps in gb_cgb what the boot ROM left
+   in A (its crt0.s), and sets the palette with native_palette, which also
+   sets the Color palette that stands for BGP's shades. Its first call, at
+   power-on with the LCD off, switches a Color or an Advance (gb_cgb is
+   GB_CGB) to double speed, the tiles' attributes cleared; the timer then
+   counts twice as fast. In native_bank, called through the port's far_
+   functions from elsewhere. */
 #ifdef NATIVE_PLATFORM_PALETTE
-void gb_palette(uint8_t shades);
 extern uint8_t gb_cgb;
 #define GB_CGB 0x11
+void native_palette(uint8_t shades);
 #endif
 
 /* native_put.s. Video RAM is written between the lines being drawn, four

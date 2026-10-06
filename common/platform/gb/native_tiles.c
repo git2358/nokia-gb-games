@@ -26,7 +26,56 @@
 
 #define REG(addr) (*(volatile uint8_t *)(addr))
 #ifdef NATIVE_PLATFORM_PALETTE
-#define set_palette(shades) gb_palette(shades)
+/* What the boot ROM left in A, which the port's crt0.s keeps: 0x11 on a
+   Game Boy Color or an Advance. */
+uint8_t gb_cgb;
+
+#define LCDC REG(0xff40)
+#define LY REG(0xff44)
+#define BGP REG(0xff47)
+#define BCPS REG(0xff68)
+#define BCPD REG(0xff69)
+#define KEY1 REG(0xff4d)
+#define VBK REG(0xff4f)
+#define P1 REG(0xff00)
+
+/* In work RAM, which starts clear. */
+static uint8_t color_started;
+
+void native_palette(uint8_t shades)
+{
+    /* White, light grey, dark grey, black, as RGB555. */
+    static const uint16_t colours[4] = { 0x7fff, 0x56b5, 0x294a, 0x0000 };
+    uint8_t i;
+
+    BGP = shades;
+    if (gb_cgb != GB_CGB)
+        return;
+    /* The first call, at power-on with the LCD off: Color mode at double
+       speed, the tiles' attributes cleared. */
+    if (!color_started) {
+        color_started = 1;
+        VBK = 1;
+        memset((uint8_t *)0x9800, 0, 0x800);
+        VBK = 0;
+        P1 = 0x30;
+        KEY1 = 0x01;
+        __asm__("stop");
+    }
+    /* The Color palette is not there to write while a line is drawn: in
+       the vertical blank, with a line of it left (or at once, the LCD
+       off). */
+    if (LCDC & 0x80)
+        while (LY < 144 || LY >= 152)
+            ;
+    BCPS = 0x80;
+    for (i = 0; i < 4; i++, shades >>= 2) {
+        BCPD = (uint8_t)colours[shades & 3];
+        BCPD = (uint8_t)(colours[shades & 3] >> 8);
+    }
+}
+
+#define set_palette(shades) native_palette(shades)
 #else
 #define BGP REG(0xff47)
 #define set_palette(shades) (BGP = (shades))

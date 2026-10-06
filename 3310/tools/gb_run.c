@@ -95,7 +95,10 @@ int main(int argc, char **argv)
         fprintf(stderr, "usage: gb_run ROM.gb BOOT_ROM STEP...\n");
         return 2;
     }
-    gb = GB_init(GB_alloc(), GB_MODEL_DMG_B);
+    /* The model the boot ROM is for: a Game Boy Color's or a Game Boy
+       Advance's (cgb_boot.bin, agb_boot.bin), else the original. */
+    gb = GB_init(GB_alloc(), strstr(argv[2], "agb_boot") ? GB_MODEL_AGB
+                             : strstr(argv[2], "cgb_boot") ? GB_MODEL_CGB_E : GB_MODEL_DMG_B);
     if (GB_load_boot_rom(gb, argv[2]) || GB_load_rom(gb, argv[1])) {
         fprintf(stderr, "cannot load %s or %s\n", argv[2], argv[1]);
         return 1;

@@ -38,6 +38,8 @@ of the Nokia DCT3 MAME project, <https://github.com/lukesau/nokia-dct3-re>
   against its own `lcd.h`, so it draws at that phone's screen size.
 - `tools/` (ignored): the SameBoy and mGBA clones the headless checks are
   built on, shared by the three ports (`make setup`).
+- `docs/combined-rom.md`: the plan for one ROM holding all three phones,
+  picked on the first screen.
 - `Makefile`: runs a target in every port: `make gb`, `make gba`, `make
   test`, `make check-golden`, `make check-gb`, `make cards` and so on;
   `make -C 3310 <target>` runs one port's.

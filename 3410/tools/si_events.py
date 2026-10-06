@@ -10,7 +10,8 @@ the 3410's own numbering (see the fork's docs/games_si_3410.md: 0 the timer,
 1 and 2 a key going down and up with A its code, 3 a pause, 0x0a 0x14 0x0c
 New game; "ff 3 0 0" is the autopilot setting the lives back to 3; KEYS
 has bit k set when the game would see key code k held
-(0x3b29d0: (byte & 0xf) >> 1 nonzero) at that call), and OUT_DIR/setup.txt, the ANSI generator's state at New game in
+(0x3b29d0: (byte & 0xf) >> 1 nonzero) at that call, as read when the game
+polls them in play), and OUT_DIR/setup.txt, the ANSI generator's state at New game in
 hex.
 """
 import re
@@ -24,10 +25,25 @@ def main():
     log = Path(sys.argv[1]).read_text(errors="replace").splitlines()
     out = Path(sys.argv[2])
     events, seed = [], None
+    last_was_call = False
     for line in log:
         if seed is not None and "SIPOKE lives 3" in line:
-            # The autopilot's write between two calls: a pseudo-event.
-            events.append("ff 3 0 0")
+            # The autopilot's write as the handler was entered: a
+            # pseudo-event before that call, whichever of the two
+            # breakpoints logged first.
+            if last_was_call:
+                events.insert(len(events) - 1, "ff 3 0 0")
+            else:
+                events.append("ff 3 0 0")
+            continue
+        last_was_call = "SIEV" in line
+        k = re.search(r"SIKEYS keys=(\w+)", line)
+        if k and seed is not None and events:
+            # The poll's own reading replaces the one at the handler's entry.
+            raw = bytes.fromhex(k.group(1).rjust(24, "0"))
+            keys = sum(1 << n for n, v in enumerate(raw) if (v & 0xf) >> 1)
+            parts = events[-1].split()
+            events[-1] = " ".join(parts[:3] + [f"{keys:x}"])
             continue
         m = re.search(r"SIEV (\w+) (\w+) (\w+) c=\d+ seed=(\w+) keys=(\w+)", line)
         if not m:

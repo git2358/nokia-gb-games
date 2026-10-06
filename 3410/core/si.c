@@ -640,6 +640,25 @@ static void spawn_step(void)
 
 /* 0x25a5d4: whether an object's picture touches the terrain's (frame 0's
    bitmap, the current frame's size). */
+/* A byte of the terrain's bitmap as the phone reads it: an object part
+   off the screen's left edge reads before the row, and before the bitmap
+   itself there is the heap's own data. Taken here to be the block's size,
+   192 bytes and an 8-byte header, as a big-endian word: inferred, the one
+   reading that fits what MAME shows, a bullet at x -1 beside the terrain
+   taken away on bit 3 of the byte before the bitmap and a projectile
+   there not on bits 0 and 1. */
+static int terrain_bit(int x, int row)
+{
+    static const uint8_t before[4] = { 0x00, 0x00, 0x00, 0xc8 };
+    int at = x + W * (row >> 3);
+
+    if (at < -4)
+        return 0;
+    if (at < 0)
+        return before[4 + at] >> (row & 7) & 1;
+    return si.terrain[at] >> (row & 7) & 1;
+}
+
 static int terrain_collide(uint8_t k)
 {
     const uint8_t *bitmap = type_frames(si.rec[k].type)[0].bitmap;
@@ -656,8 +675,7 @@ static int terrain_collide(uint8_t k)
             for (c = 0; c < w; c++) {
                 if (orow >= h || x + c >= W)
                     return 0;
-                if (x + c >= 0 && (bitmap[c + w * (orow >> 3)] >> (orow & 7) & 1)
-                    && (si.terrain[x + c + W * (trow >> 3)] >> (trow & 7) & 1))
+                if ((bitmap[c + w * (orow >> 3)] >> (orow & 7) & 1) && terrain_bit(x + c, trow))
                     return h / 2 < orow ? 2 : 1;
             }
     } else if (y < ty && ty < y + h) {
@@ -666,8 +684,7 @@ static int terrain_collide(uint8_t k)
             for (c = 0; c < w; c++) {
                 if (orow >= h || x + c >= W)
                     return 0;
-                if (x + c >= 0 && (bitmap[c + w * (orow >> 3)] >> (orow & 7) & 1)
-                    && (si.terrain[x + c + W * (trow >> 3)] >> (trow & 7) & 1))
+                if ((bitmap[c + w * (orow >> 3)] >> (orow & 7) & 1) && terrain_bit(x + c, trow))
                     return 2;
             }
     } else if (ty < y && y < ty + th) {
@@ -676,8 +693,7 @@ static int terrain_collide(uint8_t k)
             for (c = 0; c < w; c++) {
                 if (x + c >= W)
                     return 0;
-                if (x + c >= 0 && (bitmap[c + w * (orow >> 3)] >> (orow & 7) & 1)
-                    && (si.terrain[x + c + W * (trow >> 3)] >> (trow & 7) & 1))
+                if ((bitmap[c + w * (orow >> 3)] >> (orow & 7) & 1) && terrain_bit(x + c, trow))
                     return 1;
             }
             if (trow + 1 >= th)
@@ -1666,8 +1682,9 @@ static uint8_t tick(uint8_t event, uint8_t a)
     case PHASE_EXIT: {
         int x = si_pics[si.ship_pic].x;
 
+        /* Off the screen judged by where it was before this step. */
         si_pic_move_by(si.ship_pic, x / 5 + 1, 0);
-        if (si_pics[si.ship_pic].x > W + 0x14) {
+        if (x > W + 0x14) {
             if (si.chapter < SI_CHAPTER_COUNT - 1) {
                 next_chapter();
                 return SI_DONE_REDRAW;
@@ -1724,7 +1741,7 @@ void si_debug(void)
 {
     uint8_t k;
 
-    printf("ch %u phase %x left %u delay %u boss %x count %u:", si.chapter, si.phase, si.entries_left, si.delay, si.boss_state, si.count);
+    printf("ch %u phase %x left %u delay %u boss %x count %u cd %u fc %u lost %u:", si.chapter, si.phase, si.entries_left, si.delay, si.boss_state, si.count, si.cooldown, si.fire_count, si.ship_lost);
     for (k = 0; k < RECORDS; k++)
         if (si.rec[k].type != FREE)
             printf(" [%u t%u %d,%d hp%u p%u]", k, si.rec[k].type, X(k), Y(k), si.rec[k].hp, si.rec[k].pattern);

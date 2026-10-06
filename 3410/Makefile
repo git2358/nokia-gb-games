@@ -170,7 +170,7 @@ golden-snake:
 # the lives back, and the replay does the same) and so plays on through the
 # chapters. check-golden replays them all (platform/host/si_replay_main.c).
 SI_GOLDENS ?= a:120:SI_CONTINUE=1 b:90:SI_SPECIAL_AT=10+25+40,SI_PAUSE_AT=30 c:150:SI_IDLE=1,SI_FIRE_EVERY=0 \
-	d:900:SI_IMMORTAL=1,SI_FIRE_EVERY=8
+	d:1300:SI_IMMORTAL=1,SI_FIRE_EVERY=8
 SI_KEYS := enter,wait1500,up,wait300,up,wait300,up,wait300,up,wait1000,enter,wait1500,enter,wait1500,down,wait500,enter,wait5000,enter,wait3000
 
 golden-si:

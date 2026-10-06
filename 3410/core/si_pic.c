@@ -149,6 +149,10 @@ static uint8_t mode_op(uint8_t mode)
 {
     uint8_t high = mode >> 4;
 
+    /* 0x30, the shield's in the chapters drawn with 0x20, shows in MAME as
+       the others there do. */
+    if (high == 3)
+        return OP_OR;
     if (high != 1 && high != 2)
         return OP_NONE;
     if (mode & 2)

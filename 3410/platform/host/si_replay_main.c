@@ -6,7 +6,7 @@
    EVENTS holds the handler's calls, one "EVENT A B KEYS" in hex per line
    (tools/si_events.py): the event, its arguments, and the keys the game
    would see held then. A frame is written each time the picture changes,
-   as OUT_DIR/NNNN.pgm, numbered by the event that produced it. SEED is the
+   as OUT_DIR/NNNNNN.pgm, numbered by the event that produced it. SEED is the
    ANSI generator's state at New game, in hex. */
 #include <stdio.h>
 #include <stdlib.h>
@@ -82,7 +82,7 @@ int main(int argc, char **argv)
             continue;
         memcpy(last, sprite_screen, sizeof last);
         sprite_present(1);
-        snprintf(path, sizeof path, "%s/%04u.pgm", argv[2], n);
+        snprintf(path, sizeof path, "%s/%06u.pgm", argv[2], n);
         if (pgm_write_lcd(path) != 0) {
             perror(path);
             return 1;

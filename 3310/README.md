@@ -175,9 +175,12 @@ make run-gb        # open the .gb in SameBoy
 make run-gba       # open the .gba in mGBA
 ```
 
-The GBA ROM is built without the boot logo, which a real console's BIOS
-checks. To run on hardware, pass a GBA ROM you own to copy it from:
-`make gba GBA_LOGO_FROM=/path/to/some.gba`.
+A real console's BIOS checks the GBA ROM's boot logo, which is not in
+this repository: the build copies it from a GBA ROM it finds, the ones it
+built with the logo before (kept in `roms/gba-logo/`, never committed),
+mGBA's test ROMs (`make setup`) or the Omega card's, or from
+`make gba GBA_LOGO_FROM=/path/to/some.gba` (see
+`common/tools/gbafix.py`).
 
 `make cards` (`scripts/copy-to-cards.sh`) copies the ROMs to the root of
 the flash carts' SD cards: the `.gb` to `/Volumes/EZGB_FW4` and

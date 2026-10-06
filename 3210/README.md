@@ -109,9 +109,12 @@ whose `ports/` directory this repository is kept. The dump must be
 NSE-8/9 v6.00 (SHA-256 `7bf29b96…0d8a` raw, or the fork's `_swap16.bin`
 form); the extractor refuses anything else.
 
-The GBA ROM is built without the boot logo, which a real console's BIOS
-checks. To run on hardware, pass a GBA ROM you own to copy it from:
-`make gba GBA_LOGO_FROM=/path/to/some.gba`.
+A real console's BIOS checks the GBA ROM's boot logo, which is not in
+this repository: the build copies it from a GBA ROM it finds, the ones it
+built with the logo before (kept in `roms/gba-logo/`, never committed),
+mGBA's test ROMs (`make setup`) or the Omega card's, or from
+`make gba GBA_LOGO_FROM=/path/to/some.gba` (see
+`common/tools/gbafix.py`).
 
 `make cards` (`scripts/copy-to-cards.sh`) copies the ROMs to the root of
 the flash carts' SD cards: the `.gb` to `/Volumes/EZGB_FW4` and

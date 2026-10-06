@@ -1,6 +1,7 @@
 #include "menu.h"
 
 #include "bantumi.h"
+#include "fireworks.h"
 #include "font.h"
 #include "game.h"
 #include "game_assets.h"
@@ -8,6 +9,7 @@
 #include "lcd.h"
 #include "rand.h"
 #include "si.h"
+#include "sound.h"
 #include "pairs2.h"
 #include "snake2.h"
 #include "sprite.h"
@@ -59,6 +61,7 @@ enum {
     SCREEN_TOP_SCORE,
     SCREEN_HELP,
     SCREEN_PLAY,
+    SCREEN_FIREWORKS, /* after a new top score or a won Bantumi */
     SCREEN_GAME_OVER
 };
 
@@ -83,6 +86,15 @@ enum {
    385 phone ticks, about six and three seconds. In menu_tick calls. */
 #define TOP_SCORE_TICKS ((uint16_t)(768ul * PHONE_TICK_US / MENU_FRAME_US))
 #define GAME_OVER_TICKS ((uint16_t)(385ul * PHONE_TICK_US / MENU_FRAME_US))
+
+/* The fireworks: a new picture every FIREWORKS_STEP phone ticks, the six
+   twice over, with a sound as they start and again as the Game over page
+   follows them. Measured in MAME: 233 ms a picture, the sound 0x23 after a
+   new top score and 0x22 after a won Bantumi. */
+#define FIREWORKS_STEP 30
+#define FIREWORKS_STEPS (2 * FIREWORKS_PICTURES)
+#define SOUND_TOP_SCORE 0x23
+#define SOUND_WON 0x22
 
 /* The top score before anyone has played. The firmware has no default of
    its own: the 4075 MAME shows is a score saved in the PMM dump. */
@@ -250,6 +262,8 @@ static uint8_t sparkle_step;  /* picture of the Top score page's animation */
 static uint8_t sparkle_ticks; /* phone ticks it has been shown */
 static uint8_t sparkle_only;  /* nothing else on the page needs drawing */
 static uint8_t icon_steps;    /* steps of the Games icon's animation so far */
+static uint8_t fireworks_step;  /* picture of the fireworks shown */
+static uint8_t fireworks_ticks; /* phone ticks it has been shown */
 static uint8_t icon_ticks;    /* phone ticks to its next step */
 static uint16_t icon_us;      /* time not yet turned into phone ticks */
 
@@ -952,6 +966,12 @@ static void title_over(void)
     }
 }
 
+static void fireworks_sound(void)
+{
+    if (games_options.sounds)
+        sound_play(game == GAME_BANTUMI ? SOUND_WON : SOUND_TOP_SCORE);
+}
+
 static void play_over(void)
 {
     final_score = (uint16_t)games_score;
@@ -972,6 +992,13 @@ static void play_over(void)
     }
     paused = 0;
     held = NO_KEY;
+    if (new_top_score || (game == GAME_BANTUMI && final_result > 0)) {
+        screen = SCREEN_FIREWORKS;
+        fireworks_step = fireworks_ticks = 0;
+        play_us = 0;
+        fireworks_sound();
+        return;
+    }
     screen = SCREEN_GAME_OVER;
     page_ticks = GAME_OVER_TICKS;
 }
@@ -1306,6 +1333,9 @@ static uint8_t handle_key(uint8_t key)
     case SCREEN_GAME_OVER:
         game_menu_open();
         break;
+    case SCREEN_FIREWORKS:
+        /* The phone's own: keys wait for the page after them. */
+        break;
     case SCREEN_MODES:
         if (key == MENU_KEY_DOWN || key == MENU_KEY_UP)
             list_move(key, 2, &pairs_mode, &pairs_mode_top);
@@ -1413,6 +1443,22 @@ uint8_t menu_tick(void)
             }
         }
         break;
+    case SCREEN_FIREWORKS:
+        play_us += MENU_FRAME_US;
+        while (play_us >= PHONE_TICK_US) {
+            play_us -= PHONE_TICK_US;
+            if (++fireworks_ticks < FIREWORKS_STEP)
+                continue;
+            fireworks_ticks = 0;
+            changed = 1;
+            if (++fireworks_step == FIREWORKS_STEPS) {
+                screen = SCREEN_GAME_OVER;
+                page_ticks = GAME_OVER_TICKS;
+                fireworks_sound();
+                break;
+            }
+        }
+        break;
     case SCREEN_TITLE: {
         uint8_t what = title_elapse(MENU_FRAME_US);
 
@@ -1442,7 +1488,7 @@ void menu_draw(void)
        all else is drawn in the phone's LCD. Changing between them, or
        leaving a screen that drew around the LCD, clears everything. */
     uint8_t mode = full_screen && screen != SCREEN_MAIN && screen != SCREEN_PLAY && screen != SCREEN_TITLE
-                   ? VIEW_NATIVE : VIEW_PHONE;
+                   && screen != SCREEN_FIREWORKS ? VIEW_NATIVE : VIEW_PHONE;
 
     uint8_t selection;
 
@@ -1450,7 +1496,8 @@ void menu_draw(void)
        into the framebuffer as the menus are. */
     if (screen == SCREEN_PLAY && snake2_full && games_playing == GAME_SNAKE)
         mode = VIEW_BOARD;
-    menu_drew_picture = (screen == SCREEN_PLAY && mode != VIEW_BOARD) || screen == SCREEN_TITLE;
+    menu_drew_picture = (screen == SCREEN_PLAY && mode != VIEW_BOARD) || screen == SCREEN_TITLE
+                        || screen == SCREEN_FIREWORKS;
     /* A step of the Games icon's animation changes only the icon, and the
        first screen's hint around the LCD stays as it is. */
     if (sparkle_only && screen == SCREEN_MAIN) {
@@ -1509,7 +1556,7 @@ void menu_draw(void)
     }
     drawn_screen = NO_SCREEN;
 
-    if (screen != SCREEN_PLAY && screen != SCREEN_TITLE) {
+    if (screen != SCREEN_PLAY && screen != SCREEN_TITLE && screen != SCREEN_FIREWORKS) {
         lcd_clear();
         board_drawn = 0;
     }
@@ -1544,6 +1591,12 @@ void menu_draw(void)
     case SCREEN_TITLE:
         /* The title is the phone's picture, shown as the game is. */
         title_draw();
+        games_strip = 0;
+        sprite_present(!board_drawn);
+        board_drawn = 1;
+        break;
+    case SCREEN_FIREWORKS:
+        fireworks_draw((uint8_t)(fireworks_step % FIREWORKS_PICTURES));
         games_strip = 0;
         sprite_present(!board_drawn);
         board_drawn = 1;

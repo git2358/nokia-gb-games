@@ -73,7 +73,7 @@ GB_BANK2 := core/si.c
 GB_BANK3 := core/si_setup.c $(ASSETS)/si_data.c core/title.c $(ASSETS)/title_data.c
 GB_BANK4 := core/snake2.c $(ASSETS)/snake2_data.c platform/gb/strip.c
 GB_BANK5 := core/pairs2.c $(ASSETS)/pairs2_data.c
-GB_BANK6 := core/bantumi.c $(ASSETS)/bantumi_data.c
+GB_BANK6 := core/bantumi.c core/fireworks.c $(ASSETS)/bantumi_data.c
 gb_rels = $(patsubst %.c,$(BUILD)/gb/$(1)/%.rel,$(notdir $(2)))
 GB_RELS := $(call gb_rels,0,$(filter-out platform/gb/main.c,$(GB_BANK0))) $(call gb_rels,1,$(GB_BANK1)) \
 	$(call gb_rels,2,$(GB_BANK2)) $(call gb_rels,3,$(GB_BANK3)) $(call gb_rels,4,$(GB_BANK4)) \
@@ -325,8 +325,10 @@ GB_MAIN_FAR := -Dstrip_present=far_strip_present -Dzoom_present=far_zoom_present
 $(BUILD)/gb/0/games.rel: GB_EXTRA := -Dsi_handler=far_si_handler -Dsnake2_handler=far_snake2_handler -Dsnake2_redraw=far_snake2_redraw \
 	-Dpairs2_handler=far_pairs2_handler -Dpairs2_render=far_pairs2_render \
 	-Dbantumi_handler=far_bantumi_handler -Dbantumi_render=far_bantumi_render
-# menu.c reaches the titles in bank 3 through far.c.
-$(BUILD)/gb/1/menu.rel: GB_EXTRA := -Dtitle_start=far_title_start -Dtitle_elapse=far_title_elapse -Dtitle_draw=far_title_draw
+# menu.c reaches the titles in bank 3 and the fireworks in bank 6 through
+# far.c.
+$(BUILD)/gb/1/menu.rel: GB_EXTRA := -Dtitle_start=far_title_start -Dtitle_elapse=far_title_elapse -Dtitle_draw=far_title_draw \
+	-Dfireworks_draw=far_fireworks_draw
 
 $(BUILD)/gb/0/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
 	@mkdir -p $(BUILD)/gb/0

@@ -83,11 +83,15 @@ phone, and any button skips it. All four games' titles are there: Snake
 II's, Space Impact's stars and closing logo, Bantumi's and Pairs II's
 cards turning to spell its name.
 
+A game that ends with a new top score, and a game of Bantumi won, first
+plays the phone's fireworks: its six full-screen pictures from the dump,
+twice over, 233 ms each, with a sound as they start and again as the
+Game over page follows, as in MAME.
+
 What is not: a paused Space Impact continues
 exactly where it stopped, where the phone gives the ship a second and a
 half of shield; a paused Snake II, Bantumi or Pairs II waits for a key, as
-on the phone. Bantumi's fireworks before "YOU WON!" are not there: what
-draws them on the phone has not been mapped. Bantumi's losing store
+on the phone. Bantumi's losing store
 blinks on the phone through the LCD's blink plane; here it is just drawn,
 as Space Impact's blinking things are. Snake
 II's large animated creature never comes: the phone lets it come only when

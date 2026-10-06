@@ -10,7 +10,7 @@
       is copied to cartridge RAM at power-on, and the games' titles;
    4  Snake II and its data, and the games at 2x (strip.c);
    5  Pairs II and its pictures;
-   6  Bantumi and its pictures.
+   6  Bantumi and its pictures, and the fireworks.
 
    The main loop runs with bank 1 mapped. A call into bank 2 to 6 goes
    through one of the far_ functions here, which map that bank for the call

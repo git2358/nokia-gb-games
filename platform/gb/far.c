@@ -3,6 +3,7 @@
 #define SI_SETUP_IMPL /* the real functions' names, not the far_ ones */
 #include "si_state.h"
 #include "bantumi.h"
+#include "fireworks.h"
 #include "pairs2.h"
 #include "snake2.h"
 #include "strip.h"
@@ -132,6 +133,16 @@ void far_bantumi_render(void)
 
     far_bank(BANK_BANTUMI);
     bantumi_render();
+    far_bank(was);
+}
+
+/* The fireworks' pictures are with Bantumi's. */
+void far_fireworks_draw(uint8_t picture)
+{
+    uint8_t was = mapped;
+
+    far_bank(BANK_BANTUMI);
+    fireworks_draw(picture);
     far_bank(was);
 }
 

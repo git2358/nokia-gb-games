@@ -8,6 +8,7 @@
 #include "snake2.h"
 #include "strip.h"
 #include "title.h"
+#include "native_gb.h"
 
 #include <string.h>
 
@@ -231,4 +232,37 @@ void far_snake2_redraw(void)
     far_bank(BANK_SNAKE);
     snake2_redraw();
     far_bank(was);
+}
+
+/* The full-screen menus made at build time: native_tiles.c and the
+   screens in one bank, their tiles in the next. */
+const uint8_t native_bank = BANK_NATIVE, native_tile_bank = BANK_NATIVE_TILES;
+
+uint8_t far_native_show(uint16_t id)
+{
+    uint8_t was = mapped, result;
+
+    far_bank(BANK_NATIVE);
+    result = native_show(id);
+    far_bank(was);
+    return result;
+}
+
+void far_native_cursor(uint8_t row, uint8_t on)
+{
+    uint8_t was = mapped;
+
+    far_bank(BANK_NATIVE);
+    native_cursor(row, on);
+    far_bank(was);
+}
+
+uint8_t far_native_leave(uint8_t palette)
+{
+    uint8_t was = mapped, result;
+
+    far_bank(BANK_NATIVE);
+    result = native_leave(palette);
+    far_bank(was);
+    return result;
 }

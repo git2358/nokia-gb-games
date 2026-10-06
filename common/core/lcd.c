@@ -1,5 +1,7 @@
 #include "lcd.h"
 
+#include <string.h>
+
 uint8_t lcd_fb[LCD_STRIDE * LCD_FB_HEIGHT];
 uint8_t lcd_dirty[LCD_CELLS_X * LCD_CELLS_Y];
 
@@ -116,16 +118,12 @@ void lcd_column_blit(uint8_t *p, uint8_t mask)
 
 void lcd_clear(void)
 {
-    unsigned i;
-
     if (lcd_view_w != LCD_FB_WIDTH || lcd_view_h != LCD_FB_HEIGHT) {
         lcd_fill_rect(0, 0, lcd_view_w, lcd_view_h, 0);
         return;
     }
-    for (i = 0; i < sizeof lcd_fb; i++)
-        lcd_fb[i] = 0;
-    for (i = 0; i < sizeof lcd_dirty; i++)
-        lcd_dirty[i] = 1;
+    memset(lcd_fb, 0, sizeof lcd_fb);
+    memset(lcd_dirty, 1, sizeof lcd_dirty);
 }
 
 void lcd_fill_rect(int x, int y, int w, int h, uint8_t color)

@@ -3,7 +3,8 @@
    NAME: testcard, outline, start (a new game, before any time passes),
    run-N (a new game after N screen frames with no key pressed), or
    menu-KEYS, the screen after the scripted keys of menu_script, or
-   menu-KEYS+N, the same N screen frames later. */
+   menu-KEYS+N, the same N screen frames later.
+   Or: frame native OUT.c, the full-screen menus as tiles (native_gen.c). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,6 +13,7 @@
 #include "games.h"
 #include "lcd.h"
 #include "menu.h"
+#include "native_tiles.h"
 #include "pgm.h"
 #include "si.h"
 #include "sound.h"
@@ -60,6 +62,8 @@ void platform_options_save(const struct game_options *in)
 
 int main(int argc, char **argv)
 {
+    if (argc == 3 && strcmp(argv[1], "native") == 0)
+        return native_gen(argv[2]);
     if (argc != 3) {
         fprintf(stderr, "usage: frame NAME OUT.pgm\n");
         return 2;

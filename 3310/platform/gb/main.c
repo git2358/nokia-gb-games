@@ -18,6 +18,7 @@
 #include "games.h"
 #include "lcd.h"
 #include "menu.h"
+#include "native_tiles.h"
 #include "si.h"
 #include "si_data.h"
 #include "sound.h"
@@ -191,9 +192,35 @@ extern uint8_t gb_present_all;
 void gb_present_plain(void);
 void gb_clear_tiles(void);
 
+/* menu_draw showed a full-screen menu made at build time, or moved the
+   cursor on one: lcd_fb does not hold what is on the screen. */
+static uint8_t native_drew;
+
+uint8_t platform_native_show(uint16_t id)
+{
+    if (direct) {
+        gb_clear_tiles();
+        strip_leave(0, direct == DIRECT_ZOOM);
+        direct = 0;
+    }
+    if (!far_native_show(id))
+        return 0;
+    native_drew = 1;
+    return 1;
+}
+
+void platform_native_cursor(uint8_t row, uint8_t on)
+{
+    far_native_cursor(row, on);
+    native_drew = 1;
+}
+
 void sprite_present(uint8_t all)
 {
     uint8_t mode = lcd_zoom_w ? DIRECT_ZOOM : DIRECT_PLAIN;
+
+    if (far_native_leave(PALETTE))
+        all = 1;
 
     if (direct != mode)
         all = 1;
@@ -256,8 +283,18 @@ static void show(void)
 {
     uint16_t i;
 
+    if (native_drew) {
+        native_drew = 0;
+        memset(lcd_dirty, 0, sizeof lcd_dirty);
+        return;
+    }
     if (menu_drew_picture)
         return;
+    if (far_native_leave(PALETTE)) {
+        /* The cells' tiles hold the made screen's. */
+        for (i = 0; i < sizeof lcd_dirty; i++)
+            lcd_dirty[i] = 1;
+    }
     if (direct) {
         /* Blank first, so that the game's tiles are not seen through the
            menus' tile map while the menu's are being made. */

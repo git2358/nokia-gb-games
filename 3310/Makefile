@@ -35,7 +35,7 @@ SDCC ?= sdcc
 MAKEBIN ?= makebin
 SDAS ?= sdasgb
 GB_FB := -DLCD_FB_WIDTH=160 -DLCD_FB_HEIGHT=144 -DLCD_GAME_ZOOM=2
-GB_CFLAGS = -msm83 --opt-code-speed $(GB_FB) -DSI_DATA_AT=0xa100 '-DPAIRS2_STATE_AT=(SI_DATA_AT + SI_DATA_SIZE)' -DPAIRS2_STATE_END=0xc000 '-DBANTUMI_STATE_AT=(SI_DATA_AT + SI_DATA_SIZE)' -DBANTUMI_STATE_END=0xc000 -DBANTUMI_PLATFORM_SEARCH -DSNAKE2_STATE_AT=SI_DATA_AT '-DSNAKE2_STATE_END=(SI_DATA_AT + SI_DATA_SIZE)' -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_BAND -DSPRITE_PLATFORM_BITMAP -DSPRITE_PLATFORM_PRESENT -DSI_PLATFORM_FIND_HIT -DSI_SETUP_FAR -Icore -I$(COMMON)/core -Iplatform/gb -I$(ASSETS)
+GB_CFLAGS = -msm83 --opt-code-speed $(GB_FB) -DSI_DATA_AT=0xa100 '-DPAIRS2_STATE_AT=(SI_DATA_AT + SI_DATA_SIZE)' -DPAIRS2_STATE_END=0xc000 '-DBANTUMI_STATE_AT=(SI_DATA_AT + SI_DATA_SIZE)' -DBANTUMI_STATE_END=0xc000 -DBANTUMI_PLATFORM_SEARCH -DSNAKE2_STATE_AT=SI_DATA_AT '-DSNAKE2_STATE_END=(SI_DATA_AT + SI_DATA_SIZE)' -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_BAND -DSPRITE_PLATFORM_BITMAP -DSPRITE_PLATFORM_PRESENT -DSI_PLATFORM_FIND_HIT -DSI_SETUP_FAR -DNATIVE_PLATFORM_TILES -Icore -I$(COMMON)/core -Iplatform/gb -I$(COMMON)/platform/gb -I$(ASSETS)
 # The SameBoy clone scripts/setup-sameboy.sh makes: its boot ROM, and its
 # core as a library (`make -C $(SAMEBOY) lib`) for tools/gb_run.
 SAMEBOY ?= ../tools/SameBoy
@@ -76,10 +76,13 @@ GB_BANK3 := core/si_setup.c $(ASSETS)/si_data.c core/title.c $(ASSETS)/title_dat
 GB_BANK4 := core/snake2.c $(ASSETS)/snake2_data.c platform/gb/strip.c
 GB_BANK5 := core/pairs2.c $(ASSETS)/pairs2_data.c
 GB_BANK6 := core/bantumi.c core/fireworks.c $(ASSETS)/bantumi_data.c
+GB_BANK7 := $(COMMON)/platform/gb/native_tiles.c $(ASSETS)/native_data.c
+GB_BANK8 := $(ASSETS)/native_data.c
 gb_rels = $(patsubst %.c,$(BUILD)/gb/$(1)/%.rel,$(notdir $(2)))
 GB_RELS := $(call gb_rels,0,$(filter-out platform/gb/main.c,$(GB_BANK0))) $(call gb_rels,1,$(GB_BANK1)) \
 	$(call gb_rels,2,$(GB_BANK2)) $(call gb_rels,3,$(GB_BANK3)) $(call gb_rels,4,$(GB_BANK4)) \
-	$(call gb_rels,5,$(GB_BANK5)) $(call gb_rels,6,$(GB_BANK6))
+	$(call gb_rels,5,$(GB_BANK5)) $(call gb_rels,6,$(GB_BANK6)) $(call gb_rels,7,$(GB_BANK7)) \
+	$(call gb_rels,8,$(GB_BANK8))
 GBA_ROM := $(BUILD)/nokia3310.gba
 GBA_TEST_ROM := $(BUILD)/nokia3310-keys.gba
 # Keys a test ROM presses at power-on (see menu_script in core/menu.c), for
@@ -177,15 +180,15 @@ $(BUILD)/asset_sheet: platform/host/asset_sheet.c core/si.c core/si_base.c core/
 sheet: $(BUILD)/asset_sheet
 	$(BUILD)/asset_sheet $(BUILD)
 
-$(BUILD)/frame: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/frame: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(COMMON)/tools/native_gen.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(COMMON)/tools/native_gen.c $(CORE_SRC) $(ASSET_SRC)
 
 $(BUILD)/frame_%.pgm: $(BUILD)/frame
 	$(BUILD)/frame $* $@
 
 # The same tool with the GBA's framebuffer, for comparing its screen.
-$(BUILD)/frame_gba: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(GBA_FB) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/frame_gba: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(COMMON)/tools/native_gen.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(GBA_FB) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(COMMON)/tools/native_gen.c $(CORE_SRC) $(ASSET_SRC)
 
 $(BUILD)/gbaframe_%.pgm: $(BUILD)/frame_gba
 	$(BUILD)/frame_gba $* $@
@@ -318,7 +321,7 @@ FORCE:
 
 # Game Boy
 
-vpath %.c core $(COMMON)/core platform/gb $(ASSETS)
+vpath %.c core $(COMMON)/core platform/gb $(COMMON)/platform/gb $(ASSETS)
 
 # main.c reaches the game at 2x in bank 4 through far.c.
 GB_MAIN_FAR := -Dstrip_present=far_strip_present -Dzoom_present=far_zoom_present -Dstrip_leave=far_strip_leave
@@ -369,16 +372,33 @@ $(BUILD)/gb/%.rel: platform/gb/%.s
 	@mkdir -p $(BUILD)/gb
 	$(SDAS) -o $@ $<
 
-# MBC5 with its rumble pin and battery-backed RAM, eight ROM banks (seven
+$(BUILD)/gb/%.rel: $(COMMON)/platform/gb/%.s
+	@mkdir -p $(BUILD)/gb
+	$(SDAS) -o $@ $<
+
+$(BUILD)/gb/7/%.rel: %.c $(CORE_HDR) $(ASSET_SRC) $(COMMON)/platform/gb/native_gb.h
+	@mkdir -p $(BUILD)/gb/7
+	$(SDCC) $(GB_CFLAGS) --codeseg CODE_7 -c $< -o $@
+
+$(BUILD)/gb/8/%.rel: %.c
+	@mkdir -p $(BUILD)/gb/8
+	$(SDCC) $(GB_CFLAGS) -DNATIVE_PART_TILES --codeseg CODE_8 -c $< -o $@
+
+# The full-screen menus made at build time, drawn by the host build of the
+# core at the Game Boy's size (native_tiles.h).
+$(ASSETS)/native_data.c: $(BUILD)/frame_gb
+	$(BUILD)/frame_gb native $@
+
+# MBC5 with its rumble pin and battery-backed RAM, sixteen ROM banks (nine
 # used) and 8 KiB of RAM. The linker does not mind the first bank running over into the
 # second, so its end is checked here.
-$(BUILD)/nokia3310%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/draw.rel $(BUILD)/gb/search.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
-	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 -Wl-b_CODE_3=0x34000 -Wl-b_CODE_4=0x44000 -Wl-b_CODE_5=0x54000 -Wl-b_CODE_6=0x64000 \
+$(BUILD)/nokia3310%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/draw.rel $(BUILD)/gb/search.rel $(BUILD)/gb/native_put.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
+	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 -Wl-b_CODE_3=0x34000 -Wl-b_CODE_4=0x44000 -Wl-b_CODE_5=0x54000 -Wl-b_CODE_6=0x64000 -Wl-b_CODE_7=0x74000 -Wl-b_CODE_8=0x84000 \
 		-o $(BUILD)/gb/$(basename $(notdir $@)).ihx $^
 	@$(PYTHON) tools/gb_bank_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
-	$(MAKEBIN) -Z -yn NOKIA3310 -yt 0x1e -yo 8 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
+	$(MAKEBIN) -Z -yn NOKIA3310 -yt 0x1e -yo 16 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
 
-.SECONDARY: $(GB_RELS) $(BUILD)/gb/crt0.rel $(BUILD)/gb/draw.rel $(BUILD)/gb/search.rel
+.SECONDARY: $(GB_RELS) $(BUILD)/gb/crt0.rel $(BUILD)/gb/draw.rel $(BUILD)/gb/search.rel $(BUILD)/gb/native_put.rel
 
 gb: $(GB_ROM)
 
@@ -389,8 +409,8 @@ $(BUILD)/gb_run: tools/gb_run.c
 	$(CC) -O2 -I$(SAMEBOY) -DGB_VERSION='"x"' -o $@ $< $(SAMEBOY)/build/lib/libsameboy.a -lm
 
 # The host's frame tool with the Game Boy's framebuffer and its 2x game.
-$(BUILD)/frame_gb: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/frame_gb: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(COMMON)/tools/native_gen.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(COMMON)/tools/native_gen.c $(CORE_SRC) $(ASSET_SRC)
 
 # The ROM presses KEYS at power-on; its screen at each of GB_FRAMES must be
 # one of the host's frames for those keys, to the pixel. With the default

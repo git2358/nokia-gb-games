@@ -10,7 +10,9 @@
       is copied to cartridge RAM at power-on, and the games' titles;
    4  Snake II and its data, and the games at 2x (strip.c);
    5  Pairs II and its pictures;
-   6  Bantumi and its pictures, and the fireworks.
+   6  Bantumi and its pictures, and the fireworks;
+   7  the full-screen menus made at build time and what shows them;
+   8  their tiles.
 
    The main loop runs with bank 1 mapped. A call into bank 2 to 6 goes
    through one of the far_ functions here, which map that bank for the call
@@ -26,12 +28,19 @@ enum {
     BANK_SETUP,
     BANK_SNAKE,
     BANK_PAIRS,
-    BANK_BANTUMI
+    BANK_BANTUMI,
+    BANK_NATIVE,
+    BANK_NATIVE_TILES
 };
 
 void far_bank(uint8_t bank);
 
 /* Space Impact's data copied into cartridge RAM again. */
 void far_si_data_restore(void);
+
+/* native_gb.h's, from the banks they are in. */
+uint8_t far_native_show(uint16_t id);
+void far_native_cursor(uint8_t row, uint8_t on);
+uint8_t far_native_leave(uint8_t palette);
 
 #endif

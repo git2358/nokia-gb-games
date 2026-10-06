@@ -4,7 +4,7 @@
 ;; si_type_picture) is then mapped.
 	.module si_fast
 	.globl	_gb_find_hit
-	.globl	_si_pictures, _si_type_picture, _si_pics
+	.globl	_si_pictures, _si_type_picture, _si_pics, _si_records_changed
 
 RECORDS = 60
 RECORD_SIZE = 13		; struct object
@@ -28,6 +28,16 @@ fh_ay:
 	.ds	1
 fh_ay2:
 	.ds	1
+;; The records that can be hit, as of fh_stamp (si_records_changed), if
+;; fh_valid: fh_count of them, each its number and its type's address.
+fh_valid:
+	.ds	1
+fh_stamp:
+	.ds	2
+fh_count:
+	.ds	1
+fh_list:
+	.ds	3 * RECORDS
 
 	.area	_CODE
 
@@ -64,35 +74,120 @@ _gb_find_hit::
 	ld	(#fh_ay), a
 	add	a, e
 	ld	(#fh_ay2), a		; ay + height(a)
-	pop	hl
-	inc	hl
-	inc	hl			; record 0's type
-	ld	b, #RECORDS		; records left
-	ld	de, #RECORD_SIZE
+	pop	hl			; rec
+	;; The records that can be hit: made again when one may have become
+	;; one (si_records_changed), else as they were.
+	ld	a, (#fh_valid)
+	or	a, a
+	jr	z, 1$
+	ld	a, (#_si_records_changed)
+	ld	b, a
+	ld	a, (#fh_stamp)
+	cp	a, b
+	jr	nz, 1$
+	ld	a, (#_si_records_changed + 1)
+	ld	b, a
+	ld	a, (#fh_stamp + 1)
+	cp	a, b
+	jr	z, 7$
+1$:
+	call	list_make
+7$:
+	;; Each of them, as it is now: still of a hitting type, not the
+	;; player's, its box meeting a's. The first by record, as the phone.
+	ld	a, (#fh_count)
+	or	a, a
+	ret	z
+	ld	b, a
+	ld	hl, #fh_list
 3$:
-	ld	a, (hl)			; type
+	ld	a, (hl+)
+	ld	c, a			; its record
+	ld	a, (hl+)
+	ld	e, a
+	ld	a, (hl+)
+	ld	d, a			; its type
+	push	hl
+	push	bc
+	ld	h, d
+	ld	l, e
+	ld	a, (hl)
 	cp	a, #FREE
 	jr	z, 5$
 	or	a, a			; TYPE_SHIP
 	jr	z, 5$
 	cp	a, #TYPE_EXPLOSION
 	jr	z, 5$
-	push	hl
-	push	bc
 	call	candidate
+	jr	c, 6$
+5$:
 	pop	bc
 	pop	hl
-	jr	c, 6$
-	ld	de, #RECORD_SIZE
-5$:
-	add	hl, de
 	dec	b
 	jr	nz, 3$
 	xor	a, a
 	ret
 6$:
-	ld	a, #RECORDS		; its index: the records there were less those left
-	sub	a, b
+	pop	bc
+	pop	hl
+	ld	a, c
+	ret
+
+;; fh_list: each record (from rec, at hl) that can be hit now, in order:
+;; its number and the address of its type.
+list_make:
+	ld	a, (#_si_records_changed)
+	ld	(#fh_stamp), a
+	ld	a, (#_si_records_changed + 1)
+	ld	(#fh_stamp + 1), a
+	ld	a, #1
+	ld	(#fh_valid), a
+	xor	a, a
+	ld	(#fh_count), a
+	inc	hl
+	inc	hl			; record 0's type
+	ld	de, #fh_list
+	ld	c, #0
+1$:
+	ld	a, (hl)
+	cp	a, #FREE
+	jr	z, 3$
+	or	a, a
+	jr	z, 3$
+	cp	a, #TYPE_EXPLOSION
+	jr	z, 3$
+	push	hl
+	ld	a, l
+	add	a, #O_SIDE - O_TYPE
+	ld	l, a
+	jr	nc, 2$
+	inc	h
+2$:
+	ld	a, (hl)
+	pop	hl
+	cp	a, #SIDE_PLAYER
+	jr	z, 3$
+	ld	a, c
+	ld	(de), a
+	inc	de
+	ld	a, l
+	ld	(de), a
+	inc	de
+	ld	a, h
+	ld	(de), a
+	inc	de
+	ld	a, (#fh_count)
+	inc	a
+	ld	(#fh_count), a
+3$:
+	push	de
+	ld	de, #RECORD_SIZE
+	add	hl, de
+	pop	de
+	inc	c
+	ld	a, c
+	cp	a, #RECORDS
+	jr	nz, 1$
 	ret
 
 ;; Record at hl - O_TYPE, live and of a hitting type: carry set when it is

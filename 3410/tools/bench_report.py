@@ -82,9 +82,19 @@ def main():
     for line in run.stdout.splitlines():
         m = re.match(r"([0-9a-f]{4}) at (\d+)", line)
         if m:
-            events.append((name[int(m.group(1), 16)], int(m.group(2))))
+            mark, at = name[int(m.group(1), 16)], int(m.group(2))
+            # A mark reached again at once: an interrupt was taken there.
+            if events and events[-1][0] == mark and at - events[-1][1] < 100:
+                continue
+            events.append((mark, at))
     if not events or events[-1][0] != "bench_end":
         sys.exit("the benchmark did not reach its end")
+    # The game starts with New game, drawn at once: marks before its step
+    # are a boot ROM's code at the same addresses (a Game Boy Color's
+    # covers 0x200 to 0x8ff), not the benchmark's.
+    first = next(i for i, (mark, _) in enumerate(events) if mark == "bench_render")
+    first = max(i for i in range(first) if events[i][0] == "bench_step")
+    events = events[first:]
     differ = compare_end(shot, Path(host_last))
     print(f"the end: {'the host' + chr(39) + 's last frame' if not differ else f'{differ} pixels differ from the host' + chr(39) + 's last frame'}")
 

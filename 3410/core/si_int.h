@@ -118,6 +118,13 @@ struct si_state {
     struct sprite_image box_image;
 };
 
+/* Counts the times a record's type or side may have been set other than
+   to free or an explosion: a template set, the records cleared or the
+   state restored (si.c). Not the phone's: for a platform's own find_hit
+   (platform/gb/si_fast.s), which keeps the records that can be hit until
+   it changes. */
+extern uint16_t si_records_changed;
+
 /* The state, and the state as the game saved it when paused (0x3b2922),
    for Continue (si.c). A platform short of work RAM may keep them
    elsewhere, as snake2.c does. */

@@ -22,6 +22,7 @@ struct si_state si_saved;
 static uint8_t si_have_saved;
 
 uint16_t si_keys_held;
+uint16_t si_records_changed;
 uint16_t si_period;
 
 /* 0x258b94 */
@@ -37,12 +38,14 @@ static void objects_clear(void)
         si.rec[k].side = 0;
     }
     si.count = 0;
+    si_records_changed++;
 }
 
 /* The template a record starts from: the game's own types', or for the
    enemies the phone's table {frames, type, side, boss}. */
 void si_set_template(struct object *o, uint8_t type) SI_FAR
 {
+    si_records_changed++;
     memset(o, 0, sizeof *o);
     if (type < 20) {
         const uint8_t *t = si_templates + 20 * type;
@@ -274,6 +277,7 @@ void si_high_score_save(void) SI_FAR
 static void new_game(void)
 {
     memset(&si, 0, sizeof si);
+    si_records_changed++;
     si.countdown = 5;
     si.lives = 3;
     si.continues = 4;
@@ -632,6 +636,7 @@ static uint8_t resume(void)
     if (!si_have_saved)
         return 0;
     si = si_saved;
+    si_records_changed++;
     si_period = 100;
     si.timer = 10;
     if (si.phase == PHASE_CONTINUE) {

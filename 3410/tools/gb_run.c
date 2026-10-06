@@ -218,13 +218,16 @@ int main(int argc, char **argv)
                 addrs[n++] = (unsigned)strtoul(p + 1, &p, 16);
             }
             while (left > 0) {
-                unsigned cycles, pc = GB_get_registers(gb)->pc, now;
+                unsigned cycles, pc = GB_get_registers(gb)->pc, sp = GB_get_registers(gb)->sp, now_sp;
 
                 cycles = GB_run(gb);
                 /* Reached, unless an interrupt was taken instead, which
-                   comes back to it later. */
-                now = GB_get_registers(gb)->pc;
-                if (!(now >= 0x40 && now <= 0x60 && !(now & 7) && pc != now - 1)) {
+                   comes back to it later: its return address, this one,
+                   on the stack two lower. */
+                now_sp = GB_get_registers(gb)->sp;
+                if (!(now_sp == ((sp - 2) & 0xffff)
+                      && (GB_safe_read_memory(gb, (uint16_t)now_sp)
+                          | GB_safe_read_memory(gb, (uint16_t)(now_sp + 1)) << 8) == pc)) {
                     for (i = 0; i < n; i++)
                         if (pc == addrs[i])
                             printf("%04x at %llu\n", pc, (unsigned long long)(at / 2));

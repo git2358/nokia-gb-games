@@ -25,7 +25,7 @@ What is there so far:
   its boxes and the snake that eats a creature on its way across;
 - the games' Settings (Game sounds, Game lights, Shakes, Club Nokia ID),
   the vibrator as a rumble motor (from a death to the second blink, as on
-  the 3410, softened as in `../common/core/rumble.h`), and the 3310's eat and death sounds, which the 3410 holds too
+  the 3410, but half as long, see `../common/core/rumble.h`), and the 3310's eat and death sounds, which the 3410 holds too
   but which have not been checked against it yet;
 - the top score and the chosen level and maze, kept in battery-backed
   cartridge RAM.

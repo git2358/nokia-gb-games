@@ -3,9 +3,7 @@
    objects are walked by their record's index and the generator is drawn
    from in the firmware's order, both of which a frame-exact game needs.
    This file is the handler, the chapters, the HUD, pause and game over;
-   the rest is in the files si_int.h lists.
-
-   Not done yet: the Instructions' demos. */
+   the rest is in the files si_int.h lists. */
 #include "si_int.h"
 
 /* The state, and the state as the game saved it when paused (0x3b2922),
@@ -200,15 +198,14 @@ static void hud_create(void)
     si_pic_move_after(si.terrain_pic, 0);
 }
 
-/* 0x259518: the chapter's record, its script from the start. */
-static void chapter_load(void)
+/* 0x259518: a chapter's record, {entries, four checkpoints, mode}, and its
+   script from the start. */
+static void chapter_load_record(const uint8_t *r, const uint8_t *script)
 {
-    const uint8_t *r = si_chapter_records + 6 * si.chapter;
-
     si.entries = r[0];
     memcpy(si.checkpoints, r + 1, 4);
     si.mode = r[5];
-    si.script = si_scripts + 9 * si_script_first[si.chapter];
+    si.script = script;
     si.entries_left = si.entries;
     si.checkpoint = 0;
     si.delay = 0x14;
@@ -221,6 +218,12 @@ static void chapter_load(void)
     hud_create();
     si.boss_state = 0;
     si.phase = PHASE_PLAY;
+}
+
+/* The chapter si.chapter's own record. */
+static void chapter_load(void)
+{
+    chapter_load_record(si_chapter_records + 6 * si.chapter, si_scripts + 9 * si_script_first[si.chapter]);
 }
 
 /* 0x2595d8 */
@@ -289,6 +292,23 @@ static void new_game(void)
     si.chapter = 0;
     chapter_load();
     si_ship_spawn(10);
+}
+
+/* 0x259a90: a demo on the built-in chapters. The bonus demo plays a
+   chapter of its own, two bonuses, after the pictures are all freed; it
+   keeps the first chapter's terrain (0xff to 0x259518). Nothing is drawn
+   until the first tick: the phone goes on showing the page before. */
+static uint8_t demo_start(uint8_t demo)
+{
+    new_game();
+    si.demo = demo;
+    si.demo_count = 0;
+    if (demo == SI_DEMO_BONUS) {
+        si_pic_reset();
+        chapter_load_record(si_demo_record, si_demo_script);
+        si_ship_spawn(10);
+    }
+    return 0;
 }
 
 /* 0x258c42 */
@@ -490,6 +510,8 @@ static uint8_t tick(uint8_t event, uint8_t a)
 {
     uint8_t c;
 
+    if (event == SI_EVENT_KEY_DOWN && si.demo)
+        si_demo_key(a);
     if (event == SI_EVENT_KEY_UP) {
         if (a == 1 || a == 3)
             si.fire_count = 0;
@@ -587,6 +609,13 @@ static uint8_t tick(uint8_t event, uint8_t a)
     return SI_DONE_REDRAW;
 }
 
+/* For the demos, which press keys in place of the player: an event of
+   play. */
+uint8_t si_play_event(uint8_t event, uint8_t a) SI_FAR
+{
+    return tick(event, a);
+}
+
 /* For the replays (the host's, the Game Boy's benchmark): what the
    autopilot wrote, the lives. */
 void si_debug_lives(int8_t lives) SI_FAR
@@ -617,6 +646,12 @@ static uint8_t pause(void)
 {
     uint8_t k;
 
+    if (si.demo) {
+        /* Nothing of a demo is kept. */
+        si_pic_reset();
+        si.demo = 0;
+        return SI_DONE_CLOSE;
+    }
     if (si.phase == PHASE_CLOSE || si.phase == PHASE_OVER)
         return SI_DONE_CLOSE;
     for (k = 0; k < RECORDS; k++)
@@ -717,9 +752,13 @@ uint8_t si_event(uint8_t event, uint8_t a) SI_FAR
         return pause();
     case SI_EVENT_CONTINUE:
         return resume();
+    case SI_EVENT_DEMO:
+        return demo_start(a);
     case SI_EVENT_TICK:
     case SI_EVENT_KEY_DOWN:
     case SI_EVENT_KEY_UP:
+        if (si.demo)
+            return si_demo_step(event);
         return tick(event, a);
     }
     return 0;

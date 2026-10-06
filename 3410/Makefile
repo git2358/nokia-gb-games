@@ -55,17 +55,20 @@ GB_ROM := $(BUILD)/nokia3410.gb
 GB_TEST_ROM := $(BUILD)/nokia3410-keys.gb
 # The banks of the Game Boy ROM (see platform/gb/far.h).
 GB_BANK0 := platform/gb/main.c platform/gb/far.c platform/gb/screen.c $(COMMON)/core/lcd.c core/sprite.c core/games.c core/rand.c core/sound.c $(ASSETS)/game_tables.c \
-	platform/gb/save.c $(ASSETS)/si_rows_index.c
-GB_BANK1 := core/menu.c $(COMMON)/core/font.c $(ASSETS)/game_assets.c
+	platform/gb/save.c $(ASSETS)/si_rows_index.c $(COMMON)/core/font.c
+# The menus; font.c, in the first bank, reads the fonts here, which are mapped
+# whenever the menus draw.
+GB_BANK1 := core/menu.c $(ASSETS)/game_assets.c
 GB_BANK2 := core/snake2.c core/title.c $(ASSETS)/snake2_data.c
 GB_BANK3 := $(COMMON)/platform/gb/native_tiles.c $(ASSETS)/native_data.c
 GB_BANK4 := $(ASSETS)/native_data.c
 # Space Impact: each bank its data first, then a part of the game.
-GB_SI_BANKS := 5 6 7 8
+GB_SI_BANKS := 5 6 7 8 11
 GB_BANK5 := core/si.c
 GB_BANK6 := core/si_move.c
 GB_BANK7 := core/si_hit.c
 GB_BANK8 := core/si_screens.c core/si_pic.c
+GB_BANK11 := core/si_demo.c
 # The pictures as the Game Boy draws them (core/si_rows.h): what draws
 # them in the first bank, their rows in two of their own.
 GB_ROWS_BANK := 9
@@ -83,7 +86,7 @@ KEYS ?= sssss
 # The game without the menus, for tools that drive it directly.
 GAME_SRC := $(filter-out core/menu.c $(COMMON)/core/font.c,$(CORE_SRC))
 
-.PHONY: help dump install-roms assets test frames golden-snake golden-si golden-si-menus check-golden check-menus gb check-gb bench-gb bench-report shot-gb run-gb cards clean
+.PHONY: help dump install-roms assets test frames golden-snake golden-si golden-si-menus golden-si-demos check-golden check-menus gb check-gb bench-gb bench-report shot-gb run-gb cards clean
 
 help:
 	@echo "make dump      rebuild $(DUMP) from the Wintesla files in FLASH_FILES=$(FLASH_FILES)"
@@ -215,6 +218,21 @@ golden-si-menus:
 	cp run_golden_si/nokia_dct3_lcdmirror_*.pgm golden/si-m/
 	$(PYTHON) tools/si_events.py --title run_golden_si/error.log golden/si-m
 
+# The Instructions with their three demos, each left to run to its end:
+# recorded from the first demo on (tools/si_events.py --demos) into
+# golden/si-i, which check-golden replays with the rest. The autopilot only
+# watches (SI_IDLE): a key would end a demo.
+SI_DEMO_KEYS := $(SI_KEYS:,enter,wait3000=),up,wait1000,enter,wait2500,enter,wait2500,enter,wait16000,enter,wait2500,enter,wait2500,enter,wait16000,enter,wait2500,enter,wait10000
+
+golden-si-demos:
+	@test -x $(DCT3_RE)/mame/mame || { echo "Missing $(DCT3_RE)/mame/mame: build the fork first"; exit 1; }
+	rm -rf run_golden_si golden/si-i && mkdir -p run_golden_si golden/si-i
+	$(MAKE) -C $(DCT3_RE) run-keys GAMES_PRODUCT=3410 RUN_DIR=$(abspath run_golden_si) SECONDS=100 KEYS=$(SI_DEMO_KEYS) \
+		RUN_NVRAM_DIR=$(abspath run_golden_si)/nvram RUN_ENV="SI_IDLE=1 SI_FIRE_EVERY=0" \
+		RUN_EXTRA_ARGS="-autoboot_script $(abspath $(DCT3_RE))/mame_nokia_3410_si_bot.lua -debug -debugger none"
+	cp run_golden_si/nokia_dct3_lcdmirror_*.pgm golden/si-i/
+	$(PYTHON) tools/si_events.py --demos run_golden_si/error.log golden/si-i
+
 # Skipped when the reference runs have not been recorded.
 check-golden: $(BUILD)/replay $(BUILD)/si_replay
 	@for dir in golden/snake2-*; do \
@@ -331,7 +349,7 @@ $(BUILD)/gb/%.rel: $(COMMON)/platform/gb/%.s
 # over into the second, so its end is checked here.
 $(BUILD)/nokia3410%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/native_put.rel $(BUILD)/gb/band.rel $(BUILD)/gb/bcall.rel $(BUILD)/gb/si_fast.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
 	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 -Wl-b_CODE_3=0x34000 -Wl-b_CODE_4=0x44000 \
-		$(foreach n,$(GB_SI_BANKS),-Wl-b_CODE_$(n)=0x$(n)4000) -Wl-b_CODE_9=0x94000 -Wl-b_CODE_10=0xA4000 \
+		$(foreach n,$(GB_SI_BANKS),-Wl-b_CODE_$(n)=0x$(shell printf %X $(n))4000) -Wl-b_CODE_9=0x94000 -Wl-b_CODE_10=0xA4000 \
 		-o $(BUILD)/gb/$(basename $(notdir $@)).ihx $^
 	@$(PYTHON) $(COMMON)/tools/gb_bank_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
 	@$(PYTHON) tools/gb_mirror_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
@@ -361,7 +379,7 @@ $(GB_BENCH_ROM): $(GB_BASE_RELS) $(BUILD)/gb/0/main-bench.rel $(BENCH_DIR)/si_be
 		rels="$$rels $(BENCH_DIR)/si_bench_$$n.rel"; banks="$$banks -Wl-b_CODE_$$b=0x$$(printf %X $$b)4000"; \
 	done; \
 	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 -Wl-b_CODE_3=0x34000 -Wl-b_CODE_4=0x44000 \
-		$(foreach n,$(GB_SI_BANKS),-Wl-b_CODE_$(n)=0x$(n)4000) -Wl-b_CODE_9=0x94000 -Wl-b_CODE_10=0xA4000 $$banks \
+		$(foreach n,$(GB_SI_BANKS),-Wl-b_CODE_$(n)=0x$(shell printf %X $(n))4000) -Wl-b_CODE_9=0x94000 -Wl-b_CODE_10=0xA4000 $$banks \
 		-o $(BUILD)/gb/nokia3410-bench.ihx $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/native_put.rel \
 		$(BUILD)/gb/band.rel $(BUILD)/gb/bcall.rel $(BUILD)/gb/si_fast.rel $(BUILD)/gb/0/main-bench.rel $(GB_RELS) $$rels
 	@$(PYTHON) $(COMMON)/tools/gb_bank_check.py $(BUILD)/gb/nokia3410-bench.map
@@ -398,11 +416,16 @@ $(BUILD)/frame_gb: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CO
 # are those it does show.
 SI_GB_KEYS := zssdswwwwwwwwwws
 SI_GB_FRAMES := 1300 1600 1900
+# The Instructions' first demo.
+SI_DEMO_GB_KEYS := zssdswwwwwwwwwwussswww
+SI_DEMO_GB_FRAMES := 1400 1500 1600
 
 check-gb: $(GB_TEST_ROM) $(BUILD)/gb_run $(BUILD)/frame_gb
 	$(PYTHON) tools/check_gb_run.py $(BUILD)/gb_run $(GB_TEST_ROM) $(SAMEBOY_BOOT) $(BUILD)/frame_gb "$(KEYS)" $(GB_FRAMES)
 	@$(MAKE) --no-print-directory $(GB_TEST_ROM) KEYS=$(SI_GB_KEYS) >/dev/null
 	$(PYTHON) tools/check_gb_run.py $(BUILD)/gb_run $(GB_TEST_ROM) $(SAMEBOY_BOOT) $(BUILD)/frame_gb "$(SI_GB_KEYS)" $(SI_GB_FRAMES)
+	@$(MAKE) --no-print-directory $(GB_TEST_ROM) KEYS=$(SI_DEMO_GB_KEYS) >/dev/null
+	$(PYTHON) tools/check_gb_run.py $(BUILD)/gb_run $(GB_TEST_ROM) $(SAMEBOY_BOOT) $(BUILD)/frame_gb "$(SI_DEMO_GB_KEYS)" $(SI_DEMO_GB_FRAMES)
 
 # Headless screenshot of the Game Boy ROM after KEYS, as a PNG.
 shot-gb: $(GB_TEST_ROM) $(BUILD)/gb_run

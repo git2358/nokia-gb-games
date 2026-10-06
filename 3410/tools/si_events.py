@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Turn a Space Impact autopilot log from MAME into the replay's events.
 
-Usage: si_events.py [--title] ERROR_LOG OUT_DIR
+Usage: si_events.py [--title | --demos] ERROR_LOG OUT_DIR
 
 ERROR_LOG is the error.log of a run of the MAME fork's
 mame_nokia_3410_si_bot.lua. Writes OUT_DIR/events.txt, every call of the
@@ -16,6 +16,9 @@ hex. OUT_DIR/sounds.txt has, for each call that asked for them, "N snd
 CODE", the last sound asked for (0x3b2510) as a code in the phone's sound
 table (si.h's SI_SOUND_), and "N vib on" or "N vib off", the vibrator's
 last switch (0x3b25d4), N the call's line in events.txt.
+
+With --demos they start at the first demo (0x09, the Instructions), and
+setup.txt is the generator's state as that call found it.
 
 With --title the events start at the title (0x0e) instead, and setup.txt
 is the generator's state as the title found it: the title reseeds it from
@@ -43,7 +46,8 @@ def undo(state, draws):
 def main():
     args = sys.argv[1:]
     title = args[:1] == ["--title"]
-    if title:
+    demos = args[:1] == ["--demos"]
+    if title or demos:
         args = args[1:]
     if len(args) != 2:
         sys.exit(__doc__)
@@ -85,7 +89,11 @@ def main():
         raw = bytes.fromhex(m.group(5).rjust(24, "0"))
         keys = sum(1 << k for k, v in enumerate(raw) if (v & 0xf) >> 1)
         if seed is None:
-            if title:
+            if demos:
+                if event != 0x09:
+                    continue
+                seed = m.group(4)
+            elif title:
                 if event != 0x0e:
                     continue
                 seed = "title"
@@ -98,7 +106,7 @@ def main():
             seed = f"{undo(int(m.group(4), 16), 60):08x}"
         events.append([f"{event:x} {a:x} {b:x} {keys:x}", None, None])
     if seed is None:
-        sys.exit(f"{sys.argv[1]}: no New game in the log")
+        sys.exit(f"{args[0]}: no {'demo' if demos else 'title' if title else 'New game'} in the log")
     out.mkdir(parents=True, exist_ok=True)
     (out / "events.txt").write_text("".join(e[0] + "\n" for e in events))
     (out / "sounds.txt").write_text("".join(f"{n} {asked}\n" for n, e in enumerate(events)

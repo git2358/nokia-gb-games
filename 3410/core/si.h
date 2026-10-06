@@ -22,10 +22,20 @@ enum {
     SI_EVENT_KEY_DOWN = 0x01, /* a: the key's code */
     SI_EVENT_KEY_UP = 0x02,
     SI_EVENT_PAUSE = 0x03,
+    SI_EVENT_DEMO = 0x09,     /* a: SI_DEMO_ */
     SI_EVENT_NEW_GAME = 0x0a,
     SI_EVENT_HIGH_SCORES = 0x0b, /* the High scores page */
     SI_EVENT_CONTINUE = 0x0d,
     SI_EVENT_TITLE = 0x0e        /* chosen in Select game: the title */
+};
+
+/* The Instructions' demos (0x259a90): firing, the keys shown on a keypad,
+   and picking up a bonus. Each closes the game when it is over
+   (SI_DONE_CLOSE); a pause (SI_EVENT_PAUSE) ends one early. */
+enum {
+    SI_DEMO_FIRE = 1,
+    SI_DEMO_KEYS = 2,
+    SI_DEMO_BONUS = 3
 };
 
 /* Key codes: the digits, and these. */

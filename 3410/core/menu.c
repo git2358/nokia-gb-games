@@ -65,6 +65,7 @@ enum {
     SCREEN_SI_SCORES,
     SCREEN_SI_CHAPTERS,
     SCREEN_SI_HELP,
+    SCREEN_SI_DEMO,
     SCREEN_SI_DONE
 };
 
@@ -76,7 +77,8 @@ enum {
     SI_ITEM_CHAPTERS,
     SI_ITEM_INSTRUCTIONS
 };
-#define SI_HELP_TEXTS 3
+#define SI_HELP_TEXTS 4
+#define SI_HELP_PAGES 8
 #define SI_HELP_LINES 4
 
 /* The games' settings, in the phone's order. The last is the phone's Club
@@ -169,6 +171,9 @@ static uint16_t last_score;
 /* Space Impact's menu and game. */
 static uint8_t si_item, si_item_top, si_paused, si_help, si_last_played;
 static const char *si_help_page; /* the first character of the page shown */
+static const char *si_help_pages[SI_HELP_PAGES]; /* where the text's pages start, for Up */
+static uint8_t si_help_pageno;
+static uint8_t si_demo_waiting; /* a demo started, its first tick not yet come: the page stays up */
 static uint8_t si_play_held(uint8_t keys);
 static uint16_t si_top, si_last;
 /* The "Done" note after a set of chapters is chosen: the phone's shows for
@@ -836,7 +841,18 @@ static const char *si_chapter_name(uint8_t index)
 
 static const char *si_help_text(uint8_t which)
 {
-    return which == 0 ? text_help_si_1 : which == 1 ? text_help_si_2 : text_help_si_3;
+    return which == 0 ? text_help_si_1 : which == 1 ? text_help_si_2 : which == 2 ? text_help_si_3 : text_help_si_4;
+}
+
+/* The Instructions: four texts, a page at a time, the first three each
+   followed by its demo, which leads on to the next text (measured in
+   MAME: the framework around the game is not traced). */
+static void si_help_open(uint8_t which)
+{
+    screen = SCREEN_SI_HELP;
+    si_help = which;
+    si_help_pageno = 0;
+    si_help_page = si_help_pages[0] = si_help_text(which);
 }
 
 static void si_menu_open(void)
@@ -851,6 +867,10 @@ static void si_closed(void)
 {
     si_units = 0;
     board_drawn = 0;
+    if (screen == SCREEN_SI_DEMO) {
+        si_help_open((uint8_t)(si_help + 1));
+        return;
+    }
     if (screen == SCREEN_SI_PLAY) {
         struct game_settings record = { 0, 0, 0 };
 
@@ -904,11 +924,11 @@ static uint8_t si_send(uint8_t event, uint8_t a)
 }
 
 /* Starts something the game draws, with its timer. */
-static void si_open(uint8_t which, uint8_t event)
+static void si_open(uint8_t which, uint8_t event, uint8_t a)
 {
     screen = which;
     board_drawn = 0;
-    si_call(event, 0);
+    si_call(event, a);
     si_units = si_period_units();
 }
 
@@ -920,6 +940,7 @@ static uint8_t si_elapse(void)
         if (!si_units || --si_units)
             continue;
         done = si_call(SI_EVENT_TICK, 0);
+        si_demo_waiting = 0;
         si_units = si_period_units();
         if (done & SI_DONE_CLOSE) {
             si_closed();
@@ -997,39 +1018,51 @@ static void si_menu_select(void)
         /* As the phone does: a new game, then the state it saved. */
         si_paused = 0;
         si_call(SI_EVENT_NEW_GAME, 0);
-        si_open(SCREEN_SI_PLAY, SI_EVENT_CONTINUE);
+        si_open(SCREEN_SI_PLAY, SI_EVENT_CONTINUE, 0);
         break;
     case SI_ITEM_NEW_GAME:
         si_paused = 0;
-        si_open(SCREEN_SI_PLAY, SI_EVENT_NEW_GAME);
+        si_open(SCREEN_SI_PLAY, SI_EVENT_NEW_GAME, 0);
         break;
     case SI_ITEM_HIGH_SCORES:
         si_last_score = si_last;
         si_show_last = si_last_played;
-        si_open(SCREEN_SI_SCORES, SI_EVENT_HIGH_SCORES);
+        si_open(SCREEN_SI_SCORES, SI_EVENT_HIGH_SCORES, 0);
         break;
     case SI_ITEM_CHAPTERS:
         screen = SCREEN_SI_CHAPTERS;
         break;
     default:
-        screen = SCREEN_SI_HELP;
-        si_help = 0;
-        si_help_page = si_help_text(0);
+        si_help_open(0);
         break;
     }
 }
 
-/* The page after the one shown: the rest of its text, or the next. */
+/* The page after the one shown: the rest of its text, or "". */
 static const char *si_help_next;
 
-static void si_help_more(void)
+/* Up: the page before, within the text. */
+static void si_help_back(void)
+{
+    if (si_help_pageno)
+        si_help_page = si_help_pages[--si_help_pageno];
+}
+
+/* More or Down: the next page, or after the last one the text's demo
+   (event 9 with its number); the last text has none. */
+static void si_help_forward(void)
 {
     if (*si_help_next) {
+        if (si_help_pageno < SI_HELP_PAGES - 1)
+            si_help_pages[++si_help_pageno] = si_help_next;
         si_help_page = si_help_next;
         return;
     }
-    si_help = (uint8_t)((si_help + 1) % SI_HELP_TEXTS);
-    si_help_page = si_help_text(si_help);
+    if (si_help < SI_HELP_TEXTS - 1) {
+        si_keys_held = 0;
+        si_demo_waiting = 1;
+        si_open(SCREEN_SI_DEMO, SI_EVENT_DEMO, (uint8_t)(si_help + 1));
+    }
 }
 
 /* Moves a selection through a list of `count` that shows three rows; the
@@ -1071,6 +1104,17 @@ static uint8_t handle_key(uint8_t key)
         return play_key(key);
     if (screen == SCREEN_SI_PLAY)
         return si_play_key(key);
+    if (screen == SCREEN_SI_DEMO) {
+        /* Any key ends a demo, as a pause; C goes back to the game's menu,
+           the others on to the next text. */
+        si_call(SI_EVENT_PAUSE, 0);
+        si_units = 0;
+        if (key == MENU_KEY_BACK)
+            screen = SCREEN_SI_MENU;
+        else
+            si_help_open((uint8_t)(si_help + 1));
+        return 1;
+    }
     if (start || key == MENU_KEY_ALT)
         key = MENU_KEY_SELECT;
     switch (screen) {
@@ -1106,8 +1150,10 @@ static uint8_t handle_key(uint8_t key)
         screen = SCREEN_SI_MENU;
         break;
     case SCREEN_SI_HELP:
-        if (key == MENU_KEY_SELECT)
-            si_help_more();
+        if ((key == MENU_KEY_SELECT && si_help < SI_HELP_TEXTS - 1) || key == MENU_KEY_DOWN)
+            si_help_forward();
+        else if (key == MENU_KEY_UP)
+            si_help_back();
         else if (key == MENU_KEY_BACK)
             screen = SCREEN_SI_MENU;
         return 1;
@@ -1147,7 +1193,7 @@ static uint8_t handle_key(uint8_t key)
                     record.top_score = 0;
                 si_top = record.top_score;
                 si_paused = 0;
-                si_open(SCREEN_SI_TITLE, SI_EVENT_TITLE);
+                si_open(SCREEN_SI_TITLE, SI_EVENT_TITLE, 0);
             } else if (game == GAME_SNAKE) {
                 paused = 0;
                 screen = SCREEN_TITLE;
@@ -1300,6 +1346,7 @@ uint8_t menu_tick(void)
     switch (screen) {
     case SCREEN_SI_TITLE:
     case SCREEN_SI_PLAY:
+    case SCREEN_SI_DEMO:
     case SCREEN_SI_SCORES:
         changed = si_elapse();
         break;
@@ -1360,7 +1407,10 @@ static void draw_phone(void)
         break;
     case SCREEN_SI_HELP:
         si_help_next = draw_wrapped(&font_small_bold, 0, LIST_Y, HELP_LINE_HEIGHT, SI_HELP_LINES, LCD_WIDTH, si_help_page);
-        draw_softkeys(text_more, text_back);
+        if (si_help < SI_HELP_TEXTS - 1)
+            draw_softkeys(text_more, text_back);
+        else
+            draw_softkeys("", text_exit);
         break;
     case SCREEN_MAIN:
         draw_main();
@@ -1559,7 +1609,7 @@ static void draw_native(void)
         si_help_next = draw_wrapped(&NATIVE_BODY_FONT, NATIVE_MARGIN, NATIVE_LIST_Y, NATIVE_ROW_HEIGHT,
                                     (uint8_t)((NATIVE_HINT_Y - 3 - NATIVE_LIST_Y) / NATIVE_ROW_HEIGHT),
                                     LCD_FB_WIDTH - 2 * NATIVE_MARGIN, si_help_page);
-        native_hint(text_hint_more);
+        native_hint(si_help < SI_HELP_TEXTS - 1 ? text_hint_more : text_hint_back);
         break;
     case SCREEN_GAMES:
         native_list(text_games, GAMES_COUNT, games_item, games_name);
@@ -1608,11 +1658,15 @@ void menu_draw(void)
        leaving a screen that drew around the LCD, clears everything. */
     uint8_t picture = screen == SCREEN_PLAY || screen == SCREEN_TITLE || screen == SCREEN_GAME_OVER
                       || screen == SCREEN_HIGH_SCORES || screen == SCREEN_SI_TITLE || screen == SCREEN_SI_PLAY
-                      || screen == SCREEN_SI_SCORES;
+                      || screen == SCREEN_SI_SCORES || screen == SCREEN_SI_DEMO;
     uint8_t mode = full_screen && screen != SCREEN_MAIN && !picture ? VIEW_NATIVE : VIEW_PHONE;
 #ifdef NATIVE_PLATFORM_TILES
     uint16_t was_tiled = tiled_id;
+#endif
 
+    if (screen == SCREEN_SI_DEMO && si_demo_waiting)
+        return;
+#ifdef NATIVE_PLATFORM_TILES
     tiled_id = NATIVE_NONE;
 #endif
 
@@ -1657,14 +1711,15 @@ void menu_draw(void)
     }
 #ifdef SI_PLATFORM_ROWS
     /* A platform that shows the game from si_rows' tiles. */
-    if (screen == SCREEN_SI_PLAY) {
+    if (screen == SCREEN_SI_PLAY || screen == SCREEN_SI_DEMO) {
         si_render_rows();
         si_rows_present(!board_drawn);
         board_drawn = 1;
         return;
     }
 #endif
-    if (screen == SCREEN_SI_TITLE || screen == SCREEN_SI_PLAY || screen == SCREEN_SI_SCORES) {
+    if (screen == SCREEN_SI_TITLE || screen == SCREEN_SI_PLAY || screen == SCREEN_SI_DEMO
+        || screen == SCREEN_SI_SCORES) {
         si_render();
         if (si_scores_shown()) {
             draw_score_box(si_top_score, 1, 1);

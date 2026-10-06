@@ -114,6 +114,10 @@ struct si_state {
     uint8_t bounce_age, bounce_last, flashed;
     const uint8_t *path;
     uint8_t logo_top, logo_bottom;
+    /* The demo running (SI_DEMO_, or 0), its steps, the keys demo's pointer. */
+    uint8_t demo;
+    int16_t demo_count;
+    uint8_t demo_pointer;
     uint8_t box[BOX_W * 2];
     struct sprite_image box_image;
 };
@@ -161,6 +165,9 @@ void si_boss_destroyed(uint8_t k) SI_FAR;
 void si_objects_step(void) SI_FAR;
 void si_ship_collisions(void) SI_FAR;
 void si_shot_collisions(void) SI_FAR;
+uint8_t si_play_event(uint8_t event, uint8_t a) SI_FAR;
+uint8_t si_demo_step(uint8_t event) SI_FAR;
+void si_demo_key(uint8_t key) SI_FAR;
 void si_title_start(void) SI_FAR;
 uint8_t si_title_event(uint8_t event) SI_FAR;
 /* si_screens.c's: what neither the title nor the High scores page is up

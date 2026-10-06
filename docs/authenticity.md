@@ -229,6 +229,8 @@ are listed here.
 | Eat and death sounds | traced + data | `0xfa0`/`0xfa1` are `0x1f`/`0x20`: `0x3f7d0e` maps an id through the halfwords at `0x4c3538`, and the tone task indexes the table from `0x4a9060`, 3 records early | no |
 | Space Impact's sounds: shot, wall or missile, beam, bonus, ship lost, game over or new top score | traced + data | `0x3b2510` calls, ids `0xfa5`, `0xfa6`, `0xfa8`, `0xfa0`, `0xfa7`, `0xfa2`/`0xfa4` mapped as above | sounds |
 | Space Impact's vibrator, three ticks | traced | `0x3b25d4`; on and off at the phone's ticks, the motor's pulses as in `rumble.h` | sounds |
+| Space Impact's Instructions demos: firing, the keys on a keypad, a bonus | traced + data | `0x259a90`, `0x25c6d4`, `0x259d30`; the bonus chapter `0x4ad390`, the keypad `0x4b4a80` and pointer `0x4b4a98` | frames, sounds (`golden/si-i`) |
+| Instructions pages around the demos: More or Down past a text's last page starts its demo, a demo's end or any key leads to the next text, C back to the menu, a fourth text with Exit only, Up and Down page | measured | the games framework that sends event 9 and turns keys into event 3 is not traced; Up during a demo was once seen to be ignored | no |
 | Full-screen mode, cart-RAM saves, Lights | port | | no |
 
 ## Mismatches found

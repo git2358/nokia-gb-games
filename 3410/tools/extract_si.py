@@ -38,7 +38,13 @@ NAMED = {
     "TITLE_SHIP": 0x4ABD70,
     "TITLE_ENEMY": 0x4ABD58,
     "SCORES_ENEMY": 0x490E74,
+    "KEYPAD": 0x4B4A80,       # the keys demo's (0x25c6d4)
+    "POINTER": 0x4B4A98,
 }
+# The bonus demo's chapter (0x259a90): a record as the game holds one in its
+# state, {u8 entries, 3 bytes, u32 script, u8 checkpoints[4], 3 bytes, u8
+# mode, ...}, with its script of 9-byte entries.
+DEMO_CHAPTER = 0x4AD390
 
 
 def parse_chapter_file(f):
@@ -200,6 +206,10 @@ def extract_si(at, c_bytes):
 
     cf = parse_chapter_file(at(*CHAPTER_FILE))
     count = len(cf["chapter_entries"])
+    demo = at(DEMO_CHAPTER, 16)
+    # In the chapter file's form: entries, the four checkpoints, the mode.
+    demo_record = bytes([demo[0]]) + demo[8:12] + bytes([demo[15]])
+    demo_script = at(struct.unpack_from(">I", demo, 4)[0], 9 * demo[0])
     script_first, tile_first, map_first, total = [], [], [], 0
     for n in cf["chapter_entries"]:
         script_first.append(total)
@@ -239,6 +249,8 @@ def extract_si(at, c_bytes):
         f"extern const uint8_t si_maps[{len(cf['map_data'])}];",
         f"extern const uint16_t si_map_first[{count}];",
         f"extern const uint8_t si_map_size[{2 * count}];",
+        "extern const uint8_t si_demo_record[6];",
+        f"extern const uint8_t si_demo_script[{len(demo_script)}];",
     ]
 
     def words(name, values, ctype="uint16_t"):
@@ -267,4 +279,6 @@ def extract_si(at, c_bytes):
     source.append(c_bytes("si_maps", cf["map_data"]))
     source.append(words("si_map_first", map_first[:count]))
     source.append(c_bytes("si_map_size", bytes(v for wh in cf["maps"][:count] for v in wh)))
+    source.append(c_bytes("si_demo_record", demo_record))
+    source.append(c_bytes("si_demo_script", demo_script))
     return header, "\n\n".join(source), extract_si_rows(at, c_bytes, pictures)

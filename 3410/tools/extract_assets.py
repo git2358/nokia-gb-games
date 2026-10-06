@@ -116,6 +116,7 @@ STRINGS = [
     ("text_help_si_1", 1962),
     ("text_help_si_2", 1963),
     ("text_help_si_3", 1964),
+    ("text_help_si_4", 1965),
 ]
 
 

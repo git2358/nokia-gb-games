@@ -28,8 +28,9 @@ What is there so far:
   the phone plays it through every chapter, its bosses and game over; its
   title, its menu (Continue after a pause, New game, High scores,
   Chapters, Instructions) and its High scores page, all to the pixel. The
-  Instructions are the phone's text without its demos, and the Chapters
-  note "Done" is there without its tick. On the Game Boy the game is
+  Instructions are the phone's four texts with the three demos between
+  them, frame for frame as the phone plays them, and the Chapters note
+  "Done" is there without its tick. On the Game Boy the game is
   drawn straight into the tiles' rows from pictures the build makes
   ready, the same to the pixel, and keeps the phone's pace with a picture
   nearly every tick, about nine a second where the phone shows ten;
@@ -42,8 +43,8 @@ What is there so far:
 - the top score and the chosen level and maze, kept in battery-backed
   cartridge RAM.
 
-Not yet: Bumper, Bantumi and Link5, Space Impact's Instructions demos,
-the main menu's Games icon and the lists' sliding highlight.
+Not yet: Bumper, Bantumi and Link5, the Chapters note's tick, the main
+menu's Games icon and the lists' sliding highlight.
 
 The game is shown at the phone's size, in the middle of the Game Boy's
 screen. Start on the first screen picks the full-screen variant, whose
@@ -71,8 +72,9 @@ the RE fork, in whose `ports/` directory this repository is kept, or
 `DCT3_RE=` pointing at it; from here it is `../../..`), `make gb` the ROM, `make run-gb` opens it in SameBoy. `make test` runs the host
 checks; `make check-gb` runs the ROM headlessly against the host's frames.
 `make golden-snake` and `make golden-si` record Snake II and Space Impact
-games in the fork's MAME and `make check-golden` replays them through the
-core; `make check-menus` compares
+games in the fork's MAME (`golden-si-menus` the title and High scores,
+`golden-si-demos` the Instructions' demos) and `make check-golden` replays
+them through the core; `make check-menus` compares
 the menu pages with the phone's in `golden/menus/`.
 
 ## Firmware policy

@@ -396,13 +396,13 @@ $(ASSETS)/native_data.c: $(BUILD)/frame_gb
 # MBC5 with its rumble pin and battery-backed RAM, sixteen ROM banks (nine
 # used) and 8 KiB of RAM. The linker does not mind the first bank running over into the
 # second, so its end is checked here.
-$(BUILD)/nokia3310%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/draw.rel $(BUILD)/gb/search.rel $(BUILD)/gb/native_put.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
+$(BUILD)/nokia3310%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/draw.rel $(BUILD)/gb/band.rel $(BUILD)/gb/search.rel $(BUILD)/gb/native_put.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
 	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 -Wl-b_CODE_3=0x34000 -Wl-b_CODE_4=0x44000 -Wl-b_CODE_5=0x54000 -Wl-b_CODE_6=0x64000 -Wl-b_CODE_7=0x74000 -Wl-b_CODE_8=0x84000 \
 		-o $(BUILD)/gb/$(basename $(notdir $@)).ihx $^
 	@$(PYTHON) $(COMMON)/tools/gb_bank_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
 	$(MAKEBIN) -Z -yn NOKIA3310 -yt 0x1e -yo 16 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
 
-.SECONDARY: $(GB_RELS) $(BUILD)/gb/crt0.rel $(BUILD)/gb/draw.rel $(BUILD)/gb/search.rel $(BUILD)/gb/native_put.rel
+.SECONDARY: $(GB_RELS) $(BUILD)/gb/crt0.rel $(BUILD)/gb/draw.rel $(BUILD)/gb/band.rel $(BUILD)/gb/search.rel $(BUILD)/gb/native_put.rel
 
 gb: $(GB_ROM)
 

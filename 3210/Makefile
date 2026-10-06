@@ -39,11 +39,13 @@ MGBA_APP ?= /Applications/mGBA.app
 GBA_LOGO_FROM ?=
 
 BUILD := build
+# The code the three ports share.
+COMMON := ../common
 ASSETS := $(BUILD)/assets
 ASSET_SRC := $(ASSETS)/game_assets.c
-CORE_SRC := $(wildcard core/*.c)
-CORE_HDR := $(wildcard core/*.h)
-INCLUDES := -Icore -Iplatform/host -I$(ASSETS)
+CORE_SRC := $(wildcard core/*.c) $(wildcard $(COMMON)/core/*.c)
+CORE_HDR := $(wildcard core/*.h) $(wildcard $(COMMON)/core/*.h)
+INCLUDES := -Icore -I$(COMMON)/core -Iplatform/host -I$(COMMON)/platform/host -I$(ASSETS)
 
 GB_ROM := $(BUILD)/nokia3210.gb
 GBA_ROM := $(BUILD)/nokia3210.gba
@@ -55,9 +57,9 @@ GBA_TEST_ROM := $(BUILD)/nokia3210-keys.gba
 KEYS ?=
 GB_FRAME := menu-$(KEYS)
 GB_REL := $(patsubst %.c,$(BUILD)/gb/%.rel,$(notdir $(CORE_SRC))) $(BUILD)/gb/game_assets.rel
-GBA_SRC := platform/gba/crt0.s platform/gba/main.c platform/gba/libc.c $(CORE_SRC) $(ASSET_SRC)
+GBA_SRC := platform/gba/crt0.s platform/gba/main.c $(COMMON)/platform/gba/libc.c $(CORE_SRC) $(ASSET_SRC)
 
-vpath %.c core platform/gb
+vpath %.c core $(COMMON)/core platform/gb
 
 .PHONY: help assets fonts test test-snake test-boards sheet frames check-golden gb gba check-gb shot-gb check-gba shot-gba run-gb run-gba cards clean
 
@@ -91,29 +93,29 @@ $(ASSET_SRC): tools/extract_assets.py
 fonts:
 	$(PYTHON) tools/export_fonts.py "$(DUMP)" $(BUILD)/fonts
 
-$(BUILD)/test_core: tests/test_core.c core/lcd.c core/rand.c $(CORE_HDR)
+$(BUILD)/test_core: tests/test_core.c $(COMMON)/core/lcd.c core/rand.c $(CORE_HDR)
 	@mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ tests/test_core.c core/lcd.c core/rand.c
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ tests/test_core.c $(COMMON)/core/lcd.c core/rand.c
 
 test: $(BUILD)/test_core
 	$(BUILD)/test_core
 
 # Needs the extracted assets, unlike `test`.
-$(BUILD)/test_snake: tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(ASSET_SRC)
+$(BUILD)/test_snake: tests/test_snake.c $(COMMON)/core/lcd.c core/rand.c core/snake.c core/sound.c $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ tests/test_snake.c $(COMMON)/core/lcd.c core/rand.c core/snake.c core/sound.c $(ASSET_SRC)
 
-$(BUILD)/test_snake_gb: tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(ASSET_SRC)
+$(BUILD)/test_snake_gb: tests/test_snake.c $(COMMON)/core/lcd.c core/rand.c core/snake.c core/sound.c $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ tests/test_snake.c $(COMMON)/core/lcd.c core/rand.c core/snake.c core/sound.c $(ASSET_SRC)
 
-$(BUILD)/test_snake_gba: tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(GBA_FB) $(INCLUDES) -o $@ tests/test_snake.c core/lcd.c core/rand.c core/snake.c core/sound.c $(ASSET_SRC)
+$(BUILD)/test_snake_gba: tests/test_snake.c $(COMMON)/core/lcd.c core/rand.c core/snake.c core/sound.c $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(GBA_FB) $(INCLUDES) -o $@ tests/test_snake.c $(COMMON)/core/lcd.c core/rand.c core/snake.c core/sound.c $(ASSET_SRC)
 
 test-snake: $(BUILD)/test_snake $(BUILD)/test_snake_gb $(BUILD)/test_snake_gba
 	$(BUILD)/test_snake
 	$(BUILD)/test_snake_gb
 	$(BUILD)/test_snake_gba
 
-BOARDS_SRC := tests/test_boards.c core/lcd.c core/rand.c core/memory.c core/rotation.c core/sound.c
+BOARDS_SRC := tests/test_boards.c $(COMMON)/core/lcd.c core/rand.c core/memory.c core/rotation.c core/sound.c
 
 $(BUILD)/test_boards: $(BOARDS_SRC) $(CORE_HDR) $(ASSET_SRC)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $(BOARDS_SRC) $(ASSET_SRC)
@@ -121,28 +123,28 @@ $(BUILD)/test_boards: $(BOARDS_SRC) $(CORE_HDR) $(ASSET_SRC)
 test-boards: $(BUILD)/test_boards
 	$(BUILD)/test_boards
 
-$(BUILD)/asset_sheet: platform/host/asset_sheet.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/asset_sheet.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/asset_sheet: platform/host/asset_sheet.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/asset_sheet.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
 
 sheet: $(BUILD)/asset_sheet
 	$(BUILD)/asset_sheet $(BUILD)
 
-$(BUILD)/frame: platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/frame: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
 
 $(BUILD)/frame_%.pgm: $(BUILD)/frame
 	$(BUILD)/frame $* $@
 
 # The same tool with the Game Boy's framebuffer, for comparing its screen.
-$(BUILD)/frame_gb: platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/frame_gb: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
 
 $(BUILD)/gbframe_%.pgm: $(BUILD)/frame_gb
 	$(BUILD)/frame_gb $* $@
 
 # And with the GBA's.
-$(BUILD)/frame_gba: platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(GBA_FB) $(INCLUDES) -o $@ platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/frame_gba: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(GBA_FB) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
 
 $(BUILD)/gbaframe_%.pgm: $(BUILD)/frame_gba
 	$(BUILD)/frame_gba $* $@
@@ -160,19 +162,19 @@ frames: $(BUILD)/frame_testcard.pgm $(BUILD)/frame_outline.pgm $(BUILD)/frame_sn
 
 $(BUILD)/gb/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
 	@mkdir -p $(BUILD)/gb
-	$(SDCC) -msm83 --opt-code-speed $(GB_FB) -DLCD_PLATFORM_COLUMNS -Icore -I$(ASSETS) -c $< -o $@
+	$(SDCC) -msm83 --opt-code-speed $(GB_FB) -DLCD_PLATFORM_COLUMNS -Icore -I$(COMMON)/core -I$(ASSETS) -c $< -o $@
 
 # The layer itself twice: once pressing no keys, once pressing KEYS. Always
 # rebuilt, so a change of KEYS takes effect.
 $(BUILD)/gb/main.rel $(BUILD)/gb/main-keys.rel: platform/gb/main.c $(CORE_HDR) $(ASSET_SRC) FORCE
 	@mkdir -p $(BUILD)/gb
-	$(SDCC) -msm83 --opt-code-speed $(GB_FB) -DLCD_PLATFORM_COLUMNS -Icore -I$(ASSETS) '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -c $< -o $@
+	$(SDCC) -msm83 --opt-code-speed $(GB_FB) -DLCD_PLATFORM_COLUMNS -Icore -I$(COMMON)/core -I$(ASSETS) '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -c $< -o $@
 
 FORCE:
 
 $(BUILD)/gb/game_assets.rel: $(ASSETS)/game_assets.c
 	@mkdir -p $(BUILD)/gb
-	$(SDCC) -msm83 -Icore -I$(ASSETS) -c $< -o $@
+	$(SDCC) -msm83 -Icore -I$(COMMON)/core -I$(ASSETS) -c $< -o $@
 
 $(BUILD)/gb/crt0.rel: platform/gb/crt0.s
 	@mkdir -p $(BUILD)/gb
@@ -189,16 +191,16 @@ gb: $(GB_ROM)
 check-gb: $(GB_TEST_ROM) $(BUILD)/gbframe_$(GB_FRAME).pgm
 	@test -x "$(SAMEBOY_TESTER)" || { echo "Missing $(SAMEBOY_TESTER): run scripts/setup-sameboy.sh"; exit 1; }
 	$(SAMEBOY_TESTER) --dmg --length $(SHOT_SECONDS) $(GB_TEST_ROM)
-	$(PYTHON) tools/check_gb_frame.py $(BUILD)/nokia3210-keys.bmp $(BUILD)/gbframe_$(GB_FRAME).pgm
+	$(PYTHON) $(COMMON)/tools/check_gb_frame.py $(BUILD)/nokia3210-keys.bmp $(BUILD)/gbframe_$(GB_FRAME).pgm
 
 # Headless screenshot of the Game Boy ROM as a PNG.
 shot-gb: $(GB_TEST_ROM)
 	@test -x "$(SAMEBOY_TESTER)" || { echo "Missing $(SAMEBOY_TESTER): run scripts/setup-sameboy.sh"; exit 1; }
 	$(SAMEBOY_TESTER) --dmg --length $(SHOT_SECONDS) $(GB_TEST_ROM)
-	$(PYTHON) tools/bmp_to_png.py $(BUILD)/nokia3210-keys.bmp $(BUILD)/nokia3210-gb.png $(SHOT_SCALE)
+	$(PYTHON) $(COMMON)/tools/bmp_to_png.py $(BUILD)/nokia3210-keys.bmp $(BUILD)/nokia3210-gb.png $(SHOT_SCALE)
 
 # Headless Game Boy sound capture; needs `make -C $(SAMEBOY) lib`.
-$(BUILD)/gb_audio: tools/gb_audio.c
+$(BUILD)/gb_audio: $(COMMON)/tools/gb_audio.c
 	@test -f $(SAMEBOY)/build/lib/libsameboy.a || { echo "Missing SameBoy's library: run make -C $(SAMEBOY) lib"; exit 1; }
 	@mkdir -p $(BUILD)
 	$(CC) -O2 -I$(SAMEBOY) -DGB_VERSION='"x"' -o $@ $< $(SAMEBOY)/build/lib/libsameboy.a -lm
@@ -208,36 +210,36 @@ run-gb: $(GB_ROM)
 
 # GBA
 
-$(BUILD)/gba/nokia3210.elf $(BUILD)/gba/nokia3210-keys.elf: $(GBA_SRC) $(CORE_HDR) platform/gba/gba.ld FORCE
+$(BUILD)/gba/nokia3210.elf $(BUILD)/gba/nokia3210-keys.elf: $(GBA_SRC) $(CORE_HDR) $(COMMON)/platform/gba/gba.ld FORCE
 	@mkdir -p $(BUILD)/gba
-	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(ASSETS) '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -nostdlib -T platform/gba/gba.ld -Wl,-Map,$(basename $@).map -o $@ $(GBA_SRC) -lgcc
+	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(COMMON)/core -I$(ASSETS) '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -nostdlib -T $(COMMON)/platform/gba/gba.ld -Wl,-Map,$(basename $@).map -o $@ $(GBA_SRC) -lgcc
 
-$(GBA_ROM): $(BUILD)/gba/nokia3210.elf tools/gbafix.py FORCE
+$(GBA_ROM): $(BUILD)/gba/nokia3210.elf $(COMMON)/tools/gbafix.py FORCE
 	$(ARM_OBJCOPY) -O binary $< $@
-	$(PYTHON) tools/gbafix.py $@ $(if $(GBA_LOGO_FROM),--logo-from "$(GBA_LOGO_FROM)")
+	$(PYTHON) $(COMMON)/tools/gbafix.py $@ $(if $(GBA_LOGO_FROM),--logo-from "$(GBA_LOGO_FROM)")
 
-$(GBA_TEST_ROM): $(BUILD)/gba/nokia3210-keys.elf tools/gbafix.py FORCE
+$(GBA_TEST_ROM): $(BUILD)/gba/nokia3210-keys.elf $(COMMON)/tools/gbafix.py FORCE
 	$(ARM_OBJCOPY) -O binary $< $@
-	$(PYTHON) tools/gbafix.py $@
+	$(PYTHON) $(COMMON)/tools/gbafix.py $@
 
 gba: $(GBA_ROM)
 
-# Headless GBA runs use mGBA's core library; scripts/setup-mgba.sh builds it.
+# Headless GBA runs use mGBA's core library; ../common/scripts/setup-mgba.sh builds it.
 MGBA ?= ../tools/mgba
 SHOT_FRAMES ?= 60
 
 $(BUILD)/gba_shot: tools/gba_shot.c
-	@test -f "$(MGBA)/build/libmgba.a" || { echo "Missing $(MGBA)/build/libmgba.a: run scripts/setup-mgba.sh"; exit 1; }
+	@test -f "$(MGBA)/build/libmgba.a" || { echo "Missing $(MGBA)/build/libmgba.a: run ../common/scripts/setup-mgba.sh"; exit 1; }
 	@mkdir -p $(BUILD)
 	$(CC) -O2 -I$(MGBA)/include -I$(MGBA)/build/include -o $@ $< $(MGBA)/build/libmgba.a -lm -framework CoreFoundation
 
 check-gba: $(GBA_TEST_ROM) $(BUILD)/gba_shot $(BUILD)/gbaframe_$(GB_FRAME).pgm
 	$(BUILD)/gba_shot $(GBA_TEST_ROM) $(BUILD)/nokia3210-gba.bmp $(SHOT_FRAMES)
-	$(PYTHON) tools/check_gb_frame.py $(BUILD)/nokia3210-gba.bmp $(BUILD)/gbaframe_$(GB_FRAME).pgm
+	$(PYTHON) $(COMMON)/tools/check_gb_frame.py $(BUILD)/nokia3210-gba.bmp $(BUILD)/gbaframe_$(GB_FRAME).pgm
 
 shot-gba: $(GBA_TEST_ROM) $(BUILD)/gba_shot
 	$(BUILD)/gba_shot $(GBA_TEST_ROM) $(BUILD)/nokia3210-gba.bmp $(SHOT_FRAMES)
-	$(PYTHON) tools/bmp_to_png.py $(BUILD)/nokia3210-gba.bmp $(BUILD)/nokia3210-gba.png 2
+	$(PYTHON) $(COMMON)/tools/bmp_to_png.py $(BUILD)/nokia3210-gba.bmp $(BUILD)/nokia3210-gba.png 2
 
 run-gba: $(GBA_ROM)
 	open -a "$(MGBA_APP)" $(GBA_ROM)

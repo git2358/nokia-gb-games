@@ -76,7 +76,7 @@ scripts/setup-sameboy.sh
 - GBA: bare `arm-none-eabi-gcc` with no C library; `platform/gba/` supplies
   the startup code, the linker script and `memset`/`memcpy`.
 - Emulators: SameBoy's tester for headless Game Boy frames and mGBA's core
-  library for headless GBA frames (`scripts/setup-mgba.sh`, needs cmake);
+  library for headless GBA frames (`../common/scripts/setup-mgba.sh`, needs cmake);
   `make run-gb` and `make run-gba` open the ROMs in SameBoy.app and
   mGBA.app.
 

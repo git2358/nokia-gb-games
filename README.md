@@ -32,6 +32,10 @@ of the Nokia DCT3 MAME project, <https://github.com/lukesau/nokia-dct3-re>
 
 - `3210/`, `3310/`, `3410/`: one port per phone, each a project of its own
   with its Makefile, core, platform layers, tools and README.
+- `common/`: the code the ports share: the LCD buffer and its blits, the
+  font, the test card, the GBA linker script and libc, the host PGM writer,
+  the frame and ROM tools and the mGBA setup script. Each port compiles it
+  against its own `lcd.h`, so it draws at that phone's screen size.
 - `tools/` (ignored): the SameBoy and mGBA clones the headless checks are
   built on, shared by the three ports (`make setup`).
 - `Makefile`: runs a target in every port: `make gb`, `make gba`, `make

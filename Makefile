@@ -35,4 +35,4 @@ check-menus:
 
 setup:
 	3310/scripts/setup-sameboy.sh
-	3310/scripts/setup-mgba.sh
+	common/scripts/setup-mgba.sh

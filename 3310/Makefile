@@ -35,7 +35,7 @@ SDCC ?= sdcc
 MAKEBIN ?= makebin
 SDAS ?= sdasgb
 GB_FB := -DLCD_FB_WIDTH=160 -DLCD_FB_HEIGHT=144 -DLCD_GAME_ZOOM=2
-GB_CFLAGS = -msm83 --opt-code-speed $(GB_FB) -DSI_DATA_AT=0xa100 '-DPAIRS2_STATE_AT=(SI_DATA_AT + SI_DATA_SIZE)' -DPAIRS2_STATE_END=0xc000 '-DBANTUMI_STATE_AT=(SI_DATA_AT + SI_DATA_SIZE)' -DBANTUMI_STATE_END=0xc000 -DBANTUMI_PLATFORM_SEARCH -DSNAKE2_STATE_AT=SI_DATA_AT '-DSNAKE2_STATE_END=(SI_DATA_AT + SI_DATA_SIZE)' -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_BAND -DSPRITE_PLATFORM_BITMAP -DSPRITE_PLATFORM_PRESENT -DSI_PLATFORM_FIND_HIT -DSI_SETUP_FAR -Icore -Iplatform/gb -I$(ASSETS)
+GB_CFLAGS = -msm83 --opt-code-speed $(GB_FB) -DSI_DATA_AT=0xa100 '-DPAIRS2_STATE_AT=(SI_DATA_AT + SI_DATA_SIZE)' -DPAIRS2_STATE_END=0xc000 '-DBANTUMI_STATE_AT=(SI_DATA_AT + SI_DATA_SIZE)' -DBANTUMI_STATE_END=0xc000 -DBANTUMI_PLATFORM_SEARCH -DSNAKE2_STATE_AT=SI_DATA_AT '-DSNAKE2_STATE_END=(SI_DATA_AT + SI_DATA_SIZE)' -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_BAND -DSPRITE_PLATFORM_BITMAP -DSPRITE_PLATFORM_PRESENT -DSI_PLATFORM_FIND_HIT -DSI_SETUP_FAR -Icore -I$(COMMON)/core -Iplatform/gb -I$(ASSETS)
 # The SameBoy clone scripts/setup-sameboy.sh makes: its boot ROM, and its
 # core as a library (`make -C $(SAMEBOY) lib`) for tools/gb_run.
 SAMEBOY ?= ../tools/SameBoy
@@ -58,16 +58,18 @@ MGBA_APP ?= /Applications/mGBA.app
 GBA_LOGO_FROM ?=
 
 BUILD := build
+# The code the three ports share.
+COMMON := ../common
 ASSETS := $(BUILD)/assets
 ASSET_SRC := $(ASSETS)/game_assets.c $(ASSETS)/si_data.c $(ASSETS)/si_tables.c $(ASSETS)/snake2_data.c $(ASSETS)/title_data.c $(ASSETS)/pairs2_data.c $(ASSETS)/bantumi_data.c
-CORE_SRC := $(wildcard core/*.c)
-CORE_HDR := $(wildcard core/*.h)
-INCLUDES := -Icore -Iplatform/host -I$(ASSETS)
+CORE_SRC := $(wildcard core/*.c) $(wildcard $(COMMON)/core/*.c)
+CORE_HDR := $(wildcard core/*.h) $(wildcard $(COMMON)/core/*.h)
+INCLUDES := -Icore -I$(COMMON)/core -Iplatform/host -I$(COMMON)/platform/host -I$(ASSETS)
 
 GB_ROM := $(BUILD)/nokia3310.gb
 GB_TEST_ROM := $(BUILD)/nokia3310-keys.gb
 # The banks of the Game Boy ROM (see platform/gb/far.h).
-GB_BANK0 := platform/gb/main.c platform/gb/far.c core/font.c core/lcd.c core/sprite.c core/games.c core/rand.c core/si_base.c core/sound.c $(ASSETS)/si_tables.c
+GB_BANK0 := platform/gb/main.c platform/gb/far.c $(COMMON)/core/font.c $(COMMON)/core/lcd.c core/sprite.c core/games.c core/rand.c core/si_base.c core/sound.c $(ASSETS)/si_tables.c
 GB_BANK1 := core/menu.c platform/gb/save.c $(ASSETS)/game_assets.c
 GB_BANK2 := core/si.c
 GB_BANK3 := core/si_setup.c $(ASSETS)/si_data.c core/title.c $(ASSETS)/title_data.c
@@ -86,8 +88,8 @@ GBA_TEST_ROM := $(BUILD)/nokia3310-keys.gba
 # `make gb` build press none.
 KEYS ?= sdsss
 # The game without the menus, for tools that drive it directly.
-GAME_SRC := $(filter-out core/menu.c core/font.c,$(CORE_SRC))
-GBA_SRC := platform/gba/crt0.s platform/gba/main.c platform/gba/libc.c $(CORE_SRC) $(ASSET_SRC)
+GAME_SRC := $(filter-out core/menu.c $(COMMON)/core/font.c,$(CORE_SRC))
+GBA_SRC := platform/gba/crt0.s platform/gba/main.c $(COMMON)/platform/gba/libc.c $(CORE_SRC) $(ASSET_SRC)
 
 # The recorded Space Impact run the core is checked against: the keys, the
 # seed the title animation leaves the games' random generator with, and
@@ -162,28 +164,28 @@ $(ASSETS)/game_assets.c: tools/extract_assets.py
 
 $(ASSETS)/si_data.c $(ASSETS)/si_tables.c $(ASSETS)/snake2_data.c $(ASSETS)/title_data.c $(ASSETS)/pairs2_data.c $(ASSETS)/bantumi_data.c: $(ASSETS)/game_assets.c
 
-$(BUILD)/test_core: tests/test_core.c core/lcd.c core/rand.c core/sprite.c $(CORE_HDR)
+$(BUILD)/test_core: tests/test_core.c $(COMMON)/core/lcd.c core/rand.c core/sprite.c $(CORE_HDR)
 	@mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) -Icore -o $@ tests/test_core.c core/lcd.c core/rand.c core/sprite.c
+	$(CC) $(CFLAGS) -Icore -I$(COMMON)/core -o $@ tests/test_core.c $(COMMON)/core/lcd.c core/rand.c core/sprite.c
 
 test: $(BUILD)/test_core
 	$(BUILD)/test_core
 
-$(BUILD)/asset_sheet: platform/host/asset_sheet.c core/si.c core/si_base.c core/si_setup.c core/sprite.c core/lcd.c core/rand.c $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/asset_sheet.c core/si.c core/si_base.c core/si_setup.c core/sprite.c core/lcd.c core/rand.c $(ASSET_SRC)
+$(BUILD)/asset_sheet: platform/host/asset_sheet.c core/si.c core/si_base.c core/si_setup.c core/sprite.c $(COMMON)/core/lcd.c core/rand.c $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/asset_sheet.c core/si.c core/si_base.c core/si_setup.c core/sprite.c $(COMMON)/core/lcd.c core/rand.c $(ASSET_SRC)
 
 sheet: $(BUILD)/asset_sheet
 	$(BUILD)/asset_sheet $(BUILD)
 
-$(BUILD)/frame: platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/frame: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
 
 $(BUILD)/frame_%.pgm: $(BUILD)/frame
 	$(BUILD)/frame $* $@
 
 # The same tool with the GBA's framebuffer, for comparing its screen.
-$(BUILD)/frame_gba: platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(GBA_FB) $(INCLUDES) -o $@ platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/frame_gba: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(GBA_FB) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
 
 $(BUILD)/gbaframe_%.pgm: $(BUILD)/frame_gba
 	$(BUILD)/frame_gba $* $@
@@ -203,8 +205,8 @@ golden:
 	cp run_golden/nokia_dct3_lcdmirror_*.pgm $(GOLDEN)/
 	awk '/^GEV 1 2b/{on=1} on && /^GEV 1 /{print $$3}' run_golden/error.log | tr '\n' ' ' > $(GOLDEN)/events.txt
 
-$(BUILD)/replay: platform/host/replay_main.c platform/host/pgm.c $(GAME_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/replay_main.c platform/host/pgm.c $(GAME_SRC) $(ASSET_SRC)
+$(BUILD)/replay: platform/host/replay_main.c $(COMMON)/platform/host/pgm.c $(GAME_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/replay_main.c $(COMMON)/platform/host/pgm.c $(GAME_SRC) $(ASSET_SRC)
 
 # Snake II's reference runs: the firmware's own game played by the fork's
 # probe, which steers the snake to the food and the creatures and, after
@@ -316,7 +318,7 @@ FORCE:
 
 # Game Boy
 
-vpath %.c core platform/gb $(ASSETS)
+vpath %.c core $(COMMON)/core platform/gb $(ASSETS)
 
 # main.c reaches the game at 2x in bank 4 through far.c.
 GB_MAIN_FAR := -Dstrip_present=far_strip_present -Dzoom_present=far_zoom_present -Dstrip_leave=far_strip_leave
@@ -387,8 +389,8 @@ $(BUILD)/gb_run: tools/gb_run.c
 	$(CC) -O2 -I$(SAMEBOY) -DGB_VERSION='"x"' -o $@ $< $(SAMEBOY)/build/lib/libsameboy.a -lm
 
 # The host's frame tool with the Game Boy's framebuffer and its 2x game.
-$(BUILD)/frame_gb: platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/frame_gb: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
 
 # The ROM presses KEYS at power-on; its screen at each of GB_FRAMES must be
 # one of the host's frames for those keys, to the pixel. With the default
@@ -409,27 +411,27 @@ run-gb: $(GB_ROM)
 # GBA
 
 
-$(BUILD)/gba/nokia3310.elf $(BUILD)/gba/nokia3310-keys.elf: $(GBA_SRC) $(CORE_HDR) platform/gba/gba.ld FORCE
+$(BUILD)/gba/nokia3310.elf $(BUILD)/gba/nokia3310-keys.elf: $(GBA_SRC) $(CORE_HDR) $(COMMON)/platform/gba/gba.ld FORCE
 	@mkdir -p $(BUILD)/gba
-	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(ASSETS) -Iplatform/gba/include '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -nostdlib -T platform/gba/gba.ld -Wl,-Map,$(basename $@).map -o $@ $(GBA_SRC) -lgcc
+	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(COMMON)/core -I$(ASSETS) -Iplatform/gba/include '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -nostdlib -T $(COMMON)/platform/gba/gba.ld -Wl,-Map,$(basename $@).map -o $@ $(GBA_SRC) -lgcc
 
-$(GBA_ROM): $(BUILD)/gba/nokia3310.elf tools/gbafix.py FORCE
+$(GBA_ROM): $(BUILD)/gba/nokia3310.elf $(COMMON)/tools/gbafix.py FORCE
 	$(ARM_OBJCOPY) -O binary $< $@
-	$(PYTHON) tools/gbafix.py $@ $(if $(GBA_LOGO_FROM),--logo-from "$(GBA_LOGO_FROM)")
+	$(PYTHON) $(COMMON)/tools/gbafix.py $@ $(if $(GBA_LOGO_FROM),--logo-from "$(GBA_LOGO_FROM)")
 
-$(GBA_TEST_ROM): $(BUILD)/gba/nokia3310-keys.elf tools/gbafix.py FORCE
+$(GBA_TEST_ROM): $(BUILD)/gba/nokia3310-keys.elf $(COMMON)/tools/gbafix.py FORCE
 	$(ARM_OBJCOPY) -O binary $< $@
-	$(PYTHON) tools/gbafix.py $@
+	$(PYTHON) $(COMMON)/tools/gbafix.py $@
 
 gba: $(GBA_ROM)
 
-# Headless GBA runs use mGBA's core library; scripts/setup-mgba.sh builds it.
+# Headless GBA runs use mGBA's core library; ../common/scripts/setup-mgba.sh builds it.
 MGBA ?= ../tools/mgba
 # Screen frames to run before the screenshot; the game starts at power-on.
 SHOT_FRAMES ?= 300
 
 $(BUILD)/gba_shot: tools/gba_shot.c
-	@test -f "$(MGBA)/build/libmgba.a" || { echo "Missing $(MGBA)/build/libmgba.a: run scripts/setup-mgba.sh"; exit 1; }
+	@test -f "$(MGBA)/build/libmgba.a" || { echo "Missing $(MGBA)/build/libmgba.a: run ../common/scripts/setup-mgba.sh"; exit 1; }
 	@mkdir -p $(BUILD)
 	$(CC) -O2 -I$(MGBA)/include -I$(MGBA)/build/include -o $@ $< $(MGBA)/build/libmgba.a -lm -framework CoreFoundation
 
@@ -446,14 +448,14 @@ check-gba: $(GBA_TEST_ROM) $(BUILD)/gba_shot $(BUILD)/frame_gba
 		$(BUILD)/gba_shot $(GBA_TEST_ROM) $(BUILD)/nokia3310-gba.bmp $$(($(SHOT_FRAMES) + later)) >/dev/null; \
 		for back in $$(seq 0 48); do \
 			n=$$(($(SHOT_FRAMES) + later - back)); $(BUILD)/frame_gba menu-$(KEYS)+$$n $(BUILD)/gbaframe.pgm >/dev/null; \
-			if $(PYTHON) tools/check_gb_frame.py $(BUILD)/nokia3310-gba.bmp $(BUILD)/gbaframe.pgm >/dev/null 2>&1; then \
+			if $(PYTHON) $(COMMON)/tools/check_gb_frame.py $(BUILD)/nokia3310-gba.bmp $(BUILD)/gbaframe.pgm >/dev/null 2>&1; then \
 				echo "ok: the ROM's screen $$(($(SHOT_FRAMES) + later)) frames after keys '$(KEYS)' is the host's after $$n"; exit 0; fi; \
 		done; \
 	done; echo "FAIL: the ROM's screen about $(SHOT_FRAMES) frames after keys '$(KEYS)' matches no host frame near it"; exit 1
 
 shot-gba: $(GBA_TEST_ROM) $(BUILD)/gba_shot
 	$(BUILD)/gba_shot $(GBA_TEST_ROM) $(BUILD)/nokia3310-gba.bmp $(SHOT_FRAMES)
-	$(PYTHON) tools/bmp_to_png.py $(BUILD)/nokia3310-gba.bmp $(BUILD)/nokia3310-gba.png $(SHOT_SCALE)
+	$(PYTHON) $(COMMON)/tools/bmp_to_png.py $(BUILD)/nokia3310-gba.bmp $(BUILD)/nokia3310-gba.png $(SHOT_SCALE)
 
 run-gba: $(GBA_ROM)
 	open -a "$(MGBA_APP)" $(GBA_ROM)

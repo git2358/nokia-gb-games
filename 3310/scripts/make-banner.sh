@@ -13,7 +13,7 @@
 #   ./scripts/make-banner.sh [output.png]     # default: docs/banner.png
 #
 # Needs everything `make check-gb` and `make check-gba` need (the firmware
-# dump, scripts/setup-sameboy.sh, scripts/setup-mgba.sh) and ImageMagick
+# dump, scripts/setup-sameboy.sh, ../common/scripts/setup-mgba.sh) and ImageMagick
 # (`brew install imagemagick`). SAMEBOY and MGBA name the emulator clones if
 # they are not in tools/.
 set -euo pipefail
@@ -89,10 +89,10 @@ gba_shot() {
   build build/nokia3310-keys.gba KEYS="$1"
   for n in $(seq 5 5 600); do
     "$BUILD/gba_shot" "$BUILD/nokia3310-keys.gba" "$TMP/gba.bmp" "$n"
-    python3 "$ROOT/tools/bmp_to_png.py" "$TMP/gba.bmp" "$TMP/gba.png" 1 >/dev/null
+    python3 "$ROOT/../common/tools/bmp_to_png.py" "$TMP/gba.bmp" "$TMP/gba.png" 1 >/dev/null
     blank "$TMP/gba.png" && continue
     "$BUILD/gba_shot" "$BUILD/nokia3310-keys.gba" "$TMP/gba.bmp" "$((n + 5))"
-    python3 "$ROOT/tools/bmp_to_png.py" "$TMP/gba.bmp" "$2" 2 >/dev/null
+    python3 "$ROOT/../common/tools/bmp_to_png.py" "$TMP/gba.bmp" "$2" 2 >/dev/null
     return
   done
   echo "error: the GBA ROM showed nothing after keys '$1'"; exit 1

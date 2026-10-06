@@ -14,7 +14,7 @@
 #   ./scripts/make-banner.sh [output.png]     # default: docs/banner.png
 #
 # Needs everything `make check-gb` and `make check-gba` need (the firmware
-# dump, scripts/setup-sameboy.sh, scripts/setup-mgba.sh) and ImageMagick
+# dump, scripts/setup-sameboy.sh, ../common/scripts/setup-mgba.sh) and ImageMagick
 # (`brew install imagemagick`). The default builds are restored at the end.
 set -euo pipefail
 
@@ -62,7 +62,7 @@ MEMORY_FULL="adds$(level_full 4)${MEMORY_TRIES}"
 gb_shot() {
   make -C "$ROOT" build/nokia3210-keys.gb KEYS="$1" >/dev/null
   "$TESTER" --dmg --length 2 "$BUILD/nokia3210-keys.gb" >/dev/null 2>&1
-  python3 "$ROOT/tools/bmp_to_png.py" "$BUILD/nokia3210-keys.bmp" "$TMP/raw.png" 3 >/dev/null
+  python3 "$ROOT/../common/tools/bmp_to_png.py" "$BUILD/nokia3210-keys.bmp" "$TMP/raw.png" 3 >/dev/null
   magick "$TMP/raw.png" +level-colors "$DARK","$GREEN" "$2"
 }
 
@@ -70,7 +70,7 @@ gb_shot() {
 gba_shot() {
   make -C "$ROOT" build/nokia3210-keys.gba KEYS="$1" >/dev/null
   "$BUILD/gba_shot" "$BUILD/nokia3210-keys.gba" "$BUILD/nokia3210-gba.bmp" 14
-  python3 "$ROOT/tools/bmp_to_png.py" "$BUILD/nokia3210-gba.bmp" "$2" 2 >/dev/null
+  python3 "$ROOT/../common/tools/bmp_to_png.py" "$BUILD/nokia3210-gba.bmp" "$2" 2 >/dev/null
 }
 
 make -C "$ROOT" build/gba_shot >/dev/null

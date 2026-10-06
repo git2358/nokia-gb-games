@@ -153,7 +153,7 @@ brew install sdcc arm-none-eabi-gcc imagemagick
 - GBA: bare `arm-none-eabi-gcc` with no C library.
 - Emulators, for the headless checks: SameBoy's core as a library
   (`scripts/setup-sameboy.sh`, needs rgbds) and mGBA's
-  (`scripts/setup-mgba.sh`, needs cmake). Both go into the repository's
+  (`../common/scripts/setup-mgba.sh`, needs cmake). Both go into the repository's
   shared, ignored `tools/`; `SAMEBOY=` and `MGBA=` name builds elsewhere.
 
 ## Version

@@ -107,7 +107,7 @@ Differences in structure:
 
 The compiler's code for the drawing primitives' innermost loops (a column of
 a bitmap, a column of a filled rectangle) was many times too slow for
-Rotation's animation on its bigger boards. `core/lcd.c` keeps those loops as
+Rotation's animation on its bigger boards. `common/core/lcd.c` keeps those loops as
 two small functions in C, `lcd_column_fill` and `lcd_column_blit`, and the
 Game Boy ROM replaces them with assembly in `platform/gb/crt0.s`
 (`LCD_PLATFORM_COLUMNS`). The pixels are the same; the game code is not

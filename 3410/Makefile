@@ -30,7 +30,7 @@ SDCC ?= sdcc
 MAKEBIN ?= makebin
 SDAS ?= sdasgb
 GB_FB := -DLCD_FB_WIDTH=160 -DLCD_FB_HEIGHT=144 -DLCD_PHONE_X=32 -DLCD_PHONE_Y=40
-GB_CFLAGS = -msm83 --opt-code-speed $(GB_FB) -DSNAKE2_STATE_AT=0xa100 -DSNAKE2_STATE_END=0xc000 -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_PRESENT -Icore -Iplatform/gb -I$(ASSETS)
+GB_CFLAGS = -msm83 --opt-code-speed $(GB_FB) -DSNAKE2_STATE_AT=0xa100 -DSNAKE2_STATE_END=0xc000 -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_PRESENT -Icore -I$(COMMON)/core -Iplatform/gb -I$(ASSETS)
 # The SameBoy clone scripts/setup-sameboy.sh makes: its boot ROM, and its
 # core as a library (`make -C $(SAMEBOY) lib`) for tools/gb_run.
 SAMEBOY ?= ../tools/SameBoy
@@ -41,17 +41,19 @@ SAMEBOY_APP ?= /Applications/SameBoy.app
 GB_FRAMES ?= 700 1000
 
 BUILD := build
+# The code the three ports share.
+COMMON := ../common
 ASSETS := $(BUILD)/assets
 ASSET_SRC := $(ASSETS)/game_assets.c $(ASSETS)/snake2_data.c $(ASSETS)/game_tables.c
-CORE_SRC := $(wildcard core/*.c)
-CORE_HDR := $(wildcard core/*.h)
-INCLUDES := -Icore -Iplatform/host -I$(ASSETS)
+CORE_SRC := $(wildcard core/*.c) $(wildcard $(COMMON)/core/*.c)
+CORE_HDR := $(wildcard core/*.h) $(wildcard $(COMMON)/core/*.h)
+INCLUDES := -Icore -I$(COMMON)/core -Iplatform/host -I$(COMMON)/platform/host -I$(ASSETS)
 
 GB_ROM := $(BUILD)/nokia3410.gb
 GB_TEST_ROM := $(BUILD)/nokia3410-keys.gb
 # The banks of the Game Boy ROM (see platform/gb/far.h).
-GB_BANK0 := platform/gb/main.c platform/gb/far.c platform/gb/screen.c core/lcd.c core/sprite.c core/games.c core/rand.c core/sound.c $(ASSETS)/game_tables.c
-GB_BANK1 := core/menu.c core/font.c platform/gb/save.c $(ASSETS)/game_assets.c
+GB_BANK0 := platform/gb/main.c platform/gb/far.c platform/gb/screen.c $(COMMON)/core/lcd.c core/sprite.c core/games.c core/rand.c core/sound.c $(ASSETS)/game_tables.c
+GB_BANK1 := core/menu.c $(COMMON)/core/font.c platform/gb/save.c $(ASSETS)/game_assets.c
 GB_BANK2 := core/snake2.c core/title.c $(ASSETS)/snake2_data.c
 gb_rels = $(patsubst %.c,$(BUILD)/gb/$(1)/%.rel,$(notdir $(2)))
 GB_RELS := $(call gb_rels,0,$(filter-out platform/gb/main.c,$(GB_BANK0))) $(call gb_rels,1,$(GB_BANK1)) \
@@ -63,7 +65,7 @@ GB_RELS := $(call gb_rels,0,$(filter-out platform/gb/main.c,$(GB_BANK0))) $(call
 # presses none.
 KEYS ?= sssss
 # The game without the menus, for tools that drive it directly.
-GAME_SRC := $(filter-out core/menu.c core/font.c,$(CORE_SRC))
+GAME_SRC := $(filter-out core/menu.c $(COMMON)/core/font.c,$(CORE_SRC))
 
 .PHONY: help dump install-roms assets test frames golden-snake golden-si check-golden check-menus gb check-gb shot-gb run-gb cards clean
 
@@ -109,23 +111,23 @@ $(ASSETS)/game_assets.c: tools/extract_assets.py
 
 $(ASSETS)/snake2_data.c $(ASSETS)/game_tables.c: $(ASSETS)/game_assets.c
 
-$(BUILD)/test_core: tests/test_core.c core/lcd.c core/rand.c core/sprite.c $(CORE_HDR)
+$(BUILD)/test_core: tests/test_core.c $(COMMON)/core/lcd.c core/rand.c core/sprite.c $(CORE_HDR)
 	@mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) -Icore -o $@ tests/test_core.c core/lcd.c core/rand.c core/sprite.c
+	$(CC) $(CFLAGS) -Icore -I$(COMMON)/core -o $@ tests/test_core.c $(COMMON)/core/lcd.c core/rand.c core/sprite.c
 
 test: $(BUILD)/test_core
 	$(BUILD)/test_core
 
-$(BUILD)/frame: platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/frame: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
 
 $(BUILD)/frame_%.pgm: $(BUILD)/frame
 	$(BUILD)/frame $* $@
 
 frames: $(BUILD)/frame_testcard.pgm $(BUILD)/frame_start.pgm $(BUILD)/frame_run-300.pgm
 
-$(BUILD)/replay: platform/host/replay_main.c platform/host/pgm.c $(GAME_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/replay_main.c platform/host/pgm.c $(GAME_SRC) $(ASSET_SRC)
+$(BUILD)/replay: platform/host/replay_main.c $(COMMON)/platform/host/pgm.c $(GAME_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/replay_main.c $(COMMON)/platform/host/pgm.c $(GAME_SRC) $(ASSET_SRC)
 
 # Snake II's reference runs: the firmware's own game played by the fork's
 # probe, which steers the snake to the food and the creatures and, after
@@ -196,7 +198,7 @@ FORCE:
 
 # Game Boy
 
-vpath %.c core platform/gb $(ASSETS)
+vpath %.c core $(COMMON)/core platform/gb $(ASSETS)
 
 # games.c reaches the game in bank 2 through far.c, and menu.c the title
 # and the game-over picture.
@@ -246,8 +248,8 @@ $(BUILD)/gb_run: tools/gb_run.c
 	$(CC) -O2 -I$(SAMEBOY) -DGB_VERSION='"x"' -o $@ $< $(SAMEBOY)/build/lib/libsameboy.a -lm
 
 # The host's frame tool with the Game Boy's framebuffer.
-$(BUILD)/frame_gb: platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ platform/host/frame_main.c platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/frame_gb: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
 
 # The ROM presses KEYS at power-on; its screen at each of GB_FRAMES must be
 # one of the host's frames for those keys, to the pixel. With the default

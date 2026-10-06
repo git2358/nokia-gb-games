@@ -68,6 +68,7 @@ _gb_find_hit::
 	inc	hl
 	inc	hl			; record 0's type
 	ld	b, #RECORDS		; records left
+	ld	de, #RECORD_SIZE
 3$:
 	ld	a, (hl)			; type
 	cp	a, #FREE
@@ -82,13 +83,9 @@ _gb_find_hit::
 	pop	bc
 	pop	hl
 	jr	c, 6$
+	ld	de, #RECORD_SIZE
 5$:
-	ld	a, l
-	add	a, #RECORD_SIZE
-	ld	l, a
-	jr	nc, 4$
-	inc	h
-4$:
+	add	hl, de
 	dec	b
 	jr	nz, 3$
 	xor	a, a

@@ -97,15 +97,21 @@ static uint8_t row_hits(const uint8_t *bitmap, uint8_t w, int x, uint8_t cols, u
    and in the first two cases at the first row past the picture's. */
 int si_terrain_collide(uint8_t k) SI_FAR
 {
-    const uint8_t *bitmap = type_frames(si.rec[k].type)[0].bitmap;
-    int w = width(k), h = height(k), x = X(k), y = Y(k);
+    const uint8_t *bitmap;
+    int w, h = height(k), x, y = Y(k);
     int ty = si_pics[si.terrain_pic].y, th = si.map_rows << 3, orow, trow, n;
-    uint8_t cols = x >= W ? 0 : W - x < w ? (uint8_t)(W - x) : (uint8_t)w, clipped = w > cols;
+    uint8_t cols, clipped;
 
+    /* Clear of the terrain's rows, as most things are: that first. */
     if (si.place == CEILING && y > ty + th)
         return 0;
     if (si.place == FLOOR && y + h < ty)
         return 0;
+    bitmap = type_frames(si.rec[k].type)[0].bitmap;
+    w = width(k);
+    x = X(k);
+    cols = x >= W ? 0 : W - x < w ? (uint8_t)(W - x) : (uint8_t)w;
+    clipped = w > cols;
     if (ty < y && y + h < ty + th) {
         trow = y - ty;
         for (orow = 0, n = th - trow; n > 0; n--, orow++, trow++) {

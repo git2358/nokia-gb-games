@@ -139,7 +139,7 @@ int main(int argc, char **argv)
                 printf(" %02x", GB_read_memory(gb, (uint16_t)(addr + k)));
             printf("\n");
         } else if (strncmp(step, "prof:", 5) == 0) {
-            static uint32_t spent[4][0x10000];
+            static uint32_t spent[8][0x10000];
             char *colon = NULL;
             long frames = strtol(step + 5, &colon, 10);
             uint64_t left = (uint64_t)frames * 70224 * 2; /* 8 MHz units in a frame */
@@ -157,10 +157,10 @@ int main(int argc, char **argv)
                 pc = GB_get_registers(gb)->pc;
                 GB_get_direct_access(gb, GB_DIRECT_ACCESS_ROM, NULL, &mapped);
                 cycles = GB_run(gb);
-                spent[mapped & 3][pc] += cycles;
+                spent[mapped & 7][pc] += cycles;
                 left = left > cycles ? left - cycles : 0;
             }
-            for (bank = 0; bank < 4; bank++)
+            for (bank = 0; bank < 8; bank++)
                 for (pc = 0; pc < 0x10000; pc++)
                     if (spent[bank][pc])
                         fprintf(out, "%u %04x %u\n", bank, pc, spent[bank][pc]);

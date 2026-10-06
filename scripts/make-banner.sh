@@ -8,7 +8,7 @@
 # phone-sized mode and under it the full-screen mode; columns for the first
 # screen, the list of games, and each of the phone's four games being
 # played. The full-screen rows leave the first screen out, which is the same
-# for both modes. Bantumi is not here yet, so its panels are left blank.
+# for both modes.
 #
 #   ./scripts/make-banner.sh [output.png]     # default: docs/banner.png
 #
@@ -51,6 +51,10 @@ SI_FULL="adsss${SI_PLAY}"
 SNAKE_PLAY="wwwwsttwwwsttwwww"
 SNAKE_PHONE="zssss${SNAKE_PLAY}"
 SNAKE_FULL="zasss${SNAKE_PLAY}"
+# Bantumi: the hand carrying the third pit's beans over the board.
+BANTUMI_PLAY="wwwwwrrsttttt"
+BANTUMI_PHONE="sddsss${BANTUMI_PLAY}"
+BANTUMI_FULL="addsss${BANTUMI_PLAY}"
 # Pairs II's Time trial from the power-on seed: the cards dealt and two
 # turned over.
 PAIRS_PLAY="wwwwwwwwsrs"
@@ -102,20 +106,24 @@ gb_shot "" "$TMP/gb-0.png"
 gb_shot "$GAMES_PHONE" "$TMP/gb-1.png"
 gb_shot "$SNAKE_PHONE" "$TMP/gb-2.png"
 gb_shot "$SI_PHONE" "$TMP/gb-3.png"
+gb_shot "$BANTUMI_PHONE" "$TMP/gb-4.png"
 gb_shot "$PAIRS_PHONE" "$TMP/gb-5.png"
 gb_shot "$GAMES_FULL" "$TMP/gbfull-1.png"
 gb_shot "$SNAKE_FULL" "$TMP/gbfull-2.png"
 gb_shot "$SI_FULL" "$TMP/gbfull-3.png"
+gb_shot "$BANTUMI_FULL" "$TMP/gbfull-4.png"
 gb_shot "$PAIRS_FULL" "$TMP/gbfull-5.png"
 
 gba_shot "" "$TMP/gba-0.png"
 gba_shot "$GAMES_PHONE" "$TMP/gba-1.png"
 gba_shot "$SNAKE_PHONE" "$TMP/gba-2.png"
 gba_shot "$SI_PHONE" "$TMP/gba-3.png"
+gba_shot "$BANTUMI_PHONE" "$TMP/gba-4.png"
 gba_shot "$PAIRS_PHONE" "$TMP/gba-5.png"
 gba_shot "$GAMES_FULL" "$TMP/gbafull-1.png"
 gba_shot "$SNAKE_FULL" "$TMP/gbafull-2.png"
 gba_shot "$SI_FULL" "$TMP/gbafull-3.png"
+gba_shot "$BANTUMI_FULL" "$TMP/gbafull-4.png"
 gba_shot "$PAIRS_FULL" "$TMP/gbafull-5.png"
 
 # --- layout: 480 px panels, a label column on the left, headers on top ------

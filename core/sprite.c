@@ -9,6 +9,7 @@ struct sprite sprites[SPRITE_COUNT + 1];
 static uint16_t free_head;
 
 uint8_t sprite_screen[84 * SPRITE_SCREEN_BANDS];
+uint8_t sprite_changed;
 
 void sprite_reset(uint8_t count)
 {
@@ -19,6 +20,7 @@ void sprite_reset(uint8_t count)
         sprites[id].next = (uint16_t)(id + 1);
     sprites[id].next = 0;
     free_head = 1;
+    sprite_changed = 1;
 }
 
 /* Takes a sprite from the free list and links it after the last sprite of
@@ -38,6 +40,7 @@ static uint16_t sprite_alloc(uint8_t flags)
     free_head = sprites[id].next;
     sprites[id].next = at;
     sprites[id].flags = flags;
+    sprite_changed = 1;
     return id;
 }
 
@@ -52,6 +55,7 @@ uint16_t sprite_free(uint16_t id)
             sprites[prev].next = sprites[id].next;
             sprites[id].next = free_head;
             free_head = id;
+            sprite_changed = 1;
             return sprites[prev].next;
         }
         prev = at;
@@ -63,6 +67,7 @@ void sprite_move(uint16_t id, int x, int y)
 {
     sprites[id].x = (uint8_t)x;
     sprites[id].y = (uint8_t)y;
+    sprite_changed = 1;
 }
 
 void sprite_set_line(uint16_t id, int x, int y, int x2, int y2)
@@ -75,11 +80,13 @@ void sprite_set_line(uint16_t id, int x, int y, int x2, int y2)
 void sprite_set_image(uint16_t id, const struct sprite_image *image)
 {
     sprites[id].image = *image;
+    sprite_changed = 1;
 }
 
 void sprite_set_mode(uint16_t id, uint8_t mode)
 {
     sprites[id].flags = (uint8_t)((sprites[id].flags & 0xc7) | mode << 3);
+    sprite_changed = 1;
 }
 
 static uint8_t make_flags(uint8_t kind, uint8_t mode, uint8_t layer)

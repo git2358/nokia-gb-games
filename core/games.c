@@ -1,5 +1,6 @@
 #include "games.h"
 
+#include "bantumi.h"
 #include "pairs2.h"
 #include "si.h"
 #include "snake2.h"
@@ -57,7 +58,19 @@ static int handle(int event)
         return snake2_handler(event, &ctx);
     if (playing == GAME_PAIRS)
         return pairs2_handler(event, &ctx);
+    if (playing == GAME_BANTUMI)
+        return bantumi_handler(event, &ctx);
     return si_handler(event, &ctx);
+}
+
+/* The tick from the context. Bantumi asks for a period of 0 on the
+   player's first turn, which the phone then ticks as fast as it can, about
+   twice a frame: a unit here. Snake II's 0 stops the tick. */
+static uint16_t tick_units(void)
+{
+    uint16_t n = units(ctx.period);
+
+    return n || playing != GAME_BANTUMI ? n : 1;
 }
 
 /* The one-shot timer from the context; 0 ms runs out at the next unit. */
@@ -75,18 +88,19 @@ static uint8_t deliver(int event, uint8_t from)
 
     switch (result) {
     case GAME_RESULT_GAME_OVER:
+    case GAME_RESULT_END:
         games_over = 1;
         games_score = ctx.score;
         tick_timer = one_shot_timer = repeat_timer = 0;
         return 1;
     case GAME_RESULT_RESTART_TIMERS:
-        tick_timer = units(ctx.period);
+        tick_timer = tick_units();
         one_shot_timer = units(ctx.one_shot);
         if (from == FROM_KEY)
             repeat_timer = REPEAT_UNITS;
         return 1;
     case GAME_RESULT_RESTART_TICK:
-        tick_timer = units(ctx.period);
+        tick_timer = tick_units();
         if (from == FROM_TICK)
             from = FROM_OTHER;
         break;
@@ -113,7 +127,7 @@ static uint8_t deliver(int event, uint8_t from)
         return 0;
     }
     if (from == FROM_TICK)
-        tick_timer = units(ctx.period);
+        tick_timer = tick_units();
     else if (from == FROM_TIMER)
         one_shot_timer = units(ctx.one_shot);
     else if (from == FROM_KEY)
@@ -138,7 +152,7 @@ void games_start(uint8_t game, uint8_t level, uint8_t option)
     waiting = 0;
     one_shot_timer = repeat_timer = 0;
     deliver(GAME_EVENT_START, FROM_OTHER);
-    tick_timer = units(ctx.period);
+    tick_timer = tick_units();
 }
 
 void games_continue(void)
@@ -163,7 +177,7 @@ uint8_t games_key_down(uint8_t key)
         return 0;
     if (waiting) {
         waiting = 0;
-        tick_timer = units(ctx.period);
+        tick_timer = tick_units();
     }
     held_key = key;
     return deliver(key, FROM_KEY);
@@ -230,7 +244,7 @@ uint8_t games_event(int event)
 {
     int result = handle(event);
 
-    if (result == GAME_RESULT_GAME_OVER) {
+    if (result == GAME_RESULT_GAME_OVER || result == GAME_RESULT_END) {
         games_over = 1;
         games_score = ctx.score;
     }
@@ -242,6 +256,8 @@ void games_render(void)
     /* Snake II draws into the picture as it goes. */
     if (playing == GAME_PAIRS)
         pairs2_render();
+    else if (playing == GAME_BANTUMI)
+        bantumi_render();
     else if (playing != GAME_SNAKE)
         sprite_render();
 }

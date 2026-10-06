@@ -2,6 +2,7 @@
 
 #define SI_SETUP_IMPL /* the real functions' names, not the far_ ones */
 #include "si_state.h"
+#include "bantumi.h"
 #include "pairs2.h"
 #include "snake2.h"
 #include "strip.h"
@@ -110,6 +111,27 @@ void far_pairs2_render(void)
 
     far_bank(BANK_PAIRS);
     pairs2_render();
+    far_bank(was);
+}
+
+int far_bantumi_handler(int event, struct game_context *ctx)
+{
+    uint8_t was = mapped;
+    int result;
+
+    far_bank(BANK_BANTUMI);
+    result = bantumi_handler(event, ctx);
+    far_bank(was);
+    return result;
+}
+
+/* The sprites' pictures are Bantumi's, in its bank. */
+void far_bantumi_render(void)
+{
+    uint8_t was = mapped;
+
+    far_bank(BANK_BANTUMI);
+    bantumi_render();
     far_bank(was);
 }
 

@@ -56,6 +56,7 @@ enum {
     GAME_RESULT_RESTART_TIMERS = 0x13, /* start the tick and the one-shot timer afresh */
     GAME_RESULT_RESTART_TICK = 0x16,   /* start the tick afresh with the period now set */
     GAME_RESULT_GAME_OVER = 0x18,      /* the score is in the context */
+    GAME_RESULT_END = 0x1e,            /* game over with a result, signed, in the context's score: Bantumi */
     GAME_RESULT_SOUND = 0x1b,          /* play the context's sound */
     GAME_RESULT_ONE_SHOT_SOUND = 0x1f, /* start the one-shot afresh and play the sound */
     GAME_RESULT_ONE_SHOT = 0x20,       /* start the one-shot afresh */

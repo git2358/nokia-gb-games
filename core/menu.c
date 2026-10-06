@@ -1,5 +1,6 @@
 #include "menu.h"
 
+#include "bantumi.h"
 #include "font.h"
 #include "game.h"
 #include "game_assets.h"
@@ -125,6 +126,8 @@ enum {
 static const uint8_t space_impact_items[] = { ITEM_NEW_GAME, ITEM_TOP_SCORE, ITEM_INSTRUCTIONS };
 static const uint8_t snake_items[] = { ITEM_NEW_GAME, ITEM_LEVEL, ITEM_MAZES, ITEM_TOP_SCORE, ITEM_INSTRUCTIONS };
 static const uint8_t pairs_items[] = { ITEM_NEW_GAME, ITEM_LEVEL, ITEM_TOP_SCORE, ITEM_INSTRUCTIONS };
+/* Bantumi keeps no top score. */
+static const uint8_t bantumi_items[] = { ITEM_NEW_GAME, ITEM_LEVEL, ITEM_INSTRUCTIONS };
 
 /* Snake II's Level page: a bar for each level, the ones up to the level
    filled, each two rows taller than the one before and with a shadow on
@@ -159,6 +162,7 @@ static uint8_t maze;     /* selection in the list of mazes */
 static uint8_t maze_top;
 static uint8_t new_top_score;  /* the game just ended beat the top score */
 static uint16_t final_score;   /* its score */
+static int16_t final_result;   /* Bantumi's: the player's beans less the phone's */
 static uint8_t held = NO_KEY;  /* the button the game sees as held */
 static uint8_t seed_fixed;     /* the games' generator is never reseeded from the time */
 static uint16_t play_us;       /* time not yet turned into phone ticks */
@@ -296,12 +300,14 @@ static void settings_load(void)
     }
     if (game == GAME_PAIRS && settings.level >= PAIRS2_LEVELS)
         settings.level = PAIRS2_LEVELS - 1;
+    if (game == GAME_BANTUMI && settings.level >= BANTUMI_LEVELS)
+        settings.level = BANTUMI_LEVELS - 1;
 }
 
 /* The bars of the Level page. */
 static uint8_t levels(void)
 {
-    return game == GAME_PAIRS ? PAIRS2_LEVELS : SNAKE2_LEVELS;
+    return game == GAME_PAIRS ? PAIRS2_LEVELS : game == GAME_BANTUMI ? BANTUMI_LEVELS : SNAKE2_LEVELS;
 }
 
 static const char *mode_name(uint8_t which)
@@ -314,6 +320,8 @@ static const char *game_name(void)
 {
     if (game == GAME_PAIRS)
         return mode_name(pairs_mode);
+    if (game == GAME_BANTUMI)
+        return text_bantumi;
     return game == GAME_SNAKE ? text_snake : text_space_impact;
 }
 
@@ -321,6 +329,8 @@ static const char *game_help(void)
 {
     if (game == GAME_PAIRS)
         return pairs_mode == PAIRS2_PUZZLE ? text_help_puzzle : text_help_time_trial;
+    if (game == GAME_BANTUMI)
+        return text_help_bantumi;
     return game == GAME_SNAKE ? text_help_snake : text_help_space_impact;
 }
 
@@ -401,9 +411,24 @@ static uint8_t can_continue(void)
     return (uint8_t)(paused && paused_game == game && (game != GAME_PAIRS || paused_mode == pairs_mode));
 }
 
+static const uint8_t *items(void)
+{
+    switch (game) {
+    case GAME_SNAKE:
+        return snake_items;
+    case GAME_PAIRS:
+        return pairs_items;
+    case GAME_BANTUMI:
+        return bantumi_items;
+    default:
+        return space_impact_items;
+    }
+}
+
 static uint8_t item_count(void)
 {
-    uint8_t n = game == GAME_SNAKE ? sizeof snake_items : game == GAME_PAIRS ? sizeof pairs_items : sizeof space_impact_items;
+    uint8_t n = game == GAME_SNAKE ? sizeof snake_items : game == GAME_PAIRS ? sizeof pairs_items
+                : game == GAME_BANTUMI ? sizeof bantumi_items : sizeof space_impact_items;
 
     return (uint8_t)(n + can_continue());
 }
@@ -416,7 +441,7 @@ static uint8_t item_id(uint8_t index)
             return ITEM_CONTINUE;
         index--;
     }
-    return game == GAME_SNAKE ? snake_items[index] : game == GAME_PAIRS ? pairs_items[index] : space_impact_items[index];
+    return items()[index];
 }
 
 static const char *item_name(uint8_t id)
@@ -916,24 +941,23 @@ static void game_menu_open(void)
     settings_load();
 }
 
-/* After the title, the game's menu, or Pairs II's list of modes; Bantumi
-   has none yet, and goes back to the list. */
+/* After the title, the game's menu, or Pairs II's list of modes. */
 static void title_over(void)
 {
-    if (game == GAME_SNAKE || game == GAME_SPACE_IMPACT) {
-        game_menu_open();
-    } else if (game == GAME_PAIRS) {
+    if (game == GAME_PAIRS) {
         screen = SCREEN_MODES;
         pairs_mode = pairs_mode_top = 0;
     } else {
-        screen = SCREEN_GAMES;
+        game_menu_open();
     }
 }
 
 static void play_over(void)
 {
     final_score = (uint16_t)games_score;
-    new_top_score = final_score > top_score;
+    final_result = (int16_t)games_score;
+    /* Bantumi ends on who won. */
+    new_top_score = game != GAME_BANTUMI && final_score > top_score;
     if (new_top_score) {
         top_score = final_score;
         if (full_snake()) {
@@ -950,6 +974,14 @@ static void play_over(void)
     held = NO_KEY;
     screen = SCREEN_GAME_OVER;
     page_ticks = GAME_OVER_TICKS;
+}
+
+/* The Game over page's words: Bantumi's say who won. */
+static const char *game_over_text(void)
+{
+    if (game == GAME_BANTUMI)
+        return final_result > 0 ? text_game_over_won : final_result < 0 ? text_game_over_lost : text_game_over;
+    return new_top_score ? text_game_over_top_score : text_game_over_score;
 }
 
 static void play_start(void)
@@ -969,6 +1001,26 @@ static void play_start(void)
    A turns clockwise and B anticlockwise, as # and * do on the phone. */
 static uint8_t play_phone_key(uint8_t key)
 {
+    /* Bantumi: left and right, or down and up as the phone's scroll key,
+       move the hand; A sows, B asks for a hint (*). */
+    if (game == GAME_BANTUMI) {
+        switch (key) {
+        case MENU_KEY_UP:
+            return GAME_KEY_SCROLL_UP;
+        case MENU_KEY_DOWN:
+            return GAME_KEY_SCROLL_DOWN;
+        case MENU_KEY_LEFT:
+            return GAME_KEY_4;
+        case MENU_KEY_RIGHT:
+            return GAME_KEY_6;
+        case MENU_KEY_SELECT:
+            return GAME_KEY_5;
+        case MENU_KEY_BACK:
+            return GAME_KEY_STAR;
+        default:
+            return 0;
+        }
+    }
     /* Pairs II: the pad moves the cursor, A or B opens a card. */
     if (game == GAME_PAIRS) {
         switch (key) {
@@ -1481,9 +1533,9 @@ void menu_draw(void)
         break;
     case SCREEN_GAME_OVER:
         if (full_screen)
-            native_note(0, new_top_score ? text_game_over_top_score : text_game_over_score, final_score);
+            native_note(0, game_over_text(), final_score);
         else
-            draw_note(new_top_score ? text_game_over_top_score : text_game_over_score, final_score);
+            draw_note(game_over_text(), final_score);
         break;
     case SCREEN_PLAY:
         games_draw(!board_drawn);

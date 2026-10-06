@@ -83,6 +83,10 @@ extern uint8_t sprite_screen[84 * SPRITE_SCREEN_BANDS];
 
 /* Draws the list into sprite_screen. */
 void sprite_render(void);
+/* Set by every change to the sprites (their list, places, pictures and
+   modes), for a game to skip drawing a picture that cannot have changed;
+   whoever reads it clears it. */
+extern uint8_t sprite_changed;
 /* Draws one sprite into sprite_screen over what is there; it need not be
    in the list. */
 void sprite_draw(const struct sprite *s);

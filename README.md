@@ -1,10 +1,10 @@
 # Nokia 3310 games for Game Boy and Game Boy Advance
 
-![The first screen, the list of games, and Snake II, Space Impact and Pairs II being played, on the Game Boy and the Game Boy Advance, each in the phone-sized mode and in full screen, where Snake II has its bigger board; Bantumi's panels are blank, as it is not here yet](docs/banner.png)
+![The first screen, the list of games, and Snake II, Space Impact, Bantumi and Pairs II being played, on the Game Boy and the Game Boy Advance, each in the phone-sized mode and in full screen, where Snake II has its bigger board](docs/banner.png)
 
 The Nokia 3310 (NHM-5 v6.39) follow-up to
-<https://github.com/lukesau/nokia-3210-games>: Space Impact, Snake II and
-Pairs II re-implemented in C from a map of the firmware, behind the phone's
+<https://github.com/lukesau/nokia-3210-games>: the phone's four games,
+Space Impact, Snake II, Bantumi and Pairs II, re-implemented in C from a map of the firmware, behind the phone's
 own Games menus, with the levels, mazes, boards, sprites, fonts and text read from your
 own dump at build time.
 One portable core runs on the host, as a Game Boy ROM (`.gb`) and as a
@@ -47,6 +47,14 @@ What is there so far:
   left; Puzzle's grid by level, each pair found taken away to uncover the
   picture behind. Level + 4 points a pair and one off a miss, and the
   phone's two sounds; the phone does not vibrate in Pairs II.
+- Bantumi: its menu with Level (five bars) and Instructions, and no Top
+  score, as on the phone. The board sliding in, the hand that picks up a
+  pit's beans and drops them one by one, extra turns, captures, the
+  phone's own search for its move (a hundred steps a tick, from one ply at
+  level 1 to eight at level 5, with its thinking picture, and with the two
+  mistakes of the firmware's that change which moves it picks), the hint
+  on `*` at level 1, the bean sound, the winner's store blinking, and the
+  phone's three Game over pages: won, lost and a draw.
 
 Start on the first screen picks a full-screen mode instead, as in the 3210
 project: the port's own menus laid out for the console's whole screen in
@@ -55,30 +63,33 @@ is played on a bigger board: the phone's own rule for the board's size
 applied to the console's screen, 39 by 33 cells on the Game Boy and 29 by
 17 on the GBA (which shows it at 2x), with the snake, the food, the
 creatures and the score at the phone's size and speed, the mazes moved
-out in proportion to fill it, and a top score of its own. Space Impact and
-Pairs II are shown at 2x on the Game Boy and at 3x on the GBA, where the
-display hardware does the scaling. Either way the phone's 84 columns are
-four too many for the screen's width, so the last four are left off:
-nothing of the score, which ends at column 75, but enemies come on four
-columns late and the ship can fly its nose out of sight.
+out in proportion to fill it, and a top score of its own. Space Impact,
+Bantumi and Pairs II are shown at 2x on the Game Boy and at 3x on the GBA,
+where the display hardware does the scaling. Either way the phone's 84
+columns are four too many for the screen's width, so the last four are
+left off: nothing of Space Impact's score, which ends at column 75, but
+enemies come on four columns late and the ship can fly its nose out of
+sight; Bantumi loses the right edge of its board.
 
-| | Menus | Space Impact | Snake II | Pairs II |
-|---|---|---|---|---|
-| D-pad | up and down | move the ship | steer (2, 4, 6, 8) | move the cursor (2, 4, 6, 8) |
-| A | select | fire | turn clockwise (#) | open a card (5) |
-| B | back | special weapon | turn anticlockwise (*) | open a card (5) |
-| Start, Select | select | pause | pause | pause |
+| | Menus | Space Impact | Snake II | Bantumi | Pairs II |
+|---|---|---|---|---|---|
+| D-pad | up and down | move the ship | steer (2, 4, 6, 8) | move the hand (4, 6; up and down as the scroll key) | move the cursor (2, 4, 6, 8) |
+| A | select | fire | turn clockwise (#) | sow (5) | open a card (5) |
+| B | back | special weapon | turn anticlockwise (*) | hint at level 1 (*) | open a card (5) |
+| Start, Select | select | pause | pause | pause | pause |
 
 Choosing a game from the list first plays its title animation, as on the
 phone, and any button skips it. All four games' titles are there: Snake
 II's, Space Impact's stars and closing logo, Bantumi's and Pairs II's
 cards turning to spell its name.
 
-What is not: Bantumi plays its title and then goes back to the list, as
-its game is not here yet. A paused Space Impact continues
+What is not: a paused Space Impact continues
 exactly where it stopped, where the phone gives the ship a second and a
-half of shield; a paused Snake II or Pairs II waits for a key, as on the
-phone. Snake
+half of shield; a paused Snake II, Bantumi or Pairs II waits for a key, as
+on the phone. Bantumi's fireworks before "YOU WON!" are not there: what
+draws them on the phone has not been mapped. Bantumi's losing store
+blinks on the phone through the LCD's blink plane; here it is just drawn,
+as Space Impact's blinking things are. Snake
 II's large animated creature never comes: the phone lets it come only when
 a setting the port does not have is on, and in MAME it never does.
 
@@ -184,6 +195,7 @@ make check-gb                    # the .gb in SameBoy against the host's frames,
 make check-gb KEYS=a3dsss        # the same in the full-screen mode's 2x, starting at the fourth level
 make check-gb KEYS=asssss        # Snake II in the full-screen mode
 make check-gb KEYS=sdddsssswwwwwwwwsrsrsdsls  # Pairs II's Time trial, cards opened after the deal
+make check-gb KEYS=zsddssdsuuuususwwwwwsww GB_FRAMES="600 3000"  # Bantumi at level 5, the phone's first move
 make check-gba KEYS=sds SHOT_FRAMES=70   # Space Impact's title, part-way
 make check-gba                   # the .gba in mGBA against the host's frames
 make shot-gb KEYS=sdsss          # a screenshot after scripted keys
@@ -203,8 +215,9 @@ They include every distinct picture of the four title animations, Space
 Impact's stars drawn from that seed. Space Impact's Top score page's two
 frames show the 4075 the PMM dump holds and differ from the port's 0 by
 design. The other frames, Snake II's menus and Level, Mazes and
-Instructions pages and Pairs II's list of modes, menu and Level page among
-them, are equal to the pixel.
+Instructions pages, Pairs II's list of modes, menu and Level page, and
+Bantumi's menu, Level page, Instructions and the start of its board's
+slide among them, are equal to the pixel.
 
 The rumble is checked the same way: `build/gb_run ... rumble 1400` prints
 each frame the motor was on for, and `build/gba_shot` prints every switch
@@ -227,22 +240,31 @@ over the terrain, a ship or a shot, that cell gets a tile of its own made
 from the picture, so what is shown is still the phone's picture to the
 pixel; `make check-gb` holds it to that.
 
-Snake II and Pairs II have no terrain, and at 2x all six bands of their
-picture are made into twelve rows of tiles, of which only those that
-changed are made again.
+Snake II, Bantumi and Pairs II have no terrain, and at 2x all six bands
+of their picture are made into twelve rows of tiles, of which only those
+that changed are made again.
+
+Bantumi's search for the phone's move, a hundred steps of a depth-first
+search every tick, takes the compiler's code some 1.6 times the phone's
+117 ms tick at level 5; the Game Boy has its own version of it in
+assembly (`platform/gb/search.s`), which does the same steps on the same
+nodes and keeps the phone's pace. The phone asks for a redraw on every
+tick it thinks, when as a rule nothing has moved; the picture is drawn
+again only when a sprite has changed.
 
 When a tick still takes longer to show than the 93 ms between ticks, the
 game keeps the phone's pace and shows fewer pictures: every tick is
 played, not every one is drawn.
 
-The ROM is 16 KiB banks on an MBC5 with 8 KiB of battery-backed RAM, six
+The ROM is 16 KiB banks on an MBC5 with 8 KiB of battery-backed RAM, seven
 of eight banks used (`platform/gb/far.h` says what is where); MBC5 for
 its rumble pin, see below. Space Impact's 7 KiB of data is
 copied from the ROM to cartridge RAM at power-on, because both the game
 and the sprite code, which are in different banks, read it. The save file
 therefore holds a copy of that data next to the top score. Pairs II's
 state, nearly 600 bytes for up to 60 cards, does not fit in the Game Boy's work
-RAM either and is kept in cartridge RAM after that data.
+RAM either and is kept in cartridge RAM after that data, where Bantumi's
+goes too, with its search's nodes.
 
 ## Sound
 
@@ -344,6 +366,24 @@ autopilot presses a key only once that change is shown and at least
 Level 7's 100 ms tick leaves the autopilot no time between ticks, so it is
 not among them.
 
+Bantumi is checked against four games (`make golden-bantumi`,
+`BANTUMI_GOLDENS`) played by the MAME fork's
+`mame_nokia_3310_bantumi_bot.lua`, which picks pits with a seeded
+generator of its own and walks the hand there with 4 and 6 before sowing
+with 5:
+
+- level 1 to the end of the game, asking for a hint every third turn and
+  sowing where it puts the hand;
+- level 2 to the end of the game;
+- level 3, paused and continued;
+- level 5, the phone's longest searches.
+
+Every picture of all four appears in order among MAME's: the slide, the
+hand's walks, sowing round the board and past the stores, captures,
+extra turns, the hint, the phone's thinking and the moves it chose, the
+end of the game with the rows swept into the stores and the winner's
+digits flashing.
+
 The frames and the event logs are derived from the firmware and stay in
 the ignored `golden/`.
 
@@ -355,7 +395,8 @@ the ignored `golden/`.
   sprites, so that a paused game's are kept), `sprite` (sprite
   list and tile layer), `si`, `si_setup` and `si_base` (Space Impact),
   `snake2` (Snake II, which draws straight into the sprite layer's
-  picture), `pairs2` (Pairs II, both modes), `game` (what the games and
+  picture), `pairs2` (Pairs II, both modes), `bantumi` (Bantumi and the
+  phone's search), `game` (what the games and
   the menus share), `games` (keys and timers to game events, the settings
   the games follow and the vibrator's timer), `sound` (the notes of the
   sound in progress), `rand`.
@@ -368,8 +409,9 @@ the ignored `golden/`.
 - `tools/gb_run.c` runs a Game Boy ROM headlessly with scripted buttons,
   screenshots, sound capture, memory peeks and a profiler
   (`tools/gb_profile.py`).
-- The firmware maps the core follows are `docs/games_applications_3310.md`
-  and `docs/games_snake2_3310.md` in the MAME fork.
+- The firmware maps the core follows are `docs/games_applications_3310.md`,
+  `docs/games_snake2_3310.md`, `docs/games_pairs2_3310.md` and
+  `docs/games_bantumi_3310.md` in the MAME fork.
 
 `tools/export_fonts.py` and `tools/gb_audio.c` are unchanged copies from
 the 3210 project and are not used yet.

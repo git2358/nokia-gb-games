@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Clone mGBA at a pinned release into the ignored tools/mgba and build only
-# its core library, which tools/gba_shot.c links for headless GBA
-# screenshots. Needs cmake and a C compiler.
+# Clone mGBA at a pinned release into the repository's ignored tools/mgba
+# and build only its core library, which tools/gba_shot.c links for
+# headless GBA screenshots. Needs cmake and a C compiler.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DEST="${MGBA_DIR:-$ROOT/tools/mgba}"
+DEST="${MGBA_DIR:-$ROOT/../tools/mgba}"
 REMOTE="${MGBA_REMOTE:-https://github.com/mgba-emu/mgba.git}"
 BASE_COMMIT="26b7884bc25a5933960f3cdcd98bac1ae14d42e2" # 0.10.5
 

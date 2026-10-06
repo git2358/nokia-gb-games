@@ -21,8 +21,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${1:-$ROOT/docs/banner.png}"
 BUILD="$ROOT/build"
-SAMEBOY="${SAMEBOY:-$ROOT/tools/SameBoy}"
-MGBA="${MGBA:-$ROOT/tools/mgba}"
+SAMEBOY="${SAMEBOY:-$ROOT/../tools/SameBoy}"
+MGBA="${MGBA:-$ROOT/../tools/mgba}"
 BOOT="$SAMEBOY/build/bin/tester/dmg_boot.bin"
 FONT="${BANNER_FONT:-/System/Library/Fonts/Menlo.ttc}"
 GREEN='#9bbc0f' # Game Boy pea green, for the labels and the Game Boy screens

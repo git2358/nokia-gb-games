@@ -192,7 +192,7 @@ static const char text_hint_ok[] = "B back   A OK";
 static const char text_hint_back[] = "B back";
 /* The full-screen list's extra entry and its page. The port's own words. */
 static const char text_about[] = "About";
-static const char text_about_body[] = "Nokia 3210 games " GAME_VERSION "\ngithub.com/lukesau/\nnokia-3210-games";
+static const char text_about_body[] = "Nokia 3210 games " GAME_VERSION "\ngithub.com/lukesau/\nnokia-gb-games";
 static const char text_hint_more[] = "B back   A more";
 static uint8_t surround_used;  /* something is drawn around the phone's LCD */
 

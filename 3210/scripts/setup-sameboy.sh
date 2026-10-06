@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Clone upstream SameBoy at a pinned commit into the ignored tools/SameBoy
-# and build its headless tester, which `make check-gb` uses to capture a
-# frame. Needs rgbds (for the boot ROMs) and a C compiler.
+# Clone upstream SameBoy at a pinned commit into the repository's ignored
+# tools/SameBoy and build its headless tester, which `make check-gb` uses
+# to capture a frame. Needs rgbds (for the boot ROMs) and a C compiler.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DEST="${SAMEBOY_DIR:-$ROOT/tools/SameBoy}"
+DEST="${SAMEBOY_DIR:-$ROOT/../tools/SameBoy}"
 REMOTE="${SAMEBOY_REMOTE:-https://github.com/LIJI32/SameBoy.git}"
 BASE_COMMIT="213a12ce93d66b105a113debd9396306066a7cfc"
 

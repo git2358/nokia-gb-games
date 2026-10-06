@@ -3,7 +3,7 @@
 # derived from your firmware dump.
 
 # Your own NSE-8/9 v6.00 dump (raw .fls or the swap16 image); see README.md.
-DUMP ?= ../../roms/3210f600a.fls
+DUMP ?= ../../../roms/3210f600a.fls
 
 PYTHON ?= python3
 CC ?= cc
@@ -19,7 +19,8 @@ GB_FB := -DLCD_FB_WIDTH=160 -DLCD_FB_HEIGHT=144 -DLCD_GAME_ZOOM=2
 # The ROM itself also takes the core's innermost drawing loops from
 # platform/gb/crt0.s (LCD_PLATFORM_COLUMNS); the host builds with this
 # framebuffer keep the C ones.
-SAMEBOY_TESTER ?= tools/SameBoy/build/bin/tester/sameboy_tester
+SAMEBOY ?= ../tools/SameBoy
+SAMEBOY_TESTER ?= $(SAMEBOY)/build/bin/tester/sameboy_tester
 SAMEBOY_APP ?= /Applications/SameBoy.app
 # Emulated seconds to run before the screenshot, and its scale factor.
 SHOT_SECONDS ?= 2
@@ -196,11 +197,11 @@ shot-gb: $(GB_TEST_ROM)
 	$(SAMEBOY_TESTER) --dmg --length $(SHOT_SECONDS) $(GB_TEST_ROM)
 	$(PYTHON) tools/bmp_to_png.py $(BUILD)/nokia3210-keys.bmp $(BUILD)/nokia3210-gb.png $(SHOT_SCALE)
 
-# Headless Game Boy sound capture; needs `make -C tools/SameBoy lib`.
+# Headless Game Boy sound capture; needs `make -C $(SAMEBOY) lib`.
 $(BUILD)/gb_audio: tools/gb_audio.c
-	@test -f tools/SameBoy/build/lib/libsameboy.a || { echo "Missing SameBoy's library: run make -C tools/SameBoy lib"; exit 1; }
+	@test -f $(SAMEBOY)/build/lib/libsameboy.a || { echo "Missing SameBoy's library: run make -C $(SAMEBOY) lib"; exit 1; }
 	@mkdir -p $(BUILD)
-	$(CC) -O2 -Itools/SameBoy -DGB_VERSION='"x"' -o $@ $< tools/SameBoy/build/lib/libsameboy.a -lm
+	$(CC) -O2 -I$(SAMEBOY) -DGB_VERSION='"x"' -o $@ $< $(SAMEBOY)/build/lib/libsameboy.a -lm
 
 run-gb: $(GB_ROM)
 	open -a "$(SAMEBOY_APP)" $(GB_ROM)
@@ -222,7 +223,7 @@ $(GBA_TEST_ROM): $(BUILD)/gba/nokia3210-keys.elf tools/gbafix.py FORCE
 gba: $(GBA_ROM)
 
 # Headless GBA runs use mGBA's core library; scripts/setup-mgba.sh builds it.
-MGBA ?= tools/mgba
+MGBA ?= ../tools/mgba
 SHOT_FRAMES ?= 60
 
 $(BUILD)/gba_shot: tools/gba_shot.c

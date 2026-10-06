@@ -58,7 +58,8 @@ That being said I got my firmware at firmware center
 - `scripts/make-banner.sh`: regenerates the banner above from headless
   emulator runs of both ROMs (needs ImageMagick).
 - `scripts/setup-sameboy.sh`: clones upstream SameBoy at a pinned commit
-  into the ignored `tools/SameBoy/` and builds its headless tester.
+  into the repository's ignored `tools/SameBoy/` and builds its headless
+  tester.
 - `tests/`: host checks that need no firmware.
 
 ## Toolchains
@@ -103,8 +104,8 @@ make sheet                      # draw the extracted assets to build/sheet_*.pgm
 make fonts                      # the phone's four fonts as ASCII-art sheets in build/fonts/
 ```
 
-`DUMP` defaults to `../../roms/3210f600a.fls`, the MAME fork's, in whose
-`ports/` directory this one is kept. The dump must be
+`DUMP` defaults to `../../../roms/3210f600a.fls`, the MAME fork's, in
+whose `ports/` directory this repository is kept. The dump must be
 NSE-8/9 v6.00 (SHA-256 `7bf29b96…0d8a` raw, or the fork's `_swap16.bin`
 form); the extractor refuses anything else.
 

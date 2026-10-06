@@ -9,7 +9,7 @@ DUMP ?= roms/noki3310/3310f639e.fls
 # holds the extractor and the emulator (https://github.com/lukesau/nokia-dct3-re).
 # This repository is kept in the fork's ports/ directory.
 FLASH_FILES ?= roms/3310-nhm5-v639
-DCT3_RE ?= ../..
+DCT3_RE ?= ../../..
 ROM_SET := roms/noki3310
 PMM := 3310 v2 pmm.bin
 # What the fork's noki3310 driver declares for BIOS 639.
@@ -37,8 +37,8 @@ SDAS ?= sdasgb
 GB_FB := -DLCD_FB_WIDTH=160 -DLCD_FB_HEIGHT=144 -DLCD_GAME_ZOOM=2
 GB_CFLAGS = -msm83 --opt-code-speed $(GB_FB) -DSI_DATA_AT=0xa100 '-DPAIRS2_STATE_AT=(SI_DATA_AT + SI_DATA_SIZE)' -DPAIRS2_STATE_END=0xc000 '-DBANTUMI_STATE_AT=(SI_DATA_AT + SI_DATA_SIZE)' -DBANTUMI_STATE_END=0xc000 -DBANTUMI_PLATFORM_SEARCH -DSNAKE2_STATE_AT=SI_DATA_AT '-DSNAKE2_STATE_END=(SI_DATA_AT + SI_DATA_SIZE)' -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_BAND -DSPRITE_PLATFORM_BITMAP -DSPRITE_PLATFORM_PRESENT -DSI_PLATFORM_FIND_HIT -DSI_SETUP_FAR -Icore -Iplatform/gb -I$(ASSETS)
 # The SameBoy clone scripts/setup-sameboy.sh makes: its boot ROM, and its
-# core as a library (`make -C tools/SameBoy lib`) for tools/gb_run.
-SAMEBOY ?= tools/SameBoy
+# core as a library (`make -C $(SAMEBOY) lib`) for tools/gb_run.
+SAMEBOY ?= ../tools/SameBoy
 SAMEBOY_BOOT ?= $(SAMEBOY)/build/bin/tester/dmg_boot.bin
 SAMEBOY_APP ?= /Applications/SameBoy.app
 # Screen frames from power-on at which check-gb takes the ROM's screen;
@@ -424,7 +424,7 @@ $(GBA_TEST_ROM): $(BUILD)/gba/nokia3310-keys.elf tools/gbafix.py FORCE
 gba: $(GBA_ROM)
 
 # Headless GBA runs use mGBA's core library; scripts/setup-mgba.sh builds it.
-MGBA ?= tools/mgba
+MGBA ?= ../tools/mgba
 # Screen frames to run before the screenshot; the game starts at power-on.
 SHOT_FRAMES ?= 300
 

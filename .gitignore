@@ -20,6 +20,6 @@ build/
 .venv/
 __pycache__/
 .DS_Store
-# Emulators cloned by scripts/
-tools/SameBoy/
-tools/mgba/
+# Emulators cloned by the scripts into the shared tools/
+/tools/
+*.pmm

@@ -184,7 +184,7 @@ static const char text_hint_more[] = "B back   A more";
 static const char text_hint_back[] = "B back";
 /* The full-screen list's extra entry and its page. The port's own words. */
 static const char text_about[] = "About";
-static const char text_about_body[] = "Nokia 3410 games " GAME_VERSION "\ngithub.com/lukesau/\nnokia-3410-games";
+static const char text_about_body[] = "Nokia 3410 games " GAME_VERSION "\ngithub.com/lukesau/\nnokia-gb-games";
 
 #if LCD_HAS_SURROUND
 /* Shown under the phone's LCD on the first screen. The port's own words. */

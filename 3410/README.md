@@ -2,8 +2,7 @@
 
 ![The first screen, the Select game list and Snake II being played on the Game Boy, at the phone's size and in full screen, where Snake II has its bigger board; Space Impact, Bumper, Bantumi and Link5's panels are blank, as they are not here yet](docs/banner.png)
 
-The Nokia 3410 (NHM-2 v5.46) follow-up to
-<https://github.com/lukesau/nokia-3310-games>: the 3410's built-in games
+The Nokia 3410 (NHM-2 v5.46) follow-up to the [3310's](../3310/README.md): the 3410's built-in games
 re-implemented in C from a map of the firmware, with their data read from
 your own dump at build time. One portable core runs on the host and as a
 Game Boy ROM (`.gb`); a GBA build is to come.
@@ -56,7 +55,7 @@ See [docs/plan.md](docs/plan.md) and, in the RE fork,
 
 `make dump` makes the flash image from the Wintesla files below (it needs
 the RE fork, in whose `ports/` directory this repository is kept, or
-`DCT3_RE=` pointing at it), `make gb` the ROM, `make run-gb` opens it in SameBoy. `make test` runs the host
+`DCT3_RE=` pointing at it; from here it is `../../..`), `make gb` the ROM, `make run-gb` opens it in SameBoy. `make test` runs the host
 checks; `make check-gb` runs the ROM headlessly against the host's frames.
 `make golden-snake` records Snake II games in the fork's MAME and `make
 check-golden` replays them through the core; `make check-menus` compares

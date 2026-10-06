@@ -2,8 +2,7 @@
 
 ![The first screen, the list of games, and Snake II, Space Impact, Bantumi and Pairs II being played, on the Game Boy and the Game Boy Advance, each in the phone-sized mode and in full screen, where Snake II has its bigger board](docs/banner.png)
 
-The Nokia 3310 (NHM-5 v6.39) follow-up to
-<https://github.com/lukesau/nokia-3210-games>: the phone's four games,
+The Nokia 3310 (NHM-5 v6.39) follow-up to the [3210's](../3210/README.md): the phone's four games,
 Space Impact, Snake II, Bantumi and Pairs II, re-implemented in C from a map of the firmware, behind the phone's
 own Games menus, with the levels, mazes, boards, sprites, fonts and text read from your
 own dump at build time.
@@ -126,9 +125,9 @@ their flash addresses (MCU `0x200000`, PPM `0x340000`, PMM `0x3d0000`):
 
 These are the files the `noki3310` driver of the MAME fork
 <https://github.com/lukesau/nokia-dct3-re> declares as BIOS `639`. The
-extractor and the emulator are the fork's; this directory is expected in
-the fork's `ports/` directory (`DCT3_RE=../..`), with its MAME already
-built.
+extractor and the emulator are the fork's; this repository is expected in
+the fork's `ports/` directory (`DCT3_RE=../../..` from here), with its
+MAME already built.
 
 ## Running the phone
 
@@ -154,8 +153,8 @@ brew install sdcc arm-none-eabi-gcc imagemagick
 - GBA: bare `arm-none-eabi-gcc` with no C library.
 - Emulators, for the headless checks: SameBoy's core as a library
   (`scripts/setup-sameboy.sh`, needs rgbds) and mGBA's
-  (`scripts/setup-mgba.sh`, needs cmake). `SAMEBOY=` and `MGBA=` name
-  existing builds, such as the 3210 project's.
+  (`scripts/setup-mgba.sh`, needs cmake). Both go into the repository's
+  shared, ignored `tools/`; `SAMEBOY=` and `MGBA=` name builds elsewhere.
 
 ## Version
 

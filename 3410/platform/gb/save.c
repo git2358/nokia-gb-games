@@ -1,5 +1,5 @@
-/* What the cartridge RAM keeps between power cycles, for the menus (bank
-   1, as they are). It starts with the settings: a two-byte signature, then
+/* What the cartridge RAM keeps between power cycles, for the menus (in
+   bank 0, which they reach from bank 1). It starts with the settings: a two-byte signature, then
    one four-byte record per game laid out as the phone stores them: top
    score high byte, low byte, level (the option in its top four bits:
    Snake II's maze) and a check byte; then the games'

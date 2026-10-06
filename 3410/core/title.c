@@ -231,7 +231,7 @@ static void draw_box_bitmap(uint16_t place, uint8_t w, uint8_t ht, uint8_t x, ui
 
 /* A score in its box of five digits, its ends from the game-over box's,
    lines along its top and bottom, and at the top a medal each side. */
-static void draw_score_box(uint16_t value, uint8_t y, uint8_t medals)
+void draw_score_box(uint16_t value, uint8_t y, uint8_t medals)
 {
     uint8_t x = (uint8_t)((LCD_WIDTH - HS_BOX_W) / 2), right = (uint8_t)(x + HS_BOX_W - BOX_END_W), i, j;
     uint16_t divisor = 10000;

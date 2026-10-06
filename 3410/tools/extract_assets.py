@@ -65,6 +65,8 @@ ENGLISH_BLOCK = 0x1BC  # offset of the ENGL block inside the TEXT chunk
 # the range used here.
 FONT_NAMES = ["font_large_bold", "font_small_plain", "font_medium_bold", "font_small_bold",
               "font_tiny_plain", "font_tiny_bold"]
+# Those the port draws with: the rest are left out, to save the room.
+FONTS_USED = FONT_NAMES[:5]
 FIRST_CHAR, LAST_CHAR = 0x20, 0x7E
 
 # English text by index in the language pack's string table.
@@ -108,6 +110,12 @@ STRINGS = [
     ("text_help_snake_2", 1959),
     ("text_help_snake_3", 1960),
     ("text_help_snake_4", 1961),
+    ("text_chapters", 128),
+    ("text_genevas_world", 134),
+    ("text_done", 707),
+    ("text_help_si_1", 1962),
+    ("text_help_si_2", 1963),
+    ("text_help_si_3", 1964),
 ]
 
 
@@ -326,6 +334,8 @@ extern const uint8_t game_sound_places[{len(sound_places)}];
 
     header += ["", '#include "font.h"', ""]
     for name, (height, baseline, glyphs) in zip(FONT_NAMES, extract_fonts(image)):
+        if name not in FONTS_USED:
+            continue
         columns = [c for glyph in glyphs for c in glyph]
         offsets, place = [], 0
         for glyph in glyphs:

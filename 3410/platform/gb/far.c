@@ -6,17 +6,18 @@
 
 #define MBC_ROM_BANK (*(volatile uint8_t *)0x2000)
 
-static uint8_t mapped = BANK_MENU;
+/* The bank mapped now (bcall.s keeps it too). */
+uint8_t far_mapped = BANK_MENU;
 
 void far_bank(uint8_t bank)
 {
-    mapped = bank;
+    far_mapped = bank;
     MBC_ROM_BANK = bank;
 }
 
 int far_snake2_handler(int event, struct game_context *ctx)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_mapped;
     int result;
 
     far_bank(BANK_SNAKE);
@@ -29,7 +30,7 @@ int far_snake2_handler(int event, struct game_context *ctx)
    its bank. */
 void far_title_start(void)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_mapped;
 
     far_bank(BANK_SNAKE);
     title_start();
@@ -38,7 +39,7 @@ void far_title_start(void)
 
 uint8_t far_title_elapse(uint16_t us)
 {
-    uint8_t was = mapped, what;
+    uint8_t was = far_mapped, what;
 
     far_bank(BANK_SNAKE);
     what = title_elapse(us);
@@ -48,7 +49,7 @@ uint8_t far_title_elapse(uint16_t us)
 
 void far_title_draw(void)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_mapped;
 
     far_bank(BANK_SNAKE);
     title_draw();
@@ -57,7 +58,7 @@ void far_title_draw(void)
 
 void far_over_start(uint16_t score, uint8_t blink)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_mapped;
 
     far_bank(BANK_SNAKE);
     over_start(score, blink);
@@ -66,7 +67,7 @@ void far_over_start(uint16_t score, uint8_t blink)
 
 uint8_t far_over_elapse(uint16_t us)
 {
-    uint8_t was = mapped, what;
+    uint8_t was = far_mapped, what;
 
     far_bank(BANK_SNAKE);
     what = over_elapse(us);
@@ -76,7 +77,7 @@ uint8_t far_over_elapse(uint16_t us)
 
 void far_over_draw(void)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_mapped;
 
     far_bank(BANK_SNAKE);
     over_draw();
@@ -85,7 +86,7 @@ void far_over_draw(void)
 
 void far_snake2_redraw(void)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_mapped;
 
     far_bank(BANK_SNAKE);
     snake2_redraw();
@@ -94,7 +95,7 @@ void far_snake2_redraw(void)
 
 void far_scores_start(uint16_t top, uint16_t last, uint8_t show_last, uint8_t kind)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_mapped;
 
     far_bank(BANK_SNAKE);
     scores_start(top, last, show_last, kind);
@@ -103,7 +104,7 @@ void far_scores_start(uint16_t top, uint16_t last, uint8_t show_last, uint8_t ki
 
 uint8_t far_scores_elapse(uint16_t us)
 {
-    uint8_t was = mapped, what;
+    uint8_t was = far_mapped, what;
 
     far_bank(BANK_SNAKE);
     what = scores_elapse(us);
@@ -113,10 +114,19 @@ uint8_t far_scores_elapse(uint16_t us)
 
 void far_scores_draw(void)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_mapped;
 
     far_bank(BANK_SNAKE);
     scores_draw();
+    far_bank(was);
+}
+
+void far_draw_score_box(uint16_t value, uint8_t y, uint8_t medals)
+{
+    uint8_t was = far_mapped;
+
+    far_bank(BANK_SNAKE);
+    draw_score_box(value, y, medals);
     far_bank(was);
 }
 
@@ -126,7 +136,7 @@ const uint8_t native_bank = BANK_NATIVE, native_tile_bank = BANK_NATIVE_TILES;
 
 uint8_t far_native_show(uint16_t id)
 {
-    uint8_t was = mapped, result;
+    uint8_t was = far_mapped, result;
 
     far_bank(BANK_NATIVE);
     result = native_show(id);
@@ -136,7 +146,7 @@ uint8_t far_native_show(uint16_t id)
 
 void far_native_cursor(uint8_t row, uint8_t on)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_mapped;
 
     far_bank(BANK_NATIVE);
     native_cursor(row, on);
@@ -145,7 +155,7 @@ void far_native_cursor(uint8_t row, uint8_t on)
 
 uint8_t far_native_leave(void)
 {
-    uint8_t was = mapped, result;
+    uint8_t was = far_mapped, result;
 
     far_bank(BANK_NATIVE);
     result = native_leave();

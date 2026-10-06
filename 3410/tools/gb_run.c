@@ -16,6 +16,9 @@
                   address range, and the instruction that made each
      hits:N:ADDR  run N screen frames and print how often the instruction
                   at hexadecimal ADDR was reached
+     times:N:ADDR,ADDR...  run N screen frames and print the cycle at
+                  which each of the instructions at those addresses is
+                  reached
      prof:N:FILE  run N screen frames, then write where the time went: a
                   line "BANK ADDR CYCLES" per instruction address, the bank
                   being the ROM bank mapped at 0x4000 (see common/tools/gb_profile.py)
@@ -139,7 +142,7 @@ int main(int argc, char **argv)
                 printf(" %02x", GB_read_memory(gb, (uint16_t)(addr + k)));
             printf("\n");
         } else if (strncmp(step, "prof:", 5) == 0) {
-            static uint32_t spent[4][0x10000];
+            static uint32_t spent[16][0x10000];
             char *colon = NULL;
             long frames = strtol(step + 5, &colon, 10);
             uint64_t left = (uint64_t)frames * 70224 * 2; /* 8 MHz units in a frame */
@@ -157,10 +160,10 @@ int main(int argc, char **argv)
                 pc = GB_get_registers(gb)->pc;
                 GB_get_direct_access(gb, GB_DIRECT_ACCESS_ROM, NULL, &mapped);
                 cycles = GB_run(gb);
-                spent[mapped & 3][pc] += cycles;
+                spent[mapped & 15][pc] += cycles;
                 left = left > cycles ? left - cycles : 0;
             }
-            for (bank = 0; bank < 4; bank++)
+            for (bank = 0; bank < 16; bank++)
                 for (pc = 0; pc < 0x10000; pc++)
                     if (spent[bank][pc])
                         fprintf(out, "%u %04x %u\n", bank, pc, spent[bank][pc]);
@@ -187,6 +190,28 @@ int main(int argc, char **argv)
                 left = left > cycles ? left - cycles : 0;
             }
             printf("%04x: reached %u times in %ld frames\n", addr, hits, frames);
+        } else if (strncmp(step, "times:", 6) == 0) {
+            /* times:N:ADDR,ADDR... runs N frames and prints the cycle,
+               counted from the step's start, at which each of the
+               instructions at those hexadecimal addresses is reached. */
+            char *p = NULL;
+            long frames = strtol(step + 6, &p, 10);
+            unsigned addrs[8], n = 0, i;
+            uint64_t left = (uint64_t)frames * 70224 * 2, at = 0;
+
+            while (p && *p && n < 8) {
+                addrs[n++] = (unsigned)strtoul(p + 1, &p, 16);
+            }
+            while (left > 0) {
+                unsigned cycles, pc = GB_get_registers(gb)->pc;
+
+                for (i = 0; i < n; i++)
+                    if (pc == addrs[i])
+                        printf("%04x at %llu\n", pc, (unsigned long long)(at / 2));
+                cycles = GB_run(gb);
+                at += cycles;
+                left = left > cycles ? left - cycles : 0;
+            }
         } else {
             long frames = strtol(step, NULL, 10);
 

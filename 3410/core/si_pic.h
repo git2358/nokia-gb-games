@@ -15,6 +15,7 @@
 
 #include <stdint.h>
 
+#include "si.h"
 #include "sprite.h"
 
 #define SI_PIC_COUNT 112
@@ -43,20 +44,24 @@ struct si_pic {
     uint8_t count, frame;
 };
 
+#ifdef SI_PICS_AT
+extern __at(SI_PICS_AT) struct si_pic si_pics[SI_PIC_COUNT + 1];
+#else
 extern struct si_pic si_pics[SI_PIC_COUNT + 1];
+#endif
 
 /* Frees every picture. */
-void si_pic_reset(void);
-uint8_t si_pic_create(uint8_t mode, int x, int y, const struct sprite_image *frames, uint8_t count);
-uint8_t si_pic_create_fill(uint8_t mode, int x, int y, int w, int h);
-uint8_t si_pic_create_line(uint8_t mode, int x, int y, int x2, int y2);
-void si_pic_free(uint8_t id);
+void si_pic_reset(void) SI_FAR;
+uint8_t si_pic_create(uint8_t mode, int x, int y, const struct sprite_image *frames, uint8_t count) SI_FAR;
+uint8_t si_pic_create_fill(uint8_t mode, int x, int y, int w, int h) SI_FAR;
+uint8_t si_pic_create_line(uint8_t mode, int x, int y, int x2, int y2) SI_FAR;
+void si_pic_free(uint8_t id) SI_FAR;
 /* Moves a picture to just after `after` in the list, or to the front when
    `after` is 0. */
-void si_pic_move_after(uint8_t id, uint8_t after);
-void si_pic_set_frames(uint8_t id, const struct sprite_image *frames, uint8_t count);
+void si_pic_move_after(uint8_t id, uint8_t after) SI_FAR;
+void si_pic_set_frames(uint8_t id, const struct sprite_image *frames, uint8_t count) SI_FAR;
 /* The next frame, back to the first after the last. */
-void si_pic_next_frame(uint8_t id);
+void si_pic_next_frame(uint8_t id) SI_FAR;
 #define si_pic_set_mode(id, m) (si_pics[id].mode = (m))
 #define si_pic_move(id, px, py) (si_pics[id].x = (int16_t)(px), si_pics[id].y = (int16_t)(py))
 #define si_pic_move_by(id, dx, dy) (si_pics[id].x = (int16_t)(si_pics[id].x + (dx)), \
@@ -64,6 +69,6 @@ void si_pic_next_frame(uint8_t id);
 #define si_pic_image(id) (&si_pics[id].frames[si_pics[id].frame])
 
 /* Draws the list into sprite_screen, cleared first. */
-void si_pic_render(void);
+void si_pic_render(void) SI_FAR;
 
 #endif

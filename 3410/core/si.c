@@ -2,155 +2,27 @@
    named in its comment by address, in the same order of operations:
    objects are walked by their record's index and the generator is drawn
    from in the firmware's order, both of which a frame-exact game needs.
+   This file is the handler, the chapters, the HUD, pause and game over;
+   the rest is in the files si_int.h lists.
 
-   Not done yet: the demos, the High scores page, sounds and the
-   vibrator. */
-#include "si.h"
+   Not done yet: the Instructions' demos, sounds and the vibrator. */
+#include "si_int.h"
 
-#include <string.h>
-
-#include "game_assets.h"
-#include "rand.h"
-#include "si_data.h"
-#include "si_pic.h"
-
-#define W 96
-#define H 65
-#define RECORDS 60
-#define MAX_OBJECTS 40
-#define FREE 0x7f
-#define NO_RECORD 0xff
-
-/* Object types: the game's own; 20 and up are the enemies. */
-enum {
-    TYPE_SHIP,
-    TYPE_SHIELD,
-    TYPE_EXPLOSION,
-    TYPE_BONUS,
-    TYPE_SHOT,
-    TYPE_BULLET,
-    TYPE_WALL,
-    TYPE_MISSILE,
-    TYPE_BEAM
-};
-
-#define SIDE_PLAYER 0x0a
-
-enum {
-    PHASE_PLAY = 10,
-    PHASE_CONTINUE = 0x14,
-    PHASE_EXIT = 0x1e,
-    PHASE_CLOSE = 0x32,
-    PHASE_OVER = 0x3c
-};
-
-#define FLOOR 0
-#define CEILING 100
-
-/* The game-over picture's score box, from the pieces of Snake II's
-   (snake2_box): two 6x12 ends and five 6x8 digits 8 apart between them. */
-#define BOX_X 23
-#define BOX_Y 26
-#define BOX_W 51
-#define BOX_H 12
-#define BOX_END_W 6
-#define BOX_DIGIT_W 6
-#define BOX_DIGIT_H 8
-#define BOX_DIGIT_PITCH 8
-#define BOX_LEFT_END 0 /* places in snake2_box */
-#define BOX_RIGHT_END 12
-#define BOX_DIGIT_0 24
-
-/* An object, 20 bytes on the phone. */
-struct object {
-    uint8_t frames, frame, type, hp, pattern, speed, fire;
-    uint8_t pic;
-    uint8_t saved_x, saved_y; /* where it was when the game was paused */
-    uint8_t no_score, side, boss;
-};
-
-static struct si_state {
-    /* The terrain: tilemap, tiles, where it is, and its picture. */
-    uint8_t map_w, map_rows, place; /* place: FLOOR or CEILING */
-    const uint8_t *map, *tiles;
-    uint8_t terrain[2 * W];
-    struct sprite_image terrain_image;
-    uint8_t terrain_pic;
-    uint8_t fill, beam_line;
-    uint8_t count;   /* objects alive, at most 40 */
-    uint8_t chapter;
-    uint8_t score_digits[5], count_digits[2], icon, hearts[5], continue_icons[4], countdown_digits[2];
-    uint8_t beam_col, boss_state;
-    struct object rec[RECORDS];
-    uint8_t bottom, top;
-    /* The chapter: its record and how far its script has got. */
-    uint8_t entries, checkpoints[4], checkpoint, mode, entries_left, delay;
-    const uint8_t *script;
-    uint8_t phase;
-    int16_t scroll;
-    int8_t countdown;
-    uint8_t boss;
-    uint16_t score;
-    uint8_t ship_lost, cooldown, fire_count, special_latch;
-    int8_t lives;
-    uint8_t shot_type, special;
-    int8_t specials;
-    uint8_t ship_pic;
-    uint8_t shield, missile_target, continues, accel, ship;
-    uint8_t timer, vibration; /* tick counters: the shield or the chapter's end; the vibrator */
-    /* The tables' working bytes. */
-    int8_t burst_pause, boss_cooldown, bounce_latch, bounce_dir;
-    uint8_t bounce_age, bounce_last, flashed;
-    const uint8_t *path;
-    uint8_t logo_top, logo_bottom;
-    uint8_t box[BOX_W * 2];
-    struct sprite_image box_image;
-} si;
-
-/* The state as the game saved it when paused (0x3b2922), for Continue. */
-static struct si_state si_saved;
+/* The state, and the state as the game saved it when paused (0x3b2922),
+   for Continue. A platform short of work RAM may keep them elsewhere, as
+   snake2.c does. */
+#ifdef SI_STATE_AT
+__at(SI_STATE_AT) struct si_state si;
+__at(SI_STATE_AT + sizeof(struct si_state)) struct si_state si_saved;
+typedef char si_state_fits[SI_STATE_AT + 2 * sizeof(struct si_state) <= SI_STATE_END ? 1 : -1];
+#else
+struct si_state si;
+struct si_state si_saved;
+#endif
 static uint8_t si_have_saved;
 
 uint16_t si_keys_held;
 uint16_t si_period;
-
-#define held(key) (si_keys_held >> (key) & 1)
-#define IS_LAST_CHAPTER() (si.chapter == SI_CHAPTER_COUNT - 1)
-#define PATH(address) (si_paths + ((address) - SI_PATHS_BASE))
-#define SETTINGS(i) (si_chapter_settings[9 * si.chapter + (i)])
-
-static const struct sprite_image *type_frames(uint8_t type)
-{
-    return &si_pictures[si_type_picture[type]];
-}
-
-/* Width and height of a record's current frame (0x259cc4, 0x25a598). */
-static int width(uint8_t k)
-{
-    return type_frames(si.rec[k].type)[si.rec[k].frame].w;
-}
-
-static int height(uint8_t k)
-{
-    return type_frames(si.rec[k].type)[si.rec[k].frame].h;
-}
-
-#define PIC(k) (si.rec[k].pic)
-#define X(k) (si_pics[PIC(k)].x)
-#define Y(k) (si_pics[PIC(k)].y)
-
-/* 0x258bb4: leading zeros shown. */
-static void draw_number(const uint8_t *pics, unsigned value, uint8_t digits)
-{
-    uint8_t d[5], i;
-
-    for (i = digits; i; i--) {
-        d[i - 1] = (uint8_t)(value % 10);
-        value /= 10;
-    }
-    for (i = 0; i < digits; i++)
-        si_pic_set_frames(pics[i], &si_pictures[SI_PIC_DIGIT + d[i]], 1);
-}
 
 /* 0x258b94 */
 static void objects_clear(void)
@@ -167,26 +39,9 @@ static void objects_clear(void)
     si.count = 0;
 }
 
-/* 0x25975c: rows on a 96-column screen sit lower. */
-static int row_adjust(int y)
-{
-    return (uint8_t)(y + (si.place == CEILING ? 10 : 6));
-}
-
-/* 0x2596b2 */
-static uint8_t find_free(void)
-{
-    uint8_t k;
-
-    for (k = 0; k < RECORDS; k++)
-        if (si.rec[k].type == FREE)
-            return k;
-    return NO_RECORD;
-}
-
 /* The template a record starts from: the game's own types', or for the
    enemies the phone's table {frames, type, side, boss}. */
-static void set_template(struct object *o, uint8_t type)
+void si_set_template(struct object *o, uint8_t type) SI_FAR
 {
     memset(o, 0, sizeof *o);
     if (type < 20) {
@@ -215,7 +70,7 @@ static void set_template(struct object *o, uint8_t type)
 
 /* 0x2596dc: the picture first, then the record; 0 when 40 objects are
    alive. */
-static uint8_t spawn(uint8_t type, uint8_t mode, int x, int y)
+uint8_t si_spawn(uint8_t type, uint8_t mode, int x, int y) SI_FAR
 {
     uint8_t pic, k;
 
@@ -225,21 +80,10 @@ static uint8_t spawn(uint8_t type, uint8_t mode, int x, int y)
     k = find_free();
     if (k == NO_RECORD)
         return 0;
-    set_template(&si.rec[k], type);
+    si_set_template(&si.rec[k], type);
     si.rec[k].pic = pic;
     si.count++;
     return k;
-}
-
-/* 0x259598 */
-static void object_free(uint8_t k)
-{
-    si_pic_free(PIC(k));
-    if (si.count)
-        si.count--;
-    si.rec[k].type = FREE;
-    if (k == si.missile_target)
-        si.missile_target = 0;
 }
 
 /* 0x258da0 */
@@ -265,22 +109,29 @@ static void terrain_render(void)
 {
     uint8_t row, col;
 
+    /* A tile's columns at a time, from where the scroll is in the first,
+       the map wrapping round (the scroll is always within it, but for the
+       division the Game Boy would rather not do). */
+    uint16_t first = (uint16_t)(si.scroll >> 5);
+
+    if (first >= si.map_w)
+        first %= si.map_w;
     for (row = 0; row < si.map_rows; row++) {
-        uint8_t cell = (uint8_t)(row * si.map_w + (uint16_t)(si.scroll >> 5) % si.map_w);
-        uint8_t in = si.scroll & 0x1f;
+        uint8_t at = (uint8_t)first, in = si.scroll & 0x1f, n, tile;
+        const uint8_t *cells = si.map + row * si.map_w;
+        uint8_t *d = &si.terrain[row * W];
 
-        for (col = 0; col < W; col++, in++) {
-            uint8_t tile, b;
-
-            if (in > 0x1f) {
-                cell++;
-                if (cell % si.map_w == 0)
-                    cell = (uint8_t)(row * si.map_w);
-                in = 0;
-            }
-            tile = si.map[cell];
-            b = tile ? si.tiles[32 * (tile - 1) + in] : 0;
-            si.terrain[row * W + col] = b;
+        for (col = 0; col < W; col += n, in = 0) {
+            n = (uint8_t)(32 - in);
+            if (n > W - col)
+                n = (uint8_t)(W - col);
+            tile = cells[at];
+            if (tile)
+                memcpy(d + col, si.tiles + 32 * (tile - 1) + in, n);
+            else
+                memset(d + col, 0, n);
+            if (++at == si.map_w)
+                at = 0;
         }
     }
 }
@@ -377,7 +228,7 @@ static void respawn_place(int *x, int *y)
 
 /* 0x25978c: a new ship (10), or the next after one was lost (0x14), and
    the shield over it. */
-static void ship_spawn(uint8_t how)
+void si_ship_spawn(uint8_t how) SI_FAR
 {
     uint8_t mode;
 
@@ -386,7 +237,7 @@ static void ship_spawn(uint8_t how)
     si.fire_count = 0;
     si.special_latch = 0;
     if (how == 10) {
-        si.ship = spawn(TYPE_SHIP, si.mode, 5, row_adjust(0x14));
+        si.ship = si_spawn(TYPE_SHIP, si.mode, 5, row_adjust(0x14));
         si.ship_pic = PIC(si.ship);
         if (si.shield != NO_RECORD)
             object_free(si.shield);
@@ -397,12 +248,12 @@ static void ship_spawn(uint8_t how)
 
         object_free(si.ship);
         respawn_place(&x, &y);
-        si.ship = spawn(TYPE_SHIP, si.mode, x, y);
+        si.ship = si_spawn(TYPE_SHIP, si.mode, x, y);
         si.ship_pic = PIC(si.ship);
     }
     mode = si.mode == 0x12 ? 0x12 : SI_MODE_HIDDEN;
     if (si.shield == NO_RECORD) {
-        si.shield = spawn(TYPE_SHIELD, mode, 3, 0x12);
+        si.shield = si_spawn(TYPE_SHIELD, mode, 3, 0x12);
     } else {
         si_pic_move(PIC(si.shield), si_pics[si.ship_pic].x - 2, si_pics[si.ship_pic].y - 2);
         si_pic_set_mode(PIC(si.shield), mode);
@@ -414,7 +265,7 @@ static void ship_spawn(uint8_t how)
 
 /* 0x259ff4: the high-score record is not kept here, but its generator
    draw is. */
-static void high_score_save(void)
+void si_high_score_save(void) SI_FAR
 {
     game_rand();
 }
@@ -432,11 +283,11 @@ static void new_game(void)
     si.shield = NO_RECORD;
     si.chapter = 0;
     chapter_load();
-    ship_spawn(10);
+    si_ship_spawn(10);
 }
 
 /* 0x258c42 */
-static void continue_enter(void)
+void si_continue_enter(void) SI_FAR
 {
     uint8_t i;
 
@@ -470,584 +321,15 @@ static int continue_key(uint8_t key)
     si.special = TYPE_WALL;
     si.specials = 3;
     chapter_load();
-    ship_spawn(10);
+    si_ship_spawn(10);
     si.entries_left = si.checkpoint ? si.checkpoint : si.entries;
     si.delay = 0x14;
     si.phase = PHASE_PLAY;
     return 1;
 }
 
-/* 0x25a068 */
-static void ship_clamp_y(void)
-{
-    int s = si.shield == NO_RECORD ? 0 : 2, y = si_pics[si.ship_pic].y;
-
-    if ((H - s - 19) < y)
-        y = H - s - 19;
-    else if (y < s + 10)
-        y = s + 10;
-    si_pics[si.ship_pic].y = (int16_t)y;
-}
-
-/* 0x25a110: the keys held, every tick. */
-static void keys_poll(void)
-{
-    int s = si.shield == NO_RECORD ? 0 : 2, x, y, step, moved = 0;
-
-    if (si.ship_lost == 1)
-        return;
-    x = si_pics[si.ship_pic].x;
-    y = si_pics[si.ship_pic].y;
-    if (held(0)) {
-        if (si.accel < 3 || (si.place == FLOOR && y == H - s - 9)
-            || (si.place == CEILING && y == si.bottom - s - 9)) {
-            si.accel++;
-            step = 1;
-        } else {
-            step = 2;
-        }
-        si_pic_move_by(si.ship_pic, 0, step);
-        moved = 1;
-    }
-    if (held(8)) {
-        if (si.accel < 3 || (si.place == FLOOR && 5 < y && y < 8 && s == 0)) {
-            si.accel++;
-            step = 1;
-        } else {
-            step = 2;
-        }
-        si_pic_move_by(si.ship_pic, 0, -step);
-        moved = 1;
-    }
-    if (held(SI_KEY_STAR)) {
-        if (si.accel < 3 || (s == 0 && 0 < x && x < 3)) {
-            si.accel++;
-            step = 1;
-        } else {
-            step = 2;
-        }
-        if (step + s < x) {
-            si_pic_move_by(si.ship_pic, -step, 0);
-            moved = 1;
-        }
-    }
-    if (held(SI_KEY_HASH)) {
-        if (si.accel < 3) {
-            si.accel++;
-            step = 1;
-        } else {
-            step = 2;
-        }
-        if (x <= W - step - 10) {
-            si_pic_move_by(si.ship_pic, step, 0);
-            moved = 1;
-        }
-    }
-    if ((held(1) || held(3)) && !si.cooldown && si.fire_count < 3) {
-        spawn(si.shot_type, si.mode, x + 6, y + 3);
-        si.cooldown = 1;
-        si.fire_count++;
-    }
-    if (!held(4) && !held(6)) {
-        si.special_latch = 0;
-    } else if (!si.special_latch && (si.special_latch = 1, si.specials >= 1)) {
-        if (si.special == TYPE_BEAM) {
-            if (!si.beam_col) {
-                uint8_t k;
-
-                si.beam_col = (uint8_t)(width(si.ship) + x);
-                if (si.top == 0x10)
-                    si.beam_line = si_pic_create_line(si.mode, si.beam_col, 0, si.beam_col, si.bottom);
-                else
-                    si.beam_line = si_pic_create_line(si.mode, si.beam_col, si.top, si.beam_col, H - 1);
-                k = find_free();
-                set_template(&si.rec[k], TYPE_BEAM);
-                si.rec[k].pic = si.beam_line;
-                si.specials--;
-                draw_number(si.count_digits, (unsigned)(int)si.specials & 0xffff, 2);
-            }
-        } else {
-            spawn(si.special, si.mode, x + 6, y + 3);
-            si.specials--;
-            draw_number(si.count_digits, (unsigned)(int)si.specials & 0xffff, 2);
-        }
-    }
-    if (moved)
-        ship_clamp_y();
-}
-
-/* 0x25a3f4: the chapter's script. */
-static void spawn_step(void)
-{
-    if (si.delay) {
-        si.delay--;
-        if (si.delay)
-            return;
-    }
-    while (si.entries_left) {
-        const uint8_t *e;
-        uint8_t k, n, mode, boss = 0;
-
-        for (k = 0; k < 4; k++)
-            if (si.entries - si.entries_left == si.checkpoints[k])
-                si.checkpoint = si.entries_left;
-        e = si.script + 9 * (si.entries - si.entries_left);
-        if (e[4] == 0x18)
-            for (k = 0; k < RECORDS; k++)
-                if (si.rec[k].type != FREE && si.rec[k].pattern == 0x18)
-                    si.rec[k].pattern = 3;
-        si.delay = e[5];
-        mode = si.mode;
-        if (si.entries_left == 1) {
-            boss = 1;
-            mode = si.mode == 0x12 ? SI_MODE_COPY : SI_MODE_HIDDEN;
-        }
-        for (n = 0; n < e[0]; n++) {
-            uint8_t y = e[6];
-            int x;
-
-            if (y == 0x3f) {
-                unsigned r = (unsigned)game_rand();
-                int limit;
-
-                y = (uint8_t)(si.top + r % si.bottom);
-                if (y < si.top)
-                    y = si.top;
-                limit = si.bottom - type_frames(e[1])[0].h;
-                if (limit < y)
-                    y = (uint8_t)limit;
-            }
-            if (y == 0 && si.place == FLOOR)
-                y = (uint8_t)(si.top + 1);
-            y = (uint8_t)row_adjust(y);
-            x = e[4] == 5 ? (int16_t)-(n * e[2]) : (int16_t)(n * e[2] + W);
-            k = spawn(e[1], mode, x, y);
-            si.rec[k].pattern = e[4];
-            si.rec[k].speed = e[3];
-            si.rec[k].hp = e[8];
-            si.rec[k].fire = e[7];
-            if (boss) {
-                si.boss_state = 1;
-                si.boss = k;
-                si.rec[k].boss = 1;
-            }
-        }
-        si.entries_left--;
-        if (si.delay)
-            return;
-    }
-}
-
-/* 0x25a5d4: whether an object's picture touches the terrain's (frame 0's
-   bitmap, the current frame's size). */
-/* A byte of the terrain's bitmap as the phone reads it: an object part
-   off the screen's left edge reads before the row, and before the bitmap
-   itself there is the heap's own data. Taken here to be the block's size,
-   192 bytes and an 8-byte header, as a big-endian word: inferred, the one
-   reading that fits what MAME shows, a bullet at x -1 beside the terrain
-   taken away on bit 3 of the byte before the bitmap and a projectile
-   there not on bits 0 and 1. */
-static int terrain_bit(int x, int row)
-{
-    static const uint8_t before[4] = { 0x00, 0x00, 0x00, 0xc8 };
-    int at = x + W * (row >> 3);
-
-    if (at < -4)
-        return 0;
-    if (at < 0)
-        return before[4 + at] >> (row & 7) & 1;
-    return si.terrain[at] >> (row & 7) & 1;
-}
-
-static int terrain_collide(uint8_t k)
-{
-    const uint8_t *bitmap = type_frames(si.rec[k].type)[0].bitmap;
-    int w = width(k), h = height(k), x = X(k), y = Y(k);
-    int ty = si_pics[si.terrain_pic].y, th = si.map_rows << 3, orow, trow, n, c;
-
-    if (si.place == CEILING && y > ty + th)
-        return 0;
-    if (si.place == FLOOR && y + h < ty)
-        return 0;
-    if (ty < y && y + h < ty + th) {
-        trow = y - ty;
-        for (orow = 0, n = th - trow; n > 0; n--, orow++, trow++)
-            for (c = 0; c < w; c++) {
-                if (orow >= h || x + c >= W)
-                    return 0;
-                if ((bitmap[c + w * (orow >> 3)] >> (orow & 7) & 1) && terrain_bit(x + c, trow))
-                    return h / 2 < orow ? 2 : 1;
-            }
-    } else if (y < ty && ty < y + h) {
-        orow = ty - y;
-        for (trow = 0, n = h - orow; n > 0; n--, orow++, trow++)
-            for (c = 0; c < w; c++) {
-                if (orow >= h || x + c >= W)
-                    return 0;
-                if ((bitmap[c + w * (orow >> 3)] >> (orow & 7) & 1) && terrain_bit(x + c, trow))
-                    return 2;
-            }
-    } else if (ty < y && y < ty + th) {
-        trow = y - ty;
-        for (orow = 0; orow < h; orow++, trow++) {
-            for (c = 0; c < w; c++) {
-                if (x + c >= W)
-                    return 0;
-                if ((bitmap[c + w * (orow >> 3)] >> (orow & 7) & 1) && terrain_bit(x + c, trow))
-                    return 1;
-            }
-            if (trow + 1 >= th)
-                return 0;
-        }
-    }
-    return 0;
-}
-
-/* 0x25a8c2 */
-static int fire_roll(uint8_t k)
-{
-    uint8_t chance = si.rec[k].fire;
-
-    if (!chance || chance == 0x7f || (unsigned)game_rand() % chance)
-        return 0;
-    if (si.rec[k].pattern == 0x14) {
-        if (si.burst_pause > 0) {
-            si.burst_pause--;
-            return 0;
-        }
-        si.burst_pause = (int8_t)((unsigned)game_rand() % 3 + 2);
-    }
-    return 1;
-}
-
-/* 0x25a920 */
-static void enemy_fire(uint8_t k, uint8_t type)
-{
-    if (X(k) <= W)
-        spawn(type, si.mode, X(k) - 2, (height(k) >> 1) + Y(k));
-}
-
-/* 0x25adfa */
-static int free_at_left(uint8_t k)
-{
-    if (X(k) < 1 || X(k) > 250) {
-        object_free(k);
-        return 1;
-    }
-    return 0;
-}
-
-/* 0x25b0ae */
-static int free_at_right(uint8_t k)
-{
-    if (width(k) + X(k) > W) {
-        object_free(k);
-        return 1;
-    }
-    return 0;
-}
-
-/* 0x25a96e: up and down, turning at the play area's limits and the
-   terrain, with a direction kept per object. */
-static void move_bounce(uint8_t k, uint8_t bullet)
-{
-    int y = Y(k), h = height(k);
-
-    if (PIC(k) != si.bounce_last) {
-        si.bounce_last = PIC(k);
-        si.bounce_dir = -1;
-        si.bounce_latch = 0;
-        si.bounce_age = 0;
-    }
-    if ((si.place == FLOOR && y <= si.top) || (si.place == CEILING && si.bottom <= y + h)) {
-        si.bounce_dir = si.place == FLOOR && y <= si.top ? 1 : -1;
-        si.bounce_latch = 0;
-    } else if (y + h < H && y >= 0) {
-        if (terrain_collide(k)) {
-            if (!si.bounce_latch) {
-                si.bounce_dir = (int8_t)-si.bounce_dir;
-                si.bounce_latch = si.bounce_dir;
-                si.bounce_age = 0;
-            } else if (++si.bounce_age > 10) {
-                si.bounce_latch = 0;
-            }
-        }
-    } else {
-        si.bounce_dir = y < 0 ? 1 : -1;
-        si.bounce_latch = si.bounce_dir;
-        if (y < 0)
-            y = 1;
-        if (H <= y + h)
-            y = H - h - 1;
-    }
-    if (fire_roll(k) && bullet)
-        enemy_fire(k, bullet);
-    if (si.rec[k].boss)
-        si.boss_state = 0x1e;
-    if (si.bounce_latch)
-        si.bounce_dir = si.bounce_latch;
-    Y(k) = (int16_t)(si.bounce_dir + y);
-}
-
-/* 0x25aaf2: a boss comes on until it is in place. */
-static int boss_enter(uint8_t k)
-{
-    if (si.boss_state != 0x28 && si.boss_state != 0x14 && X(k) > (W / 3) * 2 - 5) {
-        X(k)--;
-        return 0;
-    }
-    return 1;
-}
-
-/* 0x25ab3e */
-static void boss_charge(uint8_t k, uint8_t bullet, int reach)
-{
-    int x = X(k), y = Y(k);
-
-    switch (si.boss_state) {
-    case 10:
-        if ((W / 3) * 2 - 5 <= x)
-            si.boss_state = 0x1e;
-        else
-            X(k) = (int16_t)(x + 1);
-        return;
-    case 0x14:
-        if (x <= W / 8) {
-            si.boss_state = 10;
-            return;
-        }
-        x += reach == 100 ? -2 : -4;
-        if (terrain_collide(k))
-            y += si.place == FLOOR ? -1 : 1;
-        si_pic_move(PIC(k), x, y);
-        return;
-    case 0x28:
-        if (x < W)
-            X(k) = (int16_t)(x + 1);
-        else
-            si.boss_state = 0x14;
-        return;
-    }
-    move_bounce(k, bullet);
-    if ((unsigned)game_rand() % 0x32 || si.bottom <= y || y <= si.top || x > (W / 3) * 2)
-        return;
-    si.boss_state = reach == 100 ? 0x14 : 0x28;
-}
-
-/* 0x25ac44: the boss's own projectile, from the chapter's settings. */
-static void boss_fire(uint8_t k)
-{
-    uint8_t type = SETTINGS(2);
-    int dy = (int8_t)SETTINGS(3), dx = (int8_t)SETTINGS(4);
-
-    if (width(k) < dx)
-        dx = 0;
-    if (height(k) < dy)
-        dy = 0;
-    if (!fire_roll(k)) {
-        if (!si.boss_cooldown)
-            return;
-    } else if (!si.boss_cooldown) {
-        uint8_t j = spawn(type, si.mode, (int8_t)(X(k) + dx - type_frames(type)[0].w), Y(k) + dy);
-
-        si.rec[j].no_score = 1;
-        si.rec[j].pattern = SETTINGS(5);
-        si.rec[j].speed = SETTINGS(6);
-        si.rec[j].hp = 3;
-        si.boss_cooldown = 6;
-        return;
-    }
-    si.boss_cooldown--;
-}
-
-/* 0x25ad28 */
-static void move_boss(uint8_t k)
-{
-    uint8_t bullet = SETTINGS(1);
-
-    if (!si.boss_state || si.boss_state == 0x7f)
-        return;
-    if (boss_enter(k)) {
-        switch (SETTINGS(0)) {
-        case 0:
-            if (fire_roll(k) == 1 && bullet)
-                enemy_fire(k, bullet);
-            break;
-        case 1:
-            move_bounce(k, bullet);
-            break;
-        case 2:
-            boss_charge(k, bullet, 100);
-            break;
-        case 3:
-            boss_charge(k, bullet, 150);
-            break;
-        }
-        if (SETTINGS(2))
-            boss_fire(k);
-    }
-    si_pic_set_mode(PIC(k), SI_MODE_COPY);
-}
-
-/* 0x25ae30: along the screen, turning off the ceiling or the floor. */
-static void move_slope(uint8_t k, int speed, int side)
-{
-    int x = X(k) - speed, y = Y(k), turned = 0;
-
-    if (side == FLOOR) {
-        if (x > W) {
-            y = si.bottom;
-        } else if (y > (H / 5) * 3) {
-            y--;
-            turned = 1;
-        }
-    } else {
-        if (x > W) {
-            y = si.top;
-        } else if (y < H / 5) {
-            y++;
-            turned = 1;
-        }
-    }
-    si_pic_move(PIC(k), x, y);
-    if (!free_at_left(k) && turned && fire_roll(k))
-        enemy_fire(k, TYPE_BULLET);
-}
-
-/* 0x25af08: leftwards with y read from a table by x. */
-static void move_path(uint8_t k, int speed, int relative, int offset)
-{
-    int x = X(k) - speed, base, step, y;
-    uint8_t pattern;
-
-    base = relative ? offset : si.place == CEILING ? 10 : 0;
-    base = row_adjust(base);
-    if (x < 0)
-        x = 0;
-    step = (int8_t)si.path[x % W];
-    y = (int16_t)(base + step);
-    if (si.place == CEILING) {
-        if (y + height(k) > H - 8 - 6)
-            y = H - 8 - height(k) - 6;
-    } else if (si.place == FLOOR && y < 10) {
-        y = 10;
-    }
-    si_pic_move(PIC(k), x, y);
-    if (free_at_left(k))
-        return;
-    pattern = si.rec[k].pattern;
-    if (pattern == 1) {
-        if (y != 0x1b && y != 9)
-            return;
-    } else if (pattern >= 10 && pattern <= 13) {
-        if (step != 4 && step != -4)
-            return;
-    } else if (pattern != 15 && pattern != 16) {
-        return;
-    }
-    if (fire_roll(k))
-        enemy_fire(k, TYPE_BULLET);
-}
-
-/* 0x25b06c: the enemy with the most hit points, by record. */
-static uint8_t missile_pick_target(void)
-{
-    uint8_t k, best = 0;
-    int most = -99;
-
-    for (k = 0; k < RECORDS; k++) {
-        uint8_t t = si.rec[k].type;
-
-        if (t != FREE && t != TYPE_SHIP && t != TYPE_EXPLOSION && si.rec[k].side != SIDE_PLAYER
-            && most < (int8_t)si.rec[k].hp) {
-            best = k;
-            most = (int8_t)si.rec[k].hp;
-        }
-    }
-    return best;
-}
-
-/* 0x25b0f0 */
-static void move_missile(uint8_t k)
-{
-    int x = X(k), y = Y(k), aim;
-    uint8_t t = si.missile_target;
-
-    if (!t || X(t) < x)
-        si.missile_target = t = missile_pick_target();
-    if (!t) {
-        si_pic_move_by(PIC(k), 1, 0);
-        return;
-    }
-    aim = Y(t) + (height(t) >> 1);
-    if (y < aim && y < si.bottom)
-        y++;
-    else if (y > aim && y > si.top)
-        y--;
-    si_pic_move(PIC(k), x + 2, y);
-    free_at_right(k);
-}
-
-/* 0x25b1c4: leftwards, then down to the ship's row and a shot when level
-   with it. */
-static void move_dive(uint8_t k, int speed)
-{
-    uint8_t top = 5, bottom = 0x21, x, y;
-    int h;
-
-    if (si.place == CEILING && si.map_rows < 3) {
-        top = 0xf;
-        bottom = 0x2b;
-    }
-    top = (uint8_t)row_adjust(top);
-    bottom = (uint8_t)row_adjust(bottom);
-    x = (uint8_t)X(k);
-    y = (uint8_t)Y(k);
-    if (free_at_left(k))
-        return;
-    h = height(k);
-    if (x > W / 2) {
-        if (W - width(k) < x) {
-            x = (uint8_t)(x - speed);
-            y = top;
-        } else {
-            x = (uint8_t)(x - speed);
-            if (y < bottom - h)
-                y = (uint8_t)(y + speed);
-        }
-    } else if (x == W / 2 || x == W / 2 - 1 || x == W / 2 - 2) {
-        if (top < y) {
-            y = (uint8_t)(y - speed);
-            if (y == si_pics[si.ship_pic].y)
-                enemy_fire(k, TYPE_BULLET);
-        } else {
-            x = (uint8_t)(x - speed);
-        }
-    } else {
-        x = (uint8_t)(x - speed);
-        if (y < bottom)
-            y = (uint8_t)(y + speed);
-    }
-    if (bottom - h < y)
-        y = (uint8_t)(bottom - h);
-    si_pic_move(PIC(k), x, y);
-}
-
-/* 0x25b37c */
-static void move_track_ship(uint8_t k, int speed)
-{
-    int y = Y(k), ship_y = si_pics[si.ship_pic].y;
-
-    if (y < ship_y)
-        y++;
-    else if (y > ship_y)
-        y--;
-    si_pic_move(PIC(k), X(k) - speed, y);
-    free_at_left(k);
-}
-
 /* 0x25b3ec */
-static void award(uint8_t kind, int amount)
+void si_award(uint8_t kind, int amount) SI_FAR
 {
     if (kind == TYPE_BONUS) {
         for (;;) {
@@ -1096,452 +378,6 @@ static void award(uint8_t kind, int amount)
     hud_refresh();
 }
 
-/* 0x25b4fa: the record keeps all but its type and picture. */
-static void explode(uint8_t k)
-{
-    si.rec[k].type = TYPE_EXPLOSION;
-    si_pic_set_frames(PIC(k), type_frames(TYPE_EXPLOSION), 5);
-}
-
-static void vibrate(void)
-{
-    if (!si.vibration)
-        si.vibration = 3;
-}
-
-/* 0x25b520 */
-static void boss_destroyed(uint8_t k)
-{
-    int w = width(k), h = height(k), cx = X(k) + (w >> 1), cy = Y(k) + (h >> 1);
-    uint8_t frames = si.rec[k].frames, i, pairs = (uint8_t)(IS_LAST_CHAPTER() + 5);
-
-    object_free(k);
-    si.boss_state = 0x7f;
-    si.timer = 0x1e;
-    spawn(TYPE_EXPLOSION, si.mode, cx, cy);
-    if (frames)
-        si.rec[k].frame = (uint8_t)((unsigned)game_rand() % frames);
-    else
-        game_rand();
-    for (i = 0; i < pairs; i++) {
-        int dx, dy;
-
-        if (IS_LAST_CHAPTER()) {
-            dx = (int8_t)((unsigned)game_rand() % 0x14 + 1);
-            dy = (int8_t)((unsigned)game_rand() % 0xd + 1);
-        } else {
-            dx = (int8_t)(((unsigned)game_rand() & 3) + 1);
-            dy = 6;
-        }
-        spawn(TYPE_EXPLOSION, si.mode, dx + cx, dy + cy);
-        if (frames)
-            si.rec[k].frame = (uint8_t)((unsigned)game_rand() % frames);
-        spawn(TYPE_EXPLOSION, si.mode, cx - dx, cy - dy);
-        if (frames)
-            si.rec[k].frame = (uint8_t)((unsigned)game_rand() % frames);
-    }
-    award(0x7e, 100);
-    vibrate();
-}
-
-/* 0x25b680: everything within three columns of the beam. */
-static void beam_scan(void)
-{
-    uint8_t k;
-
-    for (k = 0; k < RECORDS; k++) {
-        struct object *o = &si.rec[k];
-        int d;
-
-        if (o->type == FREE || o->type == TYPE_SHIP || o->type == TYPE_EXPLOSION || o->side == SIDE_PLAYER)
-            continue;
-        d = X(k) - si.beam_col;
-        if (d < -3 || d > 3)
-            continue;
-        if (o->type == TYPE_BONUS)
-            award(TYPE_BONUS, 1);
-        if (!o->boss) {
-            explode(k);
-        } else if (o->hp < 3) {
-            boss_destroyed(k);
-            continue;
-        } else {
-            o->hp -= 2;
-        }
-        award(0x7e, 10);
-    }
-}
-
-/* 0x25b750: records 0 to 58, in order. */
-static void objects_step(void)
-{
-    uint8_t k;
-
-    for (k = 0; k < RECORDS - 1; k++) {
-        struct object *o = &si.rec[k];
-        uint8_t pic = o->pic;
-
-        if (o->type == FREE)
-            continue;
-        si_pic_next_frame(pic);
-        o->frame = si_pics[pic].frame;
-        switch (o->type) {
-        case TYPE_SHIP:
-            continue;
-        case TYPE_EXPLOSION:
-            if (o->frame != 4)
-                continue;
-            if (pic != si.ship_pic) {
-                object_free(k);
-                continue;
-            }
-            if (--si.lives < 1) {
-                if (si.continues < 2) {
-                    si.phase = PHASE_OVER;
-                    si.countdown = 0x1e;
-                    high_score_save();
-                    return;
-                }
-                si.continues--;
-                continue_enter();
-                return;
-            }
-            ship_spawn(0x14);
-            continue;
-        case TYPE_WALL:
-            si_pic_move(pic, width(si.ship) + si_pics[si.ship_pic].x + 2,
-                        si_pics[si.ship_pic].y - (height(k) >> 1) + 3);
-            if (o->frame == 6)
-                object_free(k);
-            continue;
-        case TYPE_BEAM:
-            if (si.beam_col < W) {
-                si.beam_col += 2;
-                si_pics[pic].x = si_pics[pic].x2 = si.beam_col;
-                beam_scan();
-            } else {
-                si_pic_free(pic);
-                o->type = FREE;
-                si.beam_col = 0;
-            }
-            continue;
-        }
-        switch (o->pattern) {
-        case 1:
-            si.path = PATH(0x4ad094);
-            move_path(k, o->speed, 0, 0);
-            break;
-        case 2:
-            si.path = PATH(0x4ad0f4);
-            move_path(k, o->speed, 0, 0);
-            break;
-        case 3:
-            move_track_ship(k, o->speed);
-            break;
-        case 4:
-            si.path = PATH(0x4ad154);
-            move_path(k, o->speed, 0, 0);
-            break;
-        case 5:
-            if (!free_at_right(k))
-                si_pic_move_by(pic, o->speed, 0);
-            break;
-        case 6:
-            if (!free_at_left(k))
-                si_pic_move_by(pic, -o->speed, 0);
-            break;
-        case 7:
-            move_dive(k, o->speed);
-            break;
-        case 9:
-            move_missile(k);
-            break;
-        case 10:
-        case 11:
-        case 12:
-        case 13: {
-            static const uint8_t offset[4] = { 0x23, 0x0b, 0x0e, 0x19 };
-
-            si.path = PATH(0x4ad1b4);
-            move_path(k, o->speed, 0x80, offset[o->pattern - 10]);
-            break;
-        }
-        case 14:
-            si.path = PATH(0x4ad1b4);
-            move_path(k, o->speed, 0x80, 0x12);
-            break;
-        case 15:
-            si.path = PATH(0x4ad31c);
-            move_path(k, o->speed, 0, 0);
-            break;
-        case 16:
-            si.path = PATH(0x4ad2bc);
-            move_path(k, o->speed, 0, 0);
-            break;
-        case 17:
-            move_slope(k, o->speed, CEILING);
-            break;
-        case 18:
-            move_slope(k, o->speed, FLOOR);
-            break;
-        case 23:
-            move_boss(k);
-            break;
-        case 24:
-            if (X(k) <= (W / 3) * 2)
-                move_bounce(k, TYPE_BULLET);
-            else
-                X(k)--;
-            if (si.boss_state) {
-                o->pattern = 3;
-                o->speed = 1;
-            }
-            break;
-        }
-    }
-}
-
-/* 0x25ba34: boxes, on the low bytes of the places. */
-static int overlap(uint8_t a, uint8_t b)
-{
-    uint8_t ax = (uint8_t)X(a), ay = (uint8_t)Y(a), bx = (uint8_t)X(b), by = (uint8_t)Y(b);
-
-    return by <= (uint8_t)(ay + height(a)) && ay <= (uint8_t)(by + height(b)) && bx <= (uint8_t)(ax + width(a))
-           && ax <= (uint8_t)(bx + width(b));
-}
-
-/* 0x25bae6 */
-static uint8_t find_hit(uint8_t a)
-{
-    uint8_t k;
-
-    for (k = 0; k < RECORDS; k++) {
-        uint8_t t = si.rec[k].type;
-
-        if (t != FREE && t != TYPE_SHIP && t != TYPE_EXPLOSION && si.rec[k].side != SIDE_PLAYER && overlap(a, k))
-            return k;
-    }
-    return 0;
-}
-
-static int solid(unsigned a, unsigned b)
-{
-    return si.mode == 0x12 ? !a && !b : si.mode == 0x20 && a && b;
-}
-
-/* 0x25bb38 */
-static int ship_pixel_collide(uint8_t other)
-{
-    uint8_t P = si.ship;
-    const uint8_t *pb = type_frames(si.rec[P].type)[0].bitmap, *ob = type_frames(si.rec[other].type)[0].bitmap;
-    int pw = width(P), ow = width(other), px = X(P), py = Y(P), ox = X(other), oy = Y(other);
-    unsigned ship_row, other_row, ship_col, other_col, start_ship, start_other, cols, rows;
-
-    if (py < oy) {
-        ship_row = (uint8_t)(oy - py);
-        other_row = 0;
-    } else {
-        other_row = (uint8_t)(py - oy);
-        ship_row = 0;
-    }
-    if (px < ox) {
-        ship_col = (uint8_t)(ox - px);
-        other_col = 0;
-    } else {
-        other_col = (uint8_t)(px - ox);
-        ship_col = 0;
-    }
-    start_ship = ship_col;
-    start_other = other_col;
-    if (px + pw < ox + ow)
-        cols = (uint8_t)(pw - ship_col);
-    else
-        cols = (uint8_t)(ow - other_col);
-    if (height(P) + py < oy + height(other))
-        rows = (uint8_t)(height(P) - ship_row);
-    else
-        rows = (uint8_t)(height(other) - other_row);
-    for (; rows; rows--) {
-        unsigned a = start_ship, b = start_other, n;
-
-        for (n = cols; n; n--) {
-            unsigned ship_bit = pb[a + pw * (ship_row >> 3)] & 1u << (ship_row & 7);
-            unsigned other_bit = ob[b + ow * (other_row >> 3)] & 1u << (other_row & 7);
-
-            if (solid(ship_bit, other_bit))
-                return 1;
-            a = (a + 1) & 0xff;
-            b = (b + 1) & 0xff;
-        }
-        ship_row = (ship_row + 1) & 0xff;
-        other_row = (other_row + 1) & 0xff;
-    }
-    return 0;
-}
-
-/* 0x25be40: the row distance when the shot meets the boss's picture along
-   its row, else 0. */
-static int boss_pixel_hit(uint8_t shot, uint8_t boss)
-{
-    const uint8_t *bitmap = type_frames(si.rec[boss].type)[0].bitmap;
-    int dy = Y(shot) - Y(boss), bw = width(boss), i;
-
-    if (dy < 0)
-        dy = -dy;
-    for (i = 0; i <= width(shot); i = (int8_t)(i + 1)) {
-        int dx = (int8_t)(X(shot) - X(boss));
-        unsigned bit;
-
-        if (dx < 0)
-            dx = -dx;
-        bit = bitmap[(unsigned)(dy >> 3) * bw + ((i + (dx & 0xff)) & 0xff)] & 1u << (dy & 7);
-        if (si.mode == 0x12 ? !bit : si.mode == 0x20 && bit)
-            return dy;
-    }
-    return 0;
-}
-
-static void ship_destroyed(void)
-{
-    explode(si.ship);
-    si.ship_lost = 1;
-    vibrate();
-}
-
-static int kills(void)
-{
-    return SI_KILLING_CHAPTERS >> si.chapter & 1;
-}
-
-/* 0x25bd24 */
-static void ship_collisions(void)
-{
-    uint8_t hit;
-
-    if (si.ship_lost == 1)
-        return;
-    if (kills() && terrain_collide(si.ship)) {
-        si.ship_lost = 1;
-        explode(si.ship);
-        vibrate();
-    }
-    if (si.shield == NO_RECORD && (hit = find_hit(si.ship)) != 0
-        && (si.rec[hit].type == TYPE_BULLET || ship_pixel_collide(hit) == 1)) {
-        struct object *o = &si.rec[hit];
-
-        if (o->type == TYPE_BONUS) {
-            award(TYPE_BONUS, 1);
-            object_free(hit);
-            return;
-        }
-        if (--o->hp == 0) {
-            if (!o->boss) {
-                explode(hit);
-                if (!o->no_score)
-                    award(0x7e, 10);
-            } else {
-                boss_destroyed(hit);
-            }
-        }
-        ship_destroyed();
-    }
-}
-
-static void boss_flash(uint8_t k)
-{
-    if (si.flashed == PIC(k)) {
-        si.flashed = 0;
-    } else {
-        si_pic_set_mode(PIC(k), SI_MODE_NONE);
-        si.flashed = PIC(k);
-    }
-}
-
-/* 0x25bf64: the player's projectiles, and every projectile against the
-   terrain. */
-static void shot_collisions(void)
-{
-    uint8_t k, on_terrain = 0;
-
-    for (k = 0; k < RECORDS; k++) {
-        struct object *o = &si.rec[k];
-        uint8_t hit, lo, hi;
-        int pixel;
-
-        if (o->type == FREE || !o->side || o->type == TYPE_BEAM)
-            continue;
-        if (kills() && terrain_collide(k) && k != si.shield) {
-            object_free(k);
-            on_terrain = 1;
-            continue;
-        }
-        if (on_terrain || o->side != SIDE_PLAYER || (hit = find_hit(k)) == 0)
-            continue;
-        if (!si.rec[hit].boss) {
-            pixel = 1;
-        } else {
-            int weak = SETTINGS(7) && SETTINGS(8);
-
-            lo = SETTINGS(7);
-            hi = SETTINGS(8);
-            pixel = boss_pixel_hit(k, hit);
-            if (!((!weak && pixel) || (pixel < hi && lo < pixel)))
-                goto spent;
-        }
-        {
-            struct object *t = &si.rec[hit];
-
-            if (t->boss)
-                boss_flash(hit);
-            if (o->type == TYPE_SHIELD) {
-                t->hp = t->boss ? (uint8_t)(t->hp - 1) : 0;
-                if (t->type == TYPE_BONUS) {
-                    award(TYPE_BONUS, 1);
-                    object_free(hit);
-                    t->hp = 1;
-                }
-                vibrate();
-            } else if (o->type == TYPE_SHOT) {
-                t->hp--;
-            } else if (o->type == TYPE_WALL || o->type == TYPE_MISSILE) {
-                t->hp = t->hp < 4 ? 0 : (uint8_t)(t->hp - 4);
-                if (hit == si.missile_target)
-                    explode(k);
-            }
-            if (!t->hp) {
-                if (!t->boss) {
-                    if (t->type != TYPE_BONUS) {
-                        explode(hit);
-                        if (!t->no_score)
-                            award(0x7e, 10);
-                    }
-                } else {
-                    boss_destroyed(hit);
-                }
-            } else if (!t->no_score) {
-                award(0x7e, 5);
-            }
-        }
-    spent:
-        if (pixel && o->type != TYPE_SHIELD && o->type != TYPE_WALL)
-            object_free(k);
-    }
-}
-
-/* 0x25c1a4 */
-static void terrain_kills(void)
-{
-    uint8_t k;
-
-    for (k = 0; k < RECORDS; k++) {
-        struct object *o = &si.rec[k];
-
-        if (o->type != FREE && o->type != TYPE_SHIP && o->type != TYPE_EXPLOSION && o->side != SIDE_PLAYER
-            && !o->boss && o->pattern != 0x18 && terrain_collide(k))
-            explode(k);
-    }
-}
-
 /* 0x25c218 */
 static void next_chapter(void)
 {
@@ -1551,7 +387,7 @@ static void next_chapter(void)
     }
     si.chapter++;
     chapter_load();
-    ship_spawn(10);
+    si_ship_spawn(10);
 }
 
 static int box_bit(const uint8_t *bitmap, int w, int x, int y)
@@ -1580,12 +416,12 @@ static void box_make(void)
         for (x = BOX_END_W; x < BOX_W - BOX_END_W; x++)
             box_set(x, y, y == 0 || y >= BOX_H - 2);
         for (x = 0; x < BOX_END_W; x++) {
-            box_set(x, y, box_bit(snake2_box + BOX_LEFT_END, BOX_END_W, x, y));
-            box_set(BOX_W - BOX_END_W + x, y, box_bit(snake2_box + BOX_RIGHT_END, BOX_END_W, x, y));
+            box_set(x, y, box_bit(si_box + BOX_LEFT_END, BOX_END_W, x, y));
+            box_set(BOX_W - BOX_END_W + x, y, box_bit(si_box + BOX_RIGHT_END, BOX_END_W, x, y));
         }
     }
     for (i = 4; i >= 0; i--, value /= 10) {
-        const uint8_t *digit = snake2_box + BOX_DIGIT_0 + (value % 10) * BOX_DIGIT_W;
+        const uint8_t *digit = si_box + BOX_DIGIT_0 + (value % 10) * BOX_DIGIT_W;
 
         for (y = 0; y < BOX_DIGIT_H; y++)
             for (x = 0; x < BOX_DIGIT_W; x++)
@@ -1628,6 +464,19 @@ static void game_over_step(void)
     si.countdown--;
 }
 
+/* 0x25c1a4 */
+static void terrain_kills(void)
+{
+    uint8_t k;
+    struct object *o = si.rec;
+
+    for (k = 0; k < RECORDS; k++, o++) {
+        if (o->type != FREE && o->type != TYPE_SHIP && o->type != TYPE_EXPLOSION && o->side != SIDE_PLAYER
+            && !o->boss && o->pattern != 0x18 && si_terrain_collide(k))
+            explode(k);
+    }
+}
+
 /* 0x25c274: one event of play. */
 static uint8_t tick(uint8_t event, uint8_t a)
 {
@@ -1661,7 +510,7 @@ static uint8_t tick(uint8_t event, uint8_t a)
         if (si.boss_state == 0x7f) {
             si.phase = PHASE_EXIT;
             if (IS_LAST_CHAPTER())
-                high_score_save();
+                si_high_score_save();
             si_pic_set_mode(si.terrain_pic, SI_MODE_NONE);
         }
     }
@@ -1674,7 +523,7 @@ static uint8_t tick(uint8_t event, uint8_t a)
             si_period = 100;
             si.phase = PHASE_OVER;
             si.countdown = 0x1e;
-            high_score_save();
+            si_high_score_save();
             return SI_DONE_REDRAW;
         }
         draw_number(si.countdown_digits, (unsigned)si.countdown, 2);
@@ -1691,7 +540,7 @@ static uint8_t tick(uint8_t event, uint8_t a)
             }
             si.phase = PHASE_OVER;
             si.countdown = 0x1e;
-            high_score_save();
+            si_high_score_save();
             return SI_DONE_REDRAW;
         }
         break;
@@ -1702,17 +551,20 @@ static uint8_t tick(uint8_t event, uint8_t a)
     }
 
     terrain_render();
-    if (si.delay && si.entries_left)
-        si.scroll = (int16_t)((si.scroll + 1) % (si.map_w << 5));
+    if (si.delay && si.entries_left) {
+        int scroll = si.scroll + 1, end = si.map_w << 5;
+
+        si.scroll = (int16_t)(scroll >= 0 && scroll < end ? scroll : scroll == end ? 0 : scroll % end);
+    }
     if (si.phase != PHASE_EXIT)
-        keys_poll();
-    spawn_step();
-    objects_step();
+        si_keys_poll();
+    si_spawn_step();
+    si_objects_step();
     if (si.phase == PHASE_CONTINUE || si.phase == PHASE_OVER)
         return SI_DONE_REDRAW;
     if (si.phase != PHASE_EXIT) {
-        ship_collisions();
-        shot_collisions();
+        si_ship_collisions();
+        si_shot_collisions();
         if (kills())
             terrain_kills();
     }
@@ -1747,6 +599,7 @@ void si_debug(void)
             printf(" [%u t%u %d,%d hp%u p%u]", k, si.rec[k].type, X(k), Y(k), si.rec[k].hp, si.rec[k].pattern);
     printf("\n");
 }
+
 #endif
 
 /* The handler's pause (event 3): where everything is, saved with the
@@ -1782,7 +635,7 @@ static uint8_t resume(void)
     si.timer = 10;
     if (si.phase == PHASE_CONTINUE) {
         si.countdown = 5;
-        continue_enter();
+        si_continue_enter();
         return SI_DONE_REDRAW;
     }
     hud_create();
@@ -1829,9 +682,24 @@ static uint8_t resume(void)
     return SI_DONE_REDRAW;
 }
 
-uint8_t si_event(uint8_t event, uint8_t a)
+uint16_t si_score(void) SI_FAR
 {
+    return si.score;
+}
+
+uint8_t si_event(uint8_t event, uint8_t a) SI_FAR
+{
+    uint8_t done = si_screen_event(event);
+
+    if (done != SI_NO_SCREEN)
+        return done;
     switch (event) {
+    case SI_EVENT_TITLE:
+        si_title_start();
+        return SI_DONE_REDRAW;
+    case SI_EVENT_HIGH_SCORES:
+        si_scores_start();
+        return SI_DONE_REDRAW;
     case SI_EVENT_NEW_GAME:
         new_game();
         return SI_DONE_REDRAW;

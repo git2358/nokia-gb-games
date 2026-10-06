@@ -30,7 +30,8 @@ SDCC ?= sdcc
 MAKEBIN ?= makebin
 SDAS ?= sdasgb
 GB_FB := -DLCD_FB_WIDTH=160 -DLCD_FB_HEIGHT=144 -DLCD_PHONE_X=32 -DLCD_PHONE_Y=40
-GB_CFLAGS = -msm83 --opt-code-speed $(GB_FB) -DSNAKE2_STATE_AT=0xa100 -DSNAKE2_STATE_END=0xc000 -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_PRESENT -DNATIVE_PLATFORM_TILES -Icore -I$(COMMON)/core -Iplatform/gb -I$(COMMON)/platform/gb -I$(ASSETS)
+GB_CFLAGS = -msm83 --opt-code-speed $(GB_FB) -DSNAKE2_STATE_AT=0xa100 -DSNAKE2_STATE_END=0xc000 \
+	-DSI_BANKED -DSI_PICS_AT=0xa100 -DSI_STATE_AT=0xa900 -DSI_STATE_END=0xc000 -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_BAND -DSPRITE_PLATFORM_PRESENT -DNATIVE_PLATFORM_TILES -Icore -I$(COMMON)/core -Iplatform/gb -I$(COMMON)/platform/gb -I$(ASSETS)
 # The SameBoy clone scripts/setup-sameboy.sh makes: its boot ROM, and its
 # core as a library (`make -C $(SAMEBOY) lib`) for tools/gb_run.
 SAMEBOY ?= ../tools/SameBoy
@@ -52,14 +53,22 @@ INCLUDES := -Icore -I$(COMMON)/core -Iplatform/host -I$(COMMON)/platform/host -I
 GB_ROM := $(BUILD)/nokia3410.gb
 GB_TEST_ROM := $(BUILD)/nokia3410-keys.gb
 # The banks of the Game Boy ROM (see platform/gb/far.h).
-GB_BANK0 := platform/gb/main.c platform/gb/far.c platform/gb/screen.c $(COMMON)/core/lcd.c core/sprite.c core/games.c core/rand.c core/sound.c $(ASSETS)/game_tables.c
-GB_BANK1 := core/menu.c $(COMMON)/core/font.c platform/gb/save.c $(ASSETS)/game_assets.c
+GB_BANK0 := platform/gb/main.c platform/gb/far.c platform/gb/screen.c $(COMMON)/core/lcd.c core/sprite.c core/games.c core/rand.c core/sound.c $(ASSETS)/game_tables.c \
+	$(COMMON)/core/font.c platform/gb/save.c
+GB_BANK1 := core/menu.c $(ASSETS)/game_assets.c
 GB_BANK2 := core/snake2.c core/title.c $(ASSETS)/snake2_data.c
 GB_BANK3 := $(COMMON)/platform/gb/native_tiles.c $(ASSETS)/native_data.c
 GB_BANK4 := $(ASSETS)/native_data.c
+# Space Impact: each bank its data first, then a part of the game.
+GB_SI_BANKS := 5 6 7 8
+GB_BANK5 := core/si.c
+GB_BANK6 := core/si_move.c
+GB_BANK7 := core/si_hit.c
+GB_BANK8 := core/si_screens.c core/si_pic.c
 gb_rels = $(patsubst %.c,$(BUILD)/gb/$(1)/%.rel,$(notdir $(2)))
 GB_RELS := $(call gb_rels,0,$(filter-out platform/gb/main.c,$(GB_BANK0))) $(call gb_rels,1,$(GB_BANK1)) \
-	$(call gb_rels,2,$(GB_BANK2)) $(call gb_rels,3,$(GB_BANK3)) $(call gb_rels,4,$(GB_BANK4))
+	$(call gb_rels,2,$(GB_BANK2)) $(call gb_rels,3,$(GB_BANK3)) $(call gb_rels,4,$(GB_BANK4)) \
+	$(foreach n,$(GB_SI_BANKS),$(BUILD)/gb/$(n)/si_data.rel $(call gb_rels,$(n),$(GB_BANK$(n))))
 
 # Keys a test ROM presses at power-on (see menu_script in core/menu.c), for
 # scripted screenshots and the checks against the host's frame for them.
@@ -69,7 +78,7 @@ KEYS ?= sssss
 # The game without the menus, for tools that drive it directly.
 GAME_SRC := $(filter-out core/menu.c $(COMMON)/core/font.c,$(CORE_SRC))
 
-.PHONY: help dump install-roms assets test frames golden-snake golden-si check-golden check-menus gb check-gb shot-gb run-gb cards clean
+.PHONY: help dump install-roms assets test frames golden-snake golden-si golden-si-menus check-golden check-menus gb check-gb shot-gb run-gb cards clean
 
 help:
 	@echo "make dump      rebuild $(DUMP) from the Wintesla files in FLASH_FILES=$(FLASH_FILES)"
@@ -186,6 +195,20 @@ golden-si:
 		$(PYTHON) tools/si_events.py run_golden_si/error.log $$dir; \
 	done
 
+# Space Impact's title and its High scores page, then a game: recorded from
+# the title on (tools/si_events.py --title) into golden/si-m, which
+# check-golden replays with the rest.
+SI_MENU_KEYS := $(SI_KEYS:,enter,wait3000=),down,wait800,enter,wait6000,enter,wait1500,up,wait800,enter,wait3000
+
+golden-si-menus:
+	@test -x $(DCT3_RE)/mame/mame || { echo "Missing $(DCT3_RE)/mame/mame: build the fork first"; exit 1; }
+	rm -rf run_golden_si golden/si-m && mkdir -p run_golden_si golden/si-m
+	$(MAKE) -C $(DCT3_RE) run-keys GAMES_PRODUCT=3410 RUN_DIR=$(abspath run_golden_si) SECONDS=60 KEYS=$(SI_MENU_KEYS) \
+		RUN_NVRAM_DIR=$(abspath run_golden_si)/nvram \
+		RUN_EXTRA_ARGS="-autoboot_script $(abspath $(DCT3_RE))/mame_nokia_3410_si_bot.lua -debug -debugger none"
+	cp run_golden_si/nokia_dct3_lcdmirror_*.pgm golden/si-m/
+	$(PYTHON) tools/si_events.py --title run_golden_si/error.log golden/si-m
+
 # Skipped when the reference runs have not been recorded.
 check-golden: $(BUILD)/replay $(BUILD)/si_replay
 	@for dir in golden/snake2-*; do \
@@ -218,7 +241,8 @@ vpath %.c core $(COMMON)/core platform/gb $(COMMON)/platform/gb $(ASSETS)
 $(BUILD)/gb/0/games.rel: GB_EXTRA := -Dsnake2_handler=far_snake2_handler -Dsnake2_redraw=far_snake2_redraw
 $(BUILD)/gb/1/menu.rel: GB_EXTRA := -Dtitle_start=far_title_start -Dtitle_elapse=far_title_elapse -Dtitle_draw=far_title_draw \
 	-Dover_start=far_over_start -Dover_elapse=far_over_elapse -Dover_draw=far_over_draw \
-	-Dscores_start=far_scores_start -Dscores_elapse=far_scores_elapse -Dscores_draw=far_scores_draw
+	-Dscores_start=far_scores_start -Dscores_elapse=far_scores_elapse -Dscores_draw=far_scores_draw \
+	-Ddraw_score_box=far_draw_score_box
 
 $(BUILD)/gb/0/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
 	@mkdir -p $(BUILD)/gb/0
@@ -248,6 +272,22 @@ $(BUILD)/gb/4/%.rel: %.c
 	@mkdir -p $(BUILD)/gb/4
 	$(SDCC) $(GB_CFLAGS) -DNATIVE_PART_TILES --codeseg CODE_4 -c $< -o $@
 
+# Space Impact's code is the most the Game Boy runs in a tick: the compiler
+# is given longer to place its registers (a full build's minutes).
+GB_SI_OPT ?= --max-allocs-per-node 100000
+
+# Space Impact's banks. The first's copy of the data is the one the code
+# names; the others' are the same bytes under other names, which
+# tools/gb_mirror_check.py checks land at the same addresses.
+define gb_si_bank
+$(BUILD)/gb/$(1)/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
+	@mkdir -p $(BUILD)/gb/$(1)
+	$(SDCC) $(GB_CFLAGS) $(GB_SI_OPT) $$(GB_SI_NAMES) --codeseg CODE_$(1) -bo $(1) -c $$< -o $$@
+endef
+si_mirror_names = $(shell sed -n 's/^extern const .* \(si_[a-z_]*\)\[.*/-D\1=\1_m$(1)/p' $(ASSETS)/si_data.h)
+$(foreach n,$(GB_SI_BANKS),$(eval $(call gb_si_bank,$(n))))
+$(foreach n,$(filter-out 5,$(GB_SI_BANKS)),$(eval $(BUILD)/gb/$(n)/si_data.rel: GB_SI_NAMES = $$(call si_mirror_names,$(n))))
+
 # The full-screen menus made at build time, drawn by the host build of the
 # core at the Game Boy's size (native_tiles.h).
 $(ASSETS)/native_data.c: $(BUILD)/frame_gb
@@ -261,16 +301,18 @@ $(BUILD)/gb/%.rel: $(COMMON)/platform/gb/%.s
 	@mkdir -p $(BUILD)/gb
 	$(SDAS) -o $@ $<
 
-# MBC5 with its rumble pin and battery-backed RAM, eight ROM banks (five
+# MBC5 with its rumble pin and battery-backed RAM, sixteen ROM banks (nine
 # used) and 8 KiB of RAM. The linker does not mind the first bank running
 # over into the second, so its end is checked here.
-$(BUILD)/nokia3410%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/native_put.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
+$(BUILD)/nokia3410%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/native_put.rel $(BUILD)/gb/band.rel $(BUILD)/gb/bcall.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
 	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 -Wl-b_CODE_3=0x34000 -Wl-b_CODE_4=0x44000 \
+		$(foreach n,$(GB_SI_BANKS),-Wl-b_CODE_$(n)=0x$(n)4000) \
 		-o $(BUILD)/gb/$(basename $(notdir $@)).ihx $^
 	@$(PYTHON) $(COMMON)/tools/gb_bank_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
-	$(MAKEBIN) -Z -yn NOKIA3410 -yt 0x1e -yo 8 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
+	@$(PYTHON) tools/gb_mirror_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
+	$(MAKEBIN) -Z -yn NOKIA3410 -yt 0x1e -yo 16 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
 
-.SECONDARY: $(GB_RELS) $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/native_put.rel
+.SECONDARY: $(GB_RELS) $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/native_put.rel $(BUILD)/gb/band.rel $(BUILD)/gb/bcall.rel
 
 gb: $(GB_ROM)
 
@@ -288,8 +330,16 @@ $(BUILD)/frame_gb: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CO
 # one of the host's frames for those keys, to the pixel. With the default
 # keys that is a game of Snake II under way. Also says how fast the ROM
 # ran the game between the screenshots, 100% being the phone's speed.
+# Space Impact as well: its title, then a game under way. The Game Boy
+# keeps the phone's pace by showing fewer pictures, so the frames compared
+# are those it does show.
+SI_GB_KEYS := zssdswwwwwwwwwws
+SI_GB_FRAMES := 1300 1600 1900
+
 check-gb: $(GB_TEST_ROM) $(BUILD)/gb_run $(BUILD)/frame_gb
 	$(PYTHON) tools/check_gb_run.py $(BUILD)/gb_run $(GB_TEST_ROM) $(SAMEBOY_BOOT) $(BUILD)/frame_gb "$(KEYS)" $(GB_FRAMES)
+	@$(MAKE) --no-print-directory $(GB_TEST_ROM) KEYS=$(SI_GB_KEYS) >/dev/null
+	$(PYTHON) tools/check_gb_run.py $(BUILD)/gb_run $(GB_TEST_ROM) $(SAMEBOY_BOOT) $(BUILD)/frame_gb "$(SI_GB_KEYS)" $(SI_GB_FRAMES)
 
 # Headless screenshot of the Game Boy ROM after KEYS, as a PNG.
 shot-gb: $(GB_TEST_ROM) $(BUILD)/gb_run

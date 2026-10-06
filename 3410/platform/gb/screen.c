@@ -43,6 +43,7 @@ static uint8_t shown[LCD_WIDTH * SPRITE_SCREEN_BANDS];
    (x, y), to eight row bytes of lcd_fb, bit 7 - x of byte y (blocks.s).
    lcd_fb's rows are 20 bytes apart. */
 void gb_block_rows(const uint8_t *columns, uint8_t *row);
+uint8_t gb_block_changed(const uint8_t *now, uint8_t *was);
 typedef char lcd_fb_stride[LCD_STRIDE == 20 ? 1 : -1];
 
 void sprite_present(uint8_t all)
@@ -54,9 +55,10 @@ void sprite_present(uint8_t all)
     for (band = 0; band < SPRITE_SCREEN_BANDS; band++) {
         rows = band == SPRITE_SCREEN_BANDS - 1 && (LCD_HEIGHT & 7) ? (LCD_HEIGHT & 7) : 8;
         for (block = 0; block < BLOCKS_X; block++, now += 8, was += 8) {
-            if (!all && memcmp(now, was, 8) == 0)
+            if (all)
+                memcpy(was, now, 8);
+            else if (!gb_block_changed(now, was))
                 continue;
-            memcpy(was, now, 8);
             if (rows == 8) {
                 gb_block_rows(now, lcd_fb + (LCD_PHONE_Y + band * 8) * LCD_STRIDE + (LCD_PHONE_X / 8) + block);
             } else {

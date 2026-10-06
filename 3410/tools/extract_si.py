@@ -20,6 +20,9 @@ PICTURE_TABLE = 0x405B88      # u32 descriptor address by type, 54 types
 PHONE_TYPES = 0x4C1AE4        # {frames, type, side, boss} for types 20..53
 TYPE_COUNT = 54
 PATHS = (0x4AD094, 0x4AD37C)  # the y paths, signed bytes by x
+# The game-over box's ends and digits: the start of what extract_assets.py
+# takes as snake2_box, the game's own copy so that it needs nothing else.
+BOX = (0x4B47D4, 84)
 # Pictures named by the game besides those of its types.
 NAMED = {
     "HEART": 0x490104,
@@ -32,6 +35,9 @@ NAMED = {
     "STAR": 0x4917A8,
     "LOGO_TOP": 0x4ABD88,
     "LOGO_BOTTOM": 0x4ABDA0,
+    "TITLE_SHIP": 0x4ABD70,
+    "TITLE_ENEMY": 0x4ABD58,
+    "SCORES_ENEMY": 0x490E74,
 }
 
 
@@ -150,6 +156,7 @@ def extract_si(at, c_bytes):
         "extern const uint8_t si_templates[400];",
         f"extern const uint8_t si_phone_types[{len(phone_types)}];",
         f"extern const uint8_t si_paths[{PATHS[1] - PATHS[0]}];",
+        f"extern const uint8_t si_box[{BOX[1]}];",
         f"extern const uint8_t si_chapter_records[{6 * count}];",
         f"extern const uint8_t si_chapter_settings[{9 * count}];",
         f"extern const uint16_t si_script_first[{count}];",
@@ -177,6 +184,7 @@ def extract_si(at, c_bytes):
     source.append(c_bytes("si_templates", templates))
     source.append(c_bytes("si_phone_types", phone_types))
     source.append(c_bytes("si_paths", at(PATHS[0], PATHS[1] - PATHS[0])))
+    source.append(c_bytes("si_box", at(*BOX)))
     source.append(c_bytes("si_chapter_records", b"".join(cf["records"])))
     source.append(c_bytes("si_chapter_settings", b"".join(cf["settings"])))
     source.append(words("si_script_first", script_first))

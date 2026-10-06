@@ -23,6 +23,15 @@ What is there so far:
   game-over picture with the score in its box, blinking for a new top
   score, kept for each maze as on the 3410; and the High scores page with
   its boxes and the snake that eats a creature on its way across;
+- Space Impact: the 3410's game, the 3310's rebuilt on the 3410's
+  graphics library with its eight chapters in a file, frame for frame as
+  the phone plays it through every chapter, its bosses and game over; its
+  title, its menu (Continue after a pause, New game, High scores,
+  Chapters, Instructions) and its High scores page, all to the pixel. The
+  Instructions are the phone's text without its demos, and the Chapters
+  note "Done" is there without its tick. On the Game Boy the game keeps
+  the phone's pace but shows a picture about every other tick, about five
+  a second, where the phone shows ten;
 - the games' Settings (Game sounds, Game lights, Shakes, Club Nokia ID),
   the vibrator as a rumble motor (from a death to the second blink, as on
   the 3410, but half as long, see `../common/core/rumble.h`), and the 3310's eat and death sounds, which the 3410 holds too
@@ -30,8 +39,9 @@ What is there so far:
 - the top score and the chosen level and maze, kept in battery-backed
   cartridge RAM.
 
-Not yet: the other four games, the main menu's Games icon and the lists'
-sliding highlight.
+Not yet: Bumper, Bantumi and Link5, Space Impact's sounds, vibrator and
+Instructions demos, the main menu's Games icon and the lists' sliding
+highlight.
 
 The game is shown at the phone's size, in the middle of the Game Boy's
 screen. Start on the first screen picks the full-screen variant, whose
@@ -41,15 +51,16 @@ screen, 39 by 33 cells, with the snake, the food, the creatures and the
 score at the phone's size and speed, the mazes moved out in proportion to
 fill it, and top scores of its own.
 
-| | Menus | Snake II |
-|---|---|---|
-| D-pad | up and down | steer (2, 4, 6, 8) |
-| A | select | turn clockwise (#) |
-| B | back | turn anticlockwise (*) |
-| Start, Select | select | pause |
+| | Menus | Snake II | Space Impact |
+|---|---|---|---|
+| D-pad | up and down | steer (2, 4, 6, 8) | fly (8, 0, *, #) |
+| A | select | turn clockwise (#) | fire (1) |
+| B | back | turn anticlockwise (*) | special weapon (4) |
+| Start, Select | select | pause | pause |
 
 See [docs/plan.md](docs/plan.md) and, in the RE fork,
-`docs/games_applications_3410.md` and `docs/games_snake2_3410.md`.
+`docs/games_applications_3410.md`, `docs/games_snake2_3410.md` and
+`docs/games_si_3410.md`.
 
 ## Building
 
@@ -57,8 +68,9 @@ See [docs/plan.md](docs/plan.md) and, in the RE fork,
 the RE fork, in whose `ports/` directory this repository is kept, or
 `DCT3_RE=` pointing at it; from here it is `../../..`), `make gb` the ROM, `make run-gb` opens it in SameBoy. `make test` runs the host
 checks; `make check-gb` runs the ROM headlessly against the host's frames.
-`make golden-snake` records Snake II games in the fork's MAME and `make
-check-golden` replays them through the core; `make check-menus` compares
+`make golden-snake` and `make golden-si` record Snake II and Space Impact
+games in the fork's MAME and `make check-golden` replays them through the
+core; `make check-menus` compares
 the menu pages with the phone's in `golden/menus/`.
 
 ## Firmware policy

@@ -18,6 +18,7 @@
 #include "si.h"
 #include "si_pic.h"
 #include "sprite.h"
+#include "title.h"
 
 void si_debug(void);
 void si_debug_lives(int8_t lives);
@@ -77,7 +78,12 @@ int main(int argc, char **argv)
         }
         if (!(done & SI_DONE_REDRAW) || (event == SI_EVENT_NEW_GAME && next == SI_EVENT_CONTINUE))
             continue;
-        si_pic_render();
+        si_render();
+        if (si_scores_shown()) {
+            draw_score_box(si_top_score, 1, 1);
+            if (si_show_last)
+                draw_score_box(si_last_score, LCD_HEIGHT - 19, 0);
+        }
         if (memcmp(last, sprite_screen, sizeof last) == 0)
             continue;
         memcpy(last, sprite_screen, sizeof last);

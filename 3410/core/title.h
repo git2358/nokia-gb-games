@@ -33,4 +33,9 @@ void scores_start(uint16_t top, uint16_t last, uint8_t show_last, uint8_t kind);
 uint8_t scores_elapse(uint16_t us);
 void scores_draw(void);
 
+/* A score in the High scores page's box of five digits at row y, with a
+   medal each side at the top when `medals`, drawn into sprite_screen
+   (0x3b268a, which Space Impact's page uses too). */
+void draw_score_box(uint16_t value, uint8_t y, uint8_t medals);
+
 #endif

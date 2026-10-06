@@ -1295,6 +1295,7 @@ void menu_draw(void)
             return;
         }
     }
+    platform_native_blank();
 #endif
     drawn_screen = NO_SCREEN;
 

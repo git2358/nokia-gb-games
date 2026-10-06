@@ -16,9 +16,14 @@ extern uint8_t native_up;
 /* native_tiles.c, called with native_bank mapped. */
 uint8_t native_show(uint16_t id);
 void native_cursor(uint8_t row, uint8_t on);
-/* Puts the tile map back as the menus' framebuffer has it and the palette
-   given; returns 0 if no made screen was up. */
-uint8_t native_leave(uint8_t palette);
+/* Puts lcd_fb on the screen, every cell its own tile again, as the menus'
+   framebuffer has it; returns 0 if no made screen was up. */
+uint8_t native_leave(void);
+
+/* The palette every port shows its tiles with: colours 1 and 3 dark, 0 and
+   2 light, so that only the first bit plane decides, which is all
+   native_tiles.c writes. */
+#define NATIVE_PALETTE 0xcc
 
 /* native_put.s. Video RAM is written between the lines being drawn, four
    bytes at a time, as flush_tiles does. */
@@ -34,5 +39,7 @@ void native_put_byte(uint8_t *at, uint8_t value);
    tile being native_first + its column. Returns the next row. */
 extern uint8_t native_first, native_map_row[20];
 const uint16_t *native_row(const uint16_t *row, uint8_t *tiles);
+/* A row of lcd_fb's 20 cells, from its first byte, to their tiles. */
+void native_fb_row(uint8_t *tiles, const uint8_t *fb);
 
 #endif

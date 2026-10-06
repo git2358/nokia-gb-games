@@ -44,9 +44,10 @@
 #define LYC REG(0xff45)
 #define BGP REG(0xff47)
 
-/* Both bit planes of a tile are written alike, so colours 0 and 3 are all
-   there is. */
-#define PALETTE 0xfc
+/* lcd_fb's tiles have both bit planes alike and the made menus' only the
+   first (native_tiles.c): the palette takes the colour from the first
+   alone. */
+#define PALETTE NATIVE_PALETTE
 
 #define VRAM_MAP ((uint8_t *)0x9800)
 
@@ -214,6 +215,12 @@ void platform_native_cursor(uint8_t row, uint8_t on)
     native_drew = 1;
 }
 
+void platform_native_blank(void)
+{
+    if (native_up)
+        BGP = 0;
+}
+
 /* Something was drawn into lcd_fb since it was last shown. */
 static uint8_t lcd_drawn(void)
 {
@@ -230,18 +237,13 @@ static uint8_t lcd_drawn(void)
    game through it too (screen.c), or a made screen, which is up already. */
 static void show(void)
 {
-    uint16_t i;
-
     if (native_drew) {
         native_drew = 0;
         memset(lcd_dirty, 0, sizeof lcd_dirty);
         return;
     }
-    if (native_up && lcd_drawn() && far_native_leave(PALETTE)) {
-        /* The cells' tiles hold the made screen's. */
-        for (i = 0; i < sizeof lcd_dirty; i++)
-            lcd_dirty[i] = 1;
-    }
+    if (native_up && lcd_drawn())
+        far_native_leave();
     present();
 }
 

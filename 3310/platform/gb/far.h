@@ -41,6 +41,6 @@ void far_si_data_restore(void);
 /* native_gb.h's, from the banks they are in. */
 uint8_t far_native_show(uint16_t id);
 void far_native_cursor(uint8_t row, uint8_t on);
-uint8_t far_native_leave(uint8_t palette);
+uint8_t far_native_leave(void);
 
 #endif

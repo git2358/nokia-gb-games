@@ -49,6 +49,11 @@ uint8_t platform_native_show(uint16_t id);
 /* Draws or takes away the cursor on a list row of the screen shown. */
 void platform_native_cursor(uint8_t row, uint8_t on);
 
+/* The menus are about to draw something else into the framebuffer: if a
+   made screen is up, the screen goes blank at once until that is shown,
+   rather than showing the old screen meanwhile. */
+void platform_native_blank(void);
+
 /* For the host: writes the tiles of every numbered screen as C source.
    Returns nonzero on failure. */
 int native_gen(const char *path);

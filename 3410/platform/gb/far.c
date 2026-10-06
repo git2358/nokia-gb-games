@@ -143,12 +143,12 @@ void far_native_cursor(uint8_t row, uint8_t on)
     far_bank(was);
 }
 
-uint8_t far_native_leave(uint8_t palette)
+uint8_t far_native_leave(void)
 {
     uint8_t was = mapped, result;
 
     far_bank(BANK_NATIVE);
-    result = native_leave(palette);
+    result = native_leave();
     far_bank(was);
     return result;
 }

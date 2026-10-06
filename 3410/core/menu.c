@@ -1250,6 +1250,10 @@ void menu_draw(void)
         lcd_zoom_set(0, 0, 0, 0, 1);
     }
 
+#ifdef NATIVE_PLATFORM_TILES
+    if (mode != VIEW_NATIVE)
+        platform_native_blank();
+#endif
     if (screen == SCREEN_PLAY) {
         games_draw(!board_drawn);
         board_drawn = 1;
@@ -1284,6 +1288,7 @@ void menu_draw(void)
             tiled_selection = selection;
             return;
         }
+        platform_native_blank();
     }
 #endif
     lcd_clear();

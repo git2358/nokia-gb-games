@@ -268,3 +268,47 @@ _native_row::
 	ld	b, h
 	ld	c, l
 	ret
+
+;; void native_fb_row(uint8_t *tiles, const uint8_t *fb): the 20 cells of a
+;; row of lcd_fb, from its first byte `fb`, to the first bit plane of their
+;; tiles, from `tiles` on. A framebuffer row is 20 bytes.
+_native_fb_row::
+	ld	a, #20
+	ld	(#cells), a
+1$:
+	push	de
+	push	bc
+	ld	h, b
+	ld	l, c
+	ld	de, #four
+	ld	c, #8
+2$:
+	ld	a, (hl)
+	ld	(de), a
+	inc	de
+	ld	a, l
+	add	a, #20
+	ld	l, a
+	jr	nc, 3$
+	inc	h
+3$:
+	dec	c
+	jr	nz, 2$
+	pop	bc
+	pop	de
+	push	de
+	push	bc
+	ld	bc, #four
+	call	_native_put_tile
+	pop	bc
+	pop	de
+	inc	bc
+	ld	hl, #16
+	add	hl, de
+	ld	d, h
+	ld	e, l
+	ld	a, (#cells)
+	dec	a
+	ld	(#cells), a
+	jr	nz, 1$
+	ret

@@ -331,7 +331,8 @@ enum {
 };
 const uint8_t native_bank = BANK_NATIVE, native_tile_bank = BANK_NATIVE_TILES;
 
-#define PALETTE 0xe4
+/* Only the first bit plane decides (native_gb.h). */
+#define PALETTE NATIVE_PALETTE
 
 /* menu_draw showed a full-screen menu made at build time, or moved the
    cursor on one: lcd_fb does not hold what is on the screen. */
@@ -360,6 +361,12 @@ void platform_native_cursor(uint8_t row, uint8_t on)
     native_drew = 1;
 }
 
+void platform_native_blank(void)
+{
+    if (native_up)
+        BGP = 0;
+}
+
 /* Something was drawn into lcd_fb since it was last shown. */
 static uint8_t lcd_drawn(void)
 {
@@ -376,8 +383,6 @@ static uint8_t lcd_drawn(void)
    screen, which is up already. */
 static void show(void)
 {
-    uint16_t i;
-
     if (native_drew) {
         native_drew = 0;
         memset(lcd_dirty, 0, sizeof lcd_dirty);
@@ -388,11 +393,8 @@ static void show(void)
     }
     if (native_up && lcd_drawn()) {
         MBC_ROM_BANK = BANK_NATIVE;
-        native_leave(PALETTE);
+        native_leave();
         MBC_ROM_BANK = BANK_MENU;
-        /* The cells' tiles hold the made screen's. */
-        for (i = 0; i < sizeof lcd_dirty; i++)
-            lcd_dirty[i] = 1;
     }
     present();
 }

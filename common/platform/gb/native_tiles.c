@@ -9,15 +9,18 @@
    about a hundred and fifty tiles copied and its tile map written, a few
    frames.
 
-   Only the first bit plane is written. The palette the menus are shown
-   with while a made screen is up takes the colour from that plane alone,
-   so what the second holds from before does not matter.
+   Only the first bit plane is written. The ports' palette (NATIVE_PALETTE)
+   takes the colour from that plane alone, so what the second holds from
+   before does not matter.
 
    This file and the screens are in one bank, NATIVE_BANK; the tiles fill
    the next (native_put.s, in the first bank, reads them). The port says
    what both are and calls these through its far_ functions. */
 #include <stdint.h>
 
+#include <string.h>
+
+#include "lcd.h"
 #include "native_gb.h"
 #include "native_tiles.h"
 
@@ -27,9 +30,6 @@
 #define CELLS_X 20
 #define CELLS_Y 18
 #define SPLIT_ROW 12
-
-/* Colour 1 and 3 dark, 0 and 2 light: the first bit plane decides. */
-#define NATIVE_PALETTE 0xcc
 
 /* The two kept tiles, by the number both halves of the screen name them
    with (0x8fd0 and 0x8fe0: tiles 253 and 254 at 0x8000, -3 and -2 at
@@ -77,7 +77,6 @@ uint8_t native_show(uint16_t id)
     if (!shown) {
         native_put_tile(EMPTY_TILE, empty);
         native_put_tile(FULL_TILE, full);
-        BGP = NATIVE_PALETTE;
     }
     shown = p;
     native_up = 1;
@@ -125,21 +124,28 @@ void native_cursor(uint8_t row, uint8_t on)
     }
 }
 
-uint8_t native_leave(uint8_t palette)
+uint8_t native_leave(void)
 {
     uint8_t tx, ty;
+    const uint8_t *fb = lcd_fb;
 
     if (!shown)
         return 0;
     shown = 0;
     native_up = 0;
-    BGP = palette;
-    for (ty = 0; ty < CELLS_Y; ty++) {
+    /* The screen blanked at once by the palette, every colour light, while
+       the cells' own tiles are made from lcd_fb and the tile map is put
+       back; then it all comes up together. */
+    BGP = 0;
+    for (ty = 0; ty < CELLS_Y; ty++, fb += 8 * LCD_STRIDE) {
         uint8_t first = row_first(ty);
 
+        native_fb_row(row_tiles(ty), fb);
         for (tx = 0; tx < CELLS_X; tx++)
             native_map_row[tx] = (uint8_t)(first + tx);
         native_put_row(MAP + ty * 32, native_map_row);
     }
+    BGP = NATIVE_PALETTE;
+    memset(lcd_dirty, 0, sizeof lcd_dirty);
     return 1;
 }

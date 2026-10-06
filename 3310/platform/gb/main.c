@@ -47,8 +47,9 @@
 #define BGP REG(0xff47)
 
 /* Both bit planes of a tile are written alike for the menus, and only the
-   first for the game (see draw.s), so every colour but 0 is shown dark. */
-#define PALETTE 0xfc
+   first for the game (see draw.s) and the made menus (native_tiles.c): the
+   palette takes the colour from the first alone. */
+#define PALETTE NATIVE_PALETTE
 
 #define VRAM_MAP ((uint8_t *)0x9800)
 
@@ -197,6 +198,12 @@ void gb_clear_tiles(void);
    cursor on one: lcd_fb does not hold what is on the screen. */
 static uint8_t native_drew;
 
+void platform_native_blank(void)
+{
+    if (native_up)
+        BGP = 0;
+}
+
 /* Something was drawn into lcd_fb since it was last shown. */
 static uint8_t lcd_drawn(void)
 {
@@ -232,7 +239,7 @@ void sprite_present(uint8_t all)
 {
     uint8_t mode = lcd_zoom_w ? DIRECT_ZOOM : DIRECT_PLAIN;
 
-    if (native_up && far_native_leave(PALETTE))
+    if (native_up && far_native_leave())
         all = 1;
 
     if (direct != mode)
@@ -303,11 +310,8 @@ static void show(void)
     }
     if (menu_drew_picture)
         return;
-    if (native_up && lcd_drawn() && far_native_leave(PALETTE)) {
-        /* The cells' tiles hold the made screen's. */
-        for (i = 0; i < sizeof lcd_dirty; i++)
-            lcd_dirty[i] = 1;
-    }
+    if (native_up && lcd_drawn())
+        far_native_leave();
     if (direct) {
         /* Blank first, so that the game's tiles are not seen through the
            menus' tile map while the menu's are being made. */

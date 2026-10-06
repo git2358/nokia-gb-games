@@ -40,6 +40,9 @@ of the Nokia DCT3 MAME project, <https://github.com/lukesau/nokia-dct3-re>
   built on, shared by the three ports (`make setup`).
 - `docs/combined-rom.md`: the plan for one ROM holding all three phones,
   picked on the first screen.
+- `docs/authenticity.md`: where each part of the ports comes from: traced
+  from the firmware's code, read from its data, measured in MAME, or the
+  port's own.
 - `Makefile`: runs a target in every port: `make gb`, `make gba`, `make
   test`, `make check-golden`, `make check-gb`, `make cards` and so on;
   `make -C 3310 <target>` runs one port's.

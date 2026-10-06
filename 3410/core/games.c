@@ -1,4 +1,5 @@
 #include "games.h"
+#include "rumble.h"
 
 #include "snake2.h"
 #include "sound.h"
@@ -22,6 +23,8 @@ static uint16_t tick_timer, one_shot_timer, repeat_timer;
    the three above: it runs on through a pause, from games_rumble_elapse. */
 static uint8_t vibrate_timer;
 static uint16_t vibrate_us; /* microseconds not yet turned into units */
+static uint8_t vibrate_frame; /* frames into the motor's on and off, rumble.h */
+static uint8_t motor_on;
 static uint8_t held_key; /* 0 when none */
 
 #define REPEAT_UNITS 12
@@ -180,12 +183,22 @@ uint8_t games_advance(uint16_t n)
     return draw;
 }
 
+static void motor(uint8_t on)
+{
+    if (on != motor_on) {
+        motor_on = on;
+        platform_rumble(on);
+    }
+}
+
 void games_vibrate_for(uint8_t units)
 {
-    if (!games_options.shakes)
+    if (!games_options.shakes || !(units = RUMBLE_UNITS(units)))
         return;
-    if (!vibrate_timer)
-        platform_rumble(1);
+    if (!vibrate_timer) {
+        vibrate_frame = 0;
+        motor(1);
+    }
     vibrate_timer = units;
 }
 
@@ -200,15 +213,18 @@ void games_rumble_elapse(uint16_t us)
         return;
     for (vibrate_us += us; vibrate_us >= GAMES_UNIT_US; vibrate_us -= GAMES_UNIT_US)
         if (vibrate_timer && !--vibrate_timer)
-            platform_rumble(0);
+            motor(0);
+    if (vibrate_timer) {
+        if (++vibrate_frame >= RUMBLE_ON_FRAMES + RUMBLE_OFF_FRAMES)
+            vibrate_frame = 0;
+        motor(vibrate_frame < RUMBLE_ON_FRAMES);
+    }
 }
 
 void games_quiet(void)
 {
-    if (vibrate_timer) {
-        vibrate_timer = 0;
-        platform_rumble(0);
-    }
+    vibrate_timer = 0;
+    motor(0);
 }
 
 uint8_t games_elapse(uint16_t us)

@@ -119,6 +119,7 @@ the sprite and tile engines are in the fork's ignored `run_games_3310/`.
 | Shakes switch | traced | `0x111506` in `game_vibrate_2dd70e` | no |
 | Lights | port, a no-op | `0x111504` only feeds a trace id | page only |
 | Vibrator, 62 units restarted by each call | traced + measured | `game_vibrate_2dd70e`; the phone's vibra/profile/charger checks are left out | no |
+| Rumble softened: motor on 1 frame, off 1, through each pulse | port, on purpose | knobs in `common/core/rumble.h`; the phone's motor runs throughout | no |
 | Buzzer notes | data | scripts at `sound_table_321e6c` | no |
 | Buzzer pitch, note unit, 0x40 rest, 0x05/0x06 repeat | measured | the tone task is not traced | no |
 | Instructions paging | data + measured | | menus |

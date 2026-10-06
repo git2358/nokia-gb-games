@@ -224,8 +224,8 @@ slide among them, are equal to the pixel.
 
 The rumble is checked the same way: `build/gb_run ... rumble 1400` prints
 each frame the motor was on for, and `build/gba_shot` prints every switch
-of the motor. In a scripted game left to be hit, both show it on for
-about 29 frames at a time.
+of the motor. In a scripted game left to be hit, both show a pulse of
+about 29 frames, the motor on for every other one (see Rumble).
 
 ## Game Boy
 
@@ -317,6 +317,14 @@ over. The port does the same with whatever motor the cartridge has:
   rumble follows it; the EZ-Flash Junior has no motor.
 
 Shakes starts on, as on the phone.
+
+The phone's motor is gentler than a rumble cartridge's, so the port
+softens every pulse: by default the motor runs one screen frame and rests
+the next. The knobs, shared by all the ports, are in
+`../common/core/rumble.h`: RUMBLE_ON_FRAMES and RUMBLE_OFF_FRAMES for
+strength, RUMBLE_LENGTH_NUM / RUMBLE_LENGTH_DEN to shorten every pulse.
+On the Game Boy a game frame sometimes takes two screen frames, so the
+motor is on for a half to two thirds of a pulse rather than exactly half.
 
 ## Golden run
 

@@ -33,9 +33,11 @@ of the Nokia DCT3 MAME project, <https://github.com/lukesau/nokia-dct3-re>
 - `3210/`, `3310/`, `3410/`: one port per phone, each a project of its own
   with its Makefile, core, platform layers, tools and README.
 - `common/`: the code the ports share: the LCD buffer and its blits, the
-  font, the test card, the GBA linker script and libc, the host PGM writer,
-  the frame and ROM tools and the mGBA setup script. Each port compiles it
-  against its own `lcd.h`, so it draws at that phone's screen size.
+  font, the test card, the version, the full-screen menus made at build
+  time and what shows them on the Game Boy and the GBA, the GBA linker
+  script and libc, the host PGM writer, the frame and ROM tools and the
+  mGBA setup script. Each port compiles it against its own `lcd.h`, so it
+  draws at that phone's screen size.
 - `tools/` (ignored): the SameBoy and mGBA clones the headless checks are
   built on, shared by the three ports (`make setup`).
 - `docs/combined-rom.md`: the plan for one ROM holding all three phones,
@@ -48,7 +50,9 @@ of the Nokia DCT3 MAME project, <https://github.com/lukesau/nokia-dct3-re>
   `make -C 3310 <target>` runs one port's.
 
 The ports began as three repositories and were brought together here with
-their histories.
+their histories. They share one version number, `GAME_VERSION` in
+`common/core/version.h` (now v1.1), shown on each first screen and About
+page.
 
 ## Building
 

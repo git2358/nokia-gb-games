@@ -395,7 +395,7 @@ $(ASSETS)/native_data.c: $(BUILD)/frame_gb
 $(BUILD)/nokia3310%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/draw.rel $(BUILD)/gb/search.rel $(BUILD)/gb/native_put.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
 	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 -Wl-b_CODE_3=0x34000 -Wl-b_CODE_4=0x44000 -Wl-b_CODE_5=0x54000 -Wl-b_CODE_6=0x64000 -Wl-b_CODE_7=0x74000 -Wl-b_CODE_8=0x84000 \
 		-o $(BUILD)/gb/$(basename $(notdir $@)).ihx $^
-	@$(PYTHON) tools/gb_bank_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
+	@$(PYTHON) $(COMMON)/tools/gb_bank_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
 	$(MAKEBIN) -Z -yn NOKIA3310 -yt 0x1e -yo 16 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
 
 .SECONDARY: $(GB_RELS) $(BUILD)/gb/crt0.rel $(BUILD)/gb/draw.rel $(BUILD)/gb/search.rel $(BUILD)/gb/native_put.rel
@@ -433,7 +433,7 @@ run-gb: $(GB_ROM)
 
 $(BUILD)/gba/nokia3310.elf $(BUILD)/gba/nokia3310-keys.elf: $(GBA_SRC) $(CORE_HDR) $(COMMON)/platform/gba/gba.ld FORCE
 	@mkdir -p $(BUILD)/gba
-	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(COMMON)/core -I$(ASSETS) -Iplatform/gba/include '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -nostdlib -T $(COMMON)/platform/gba/gba.ld -Wl,-Map,$(basename $@).map -o $@ $(GBA_SRC) -lgcc
+	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(COMMON)/core -I$(ASSETS) -I$(COMMON)/platform/gba/include '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -nostdlib -T $(COMMON)/platform/gba/gba.ld -Wl,-Map,$(basename $@).map -o $@ $(GBA_SRC) -lgcc
 
 $(GBA_ROM): $(BUILD)/gba/nokia3310.elf $(COMMON)/tools/gbafix.py FORCE
 	$(ARM_OBJCOPY) -O binary $< $@

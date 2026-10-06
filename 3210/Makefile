@@ -56,10 +56,11 @@ GB_TEST_ROM := $(BUILD)/nokia3210-keys.gb
 GBA_TEST_ROM := $(BUILD)/nokia3210-keys.gba
 KEYS ?=
 GB_FRAME := menu-$(KEYS)
-GB_REL := $(patsubst %.c,$(BUILD)/gb/%.rel,$(notdir $(CORE_SRC))) $(BUILD)/gb/game_assets.rel
+GB_REL := $(patsubst %.c,$(BUILD)/gb/%.rel,$(notdir $(CORE_SRC))) $(BUILD)/gb/game_assets.rel \
+	$(BUILD)/gb/native_tiles.rel $(BUILD)/gb/native_data.rel $(BUILD)/gb/native_data_tiles.rel
 GBA_SRC := platform/gba/crt0.s platform/gba/main.c $(COMMON)/platform/gba/libc.c $(CORE_SRC) $(ASSET_SRC)
 
-vpath %.c core $(COMMON)/core platform/gb
+vpath %.c core $(COMMON)/core platform/gb $(COMMON)/platform/gb
 
 .PHONY: help assets fonts test test-snake test-boards sheet frames check-golden gb gba check-gb shot-gb check-gba shot-gba run-gb run-gba cards clean
 
@@ -129,22 +130,22 @@ $(BUILD)/asset_sheet: platform/host/asset_sheet.c $(COMMON)/platform/host/pgm.c 
 sheet: $(BUILD)/asset_sheet
 	$(BUILD)/asset_sheet $(BUILD)
 
-$(BUILD)/frame: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/frame: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(COMMON)/tools/native_gen.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(COMMON)/tools/native_gen.c $(CORE_SRC) $(ASSET_SRC)
 
 $(BUILD)/frame_%.pgm: $(BUILD)/frame
 	$(BUILD)/frame $* $@
 
 # The same tool with the Game Boy's framebuffer, for comparing its screen.
-$(BUILD)/frame_gb: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/frame_gb: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(COMMON)/tools/native_gen.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(COMMON)/tools/native_gen.c $(CORE_SRC) $(ASSET_SRC)
 
 $(BUILD)/gbframe_%.pgm: $(BUILD)/frame_gb
 	$(BUILD)/frame_gb $* $@
 
 # And with the GBA's.
-$(BUILD)/frame_gba: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(GBA_FB) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/frame_gba: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(COMMON)/tools/native_gen.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(GBA_FB) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(COMMON)/tools/native_gen.c $(CORE_SRC) $(ASSET_SRC)
 
 $(BUILD)/gbaframe_%.pgm: $(BUILD)/frame_gba
 	$(BUILD)/frame_gba $* $@
@@ -160,31 +161,60 @@ frames: $(BUILD)/frame_testcard.pgm $(BUILD)/frame_outline.pgm $(BUILD)/frame_sn
 
 # Game Boy
 
-$(BUILD)/gb/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
+# The ROM's banks of 16 KiB: the first, always mapped, holds the code but
+# the menus; bank 1 the menus and the firmware's pictures and text; banks 2
+# and 3 the full-screen menus made at build time (native_tiles.h).
+GB_CFLAGS := -msm83 --opt-code-speed $(GB_FB) -DLCD_PLATFORM_COLUMNS -DNATIVE_PLATFORM_TILES -Icore -I$(COMMON)/core \
+	-I$(COMMON)/platform/gb -I$(ASSETS)
+$(BUILD)/gb/menu.rel $(BUILD)/gb/game_assets.rel: GB_SEG := --codeseg CODE_1
+$(BUILD)/gb/native_tiles.rel: GB_SEG := --codeseg CODE_2
+
+$(BUILD)/gb/%.rel: %.c $(CORE_HDR) $(ASSET_SRC) $(COMMON)/platform/gb/native_gb.h
 	@mkdir -p $(BUILD)/gb
-	$(SDCC) -msm83 --opt-code-speed $(GB_FB) -DLCD_PLATFORM_COLUMNS -Icore -I$(COMMON)/core -I$(ASSETS) -c $< -o $@
+	$(SDCC) $(GB_CFLAGS) $(GB_SEG) -c $< -o $@
+
+# The full-screen menus made at build time, drawn by the host build of the
+# core at the Game Boy's size: the screens in bank 2, their tiles in 3.
+$(ASSETS)/native_data.c: $(BUILD)/frame_gb
+	$(BUILD)/frame_gb native $@
+
+$(BUILD)/gb/native_data.rel: $(ASSETS)/native_data.c
+	@mkdir -p $(BUILD)/gb
+	$(SDCC) -msm83 --codeseg CODE_2 -c $< -o $@
+
+$(BUILD)/gb/native_data_tiles.rel: $(ASSETS)/native_data.c
+	@mkdir -p $(BUILD)/gb
+	$(SDCC) -msm83 -DNATIVE_PART_TILES --codeseg CODE_3 -c $< -o $@
+
+$(BUILD)/gb/native_put.rel: $(COMMON)/platform/gb/native_put.s
+	@mkdir -p $(BUILD)/gb
+	$(SDAS) -o $@ $<
 
 # The layer itself twice: once pressing no keys, once pressing KEYS. Always
 # rebuilt, so a change of KEYS takes effect.
 $(BUILD)/gb/main.rel $(BUILD)/gb/main-keys.rel: platform/gb/main.c $(CORE_HDR) $(ASSET_SRC) FORCE
 	@mkdir -p $(BUILD)/gb
-	$(SDCC) -msm83 --opt-code-speed $(GB_FB) -DLCD_PLATFORM_COLUMNS -Icore -I$(COMMON)/core -I$(ASSETS) '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -c $< -o $@
+	$(SDCC) $(GB_CFLAGS) '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -c $< -o $@
 
 FORCE:
 
 $(BUILD)/gb/game_assets.rel: $(ASSETS)/game_assets.c
 	@mkdir -p $(BUILD)/gb
-	$(SDCC) -msm83 -Icore -I$(COMMON)/core -I$(ASSETS) -c $< -o $@
+	$(SDCC) -msm83 -Icore -I$(COMMON)/core -I$(ASSETS) $(GB_SEG) -c $< -o $@
 
 $(BUILD)/gb/crt0.rel: platform/gb/crt0.s
 	@mkdir -p $(BUILD)/gb
 	$(SDAS) -o $@ $<
 
-$(BUILD)/nokia3210%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/main%rel $(GB_REL)
-	$(SDCC) -msm83 --no-std-crt0 -o $(BUILD)/gb/$(basename $(notdir $@)).ihx $^
-	$(MAKEBIN) -Z -yn NOKIA3210 -yt 0x03 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
+# MBC1 with battery-backed RAM, four ROM banks. The linker does not mind
+# the first bank running over into the second, so its end is checked here.
+$(BUILD)/nokia3210%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/native_put.rel $(BUILD)/gb/main%rel $(GB_REL)
+	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 -Wl-b_CODE_3=0x34000 \
+		-o $(BUILD)/gb/$(basename $(notdir $@)).ihx $^
+	@$(PYTHON) $(COMMON)/tools/gb_bank_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
+	$(MAKEBIN) -Z -yn NOKIA3210 -yt 0x03 -yo 4 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
 
-.SECONDARY: $(GB_REL) $(BUILD)/gb/crt0.rel
+.SECONDARY: $(GB_REL) $(BUILD)/gb/crt0.rel $(BUILD)/gb/native_put.rel
 
 gb: $(GB_ROM)
 
@@ -212,7 +242,7 @@ run-gb: $(GB_ROM)
 
 $(BUILD)/gba/nokia3210.elf $(BUILD)/gba/nokia3210-keys.elf: $(GBA_SRC) $(CORE_HDR) $(COMMON)/platform/gba/gba.ld FORCE
 	@mkdir -p $(BUILD)/gba
-	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(COMMON)/core -I$(ASSETS) '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -nostdlib -T $(COMMON)/platform/gba/gba.ld -Wl,-Map,$(basename $@).map -o $@ $(GBA_SRC) -lgcc
+	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(COMMON)/core -I$(ASSETS) -I$(COMMON)/platform/gba/include '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -nostdlib -T $(COMMON)/platform/gba/gba.ld -Wl,-Map,$(basename $@).map -o $@ $(GBA_SRC) -lgcc
 
 $(GBA_ROM): $(BUILD)/gba/nokia3210.elf $(COMMON)/tools/gbafix.py FORCE
 	$(ARM_OBJCOPY) -O binary $< $@

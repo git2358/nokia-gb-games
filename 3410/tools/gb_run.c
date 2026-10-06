@@ -18,7 +18,7 @@
                   at hexadecimal ADDR was reached
      prof:N:FILE  run N screen frames, then write where the time went: a
                   line "BANK ADDR CYCLES" per instruction address, the bank
-                  being the ROM bank mapped at 0x4000 (see gb_profile.py)
+                  being the ROM bank mapped at 0x4000 (see common/tools/gb_profile.py)
 
    Built against the library `make lib` makes in the SameBoy clone. */
 #include <stdio.h>

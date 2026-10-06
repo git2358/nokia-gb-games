@@ -5,6 +5,7 @@
 #include "game_assets.h"
 #include "lcd.h"
 #include "memory.h"
+#include "native_tiles.h"
 #include "rand.h"
 #include "rotation.h"
 #include "snake.h"
@@ -121,6 +122,9 @@ static uint8_t board_drawn;    /* the LCD holds the running game's board */
 #define NO_SCREEN 0xff
 static uint8_t drawn_screen = NO_SCREEN, drawn_selection;
 static uint8_t full_screen;    /* the full-screen variant was chosen */
+#ifdef NATIVE_PLATFORM_TILES
+static uint8_t native_tiled;   /* the platform showed that menu from its tiles */
+#endif
 static uint8_t view_mode;      /* which of the views below the LCD is set up for */
 
 /* Columns of the phone's LCD a platform with LCD_GAME_ZOOM shows, and how
@@ -489,6 +493,19 @@ static uint8_t native_update(void)
 
     if (drawn_screen != screen)
         return 0;
+#ifdef NATIVE_PLATFORM_TILES
+    /* A made screen: the cursor is laid over it, and another level is
+       another screen. */
+    if (native_tiled) {
+        if (screen != SCREEN_GAMES && screen != SCREEN_GAME)
+            return 0;
+        selection = screen == SCREEN_GAMES ? game : item;
+        platform_native_cursor(drawn_selection, 0);
+        platform_native_cursor(selection, 1);
+        drawn_selection = selection;
+        return 1;
+    }
+#endif
     switch (screen) {
     case SCREEN_GAMES:
     case SCREEN_GAME:
@@ -716,6 +733,113 @@ static void help_more(void)
     if (!*help_page)
         help_page = help_text();
 }
+
+/* The full-screen menus made at build time (native_tiles.h), numbered:
+   the list of games, About, each game's menu with each of what its second
+   entry can be, each game's Level page at each level, and each game's
+   instructions page by page. */
+#define NATIVE_ID_GAMES 0
+#define NATIVE_ID_ABOUT 1
+#define NATIVE_RESUMES 3
+#define NATIVE_ID_GAME 2
+#define NATIVE_ID_LEVEL (NATIVE_ID_GAME + GAME_COUNT * NATIVE_RESUMES)
+#define NATIVE_ID_HELP (NATIVE_ID_LEVEL + GAME_COUNT * MAX_LEVELS)
+#define NATIVE_HELP_PAGES 16
+#define NATIVE_ID_END (NATIVE_ID_HELP + GAME_COUNT * NATIVE_HELP_PAGES)
+
+/* The instructions page shown, counting from 0; NATIVE_HELP_PAGES if it
+   is past those numbered. */
+static uint8_t help_page_number(void)
+{
+    const char *page = help_text();
+    uint8_t n, row;
+
+    for (n = 0; n < NATIVE_HELP_PAGES && *page; n++) {
+        if (page == help_page)
+            return n;
+        for (row = 0; row < help_lines() && *page; row++)
+            page = help_next_line(page);
+    }
+    return NATIVE_HELP_PAGES;
+}
+
+uint16_t menu_native_id(void)
+{
+    uint8_t n;
+
+    switch (screen) {
+    case SCREEN_GAMES:
+        return NATIVE_ID_GAMES;
+    case SCREEN_ABOUT:
+        return NATIVE_ID_ABOUT;
+    case SCREEN_GAME:
+        return (uint16_t)(NATIVE_ID_GAME + game * NATIVE_RESUMES + resume);
+    case SCREEN_LEVEL:
+        return (uint16_t)(NATIVE_ID_LEVEL + game * MAX_LEVELS + level_choice);
+    case SCREEN_HELP:
+        n = help_page_number();
+        if (n >= NATIVE_HELP_PAGES)
+            return NATIVE_NONE;
+        return (uint16_t)(NATIVE_ID_HELP + game * NATIVE_HELP_PAGES + n);
+    default:
+        return NATIVE_NONE;
+    }
+}
+
+/* The host draws them for native_gen.c; the platform that shows them has
+   no use for these. */
+#ifndef NATIVE_PLATFORM_TILES
+uint8_t menu_native_draw(uint16_t id)
+{
+    uint8_t n;
+
+    if (id >= NATIVE_ID_END)
+        return NATIVE_END;
+    full_screen = 1;
+    /* No selection: the cursor is drawn over the picture. */
+    item = 0xff;
+    if (id == NATIVE_ID_GAMES) {
+        screen = SCREEN_GAMES;
+        game = 0xff;
+        native_games();
+    } else if (id == NATIVE_ID_ABOUT) {
+        screen = SCREEN_ABOUT;
+        native_about();
+    } else if (id < NATIVE_ID_LEVEL) {
+        screen = SCREEN_GAME;
+        game = (uint8_t)((id - NATIVE_ID_GAME) / NATIVE_RESUMES);
+        resume = (uint8_t)((id - NATIVE_ID_GAME) % NATIVE_RESUMES);
+        native_game();
+    } else if (id < NATIVE_ID_HELP) {
+        screen = SCREEN_LEVEL;
+        game = (uint8_t)((id - NATIVE_ID_LEVEL) / MAX_LEVELS);
+        level_choice = (uint8_t)((id - NATIVE_ID_LEVEL) % MAX_LEVELS);
+        if (level_choice >= level_count())
+            return NATIVE_SKIP;
+        native_level();
+    } else {
+        screen = SCREEN_HELP;
+        game = (uint8_t)((id - NATIVE_ID_HELP) / NATIVE_HELP_PAGES);
+        help_page = help_text();
+        for (n = (uint8_t)((id - NATIVE_ID_HELP) % NATIVE_HELP_PAGES); n; n--) {
+            uint8_t row;
+
+            for (row = 0; row < help_lines() && *help_page; row++)
+                help_page = help_next_line(help_page);
+            if (!*help_page)
+                return NATIVE_SKIP;
+        }
+        draw_help();
+    }
+    return NATIVE_DRAWN;
+}
+
+void menu_native_cursor(uint8_t row)
+{
+    full_screen = 1;
+    native_cursor(row, 1);
+}
+#endif
 
 void menu_init(void)
 {
@@ -1157,6 +1281,21 @@ void menu_draw(void)
             return;
         }
     }
+#ifdef NATIVE_PLATFORM_TILES
+    native_tiled = 0;
+    if (mode == VIEW_NATIVE) {
+        uint16_t id = menu_native_id();
+
+        if (id != NATIVE_NONE && platform_native_show(id)) {
+            native_tiled = 1;
+            drawn_screen = screen;
+            drawn_selection = screen == SCREEN_GAMES ? game : screen == SCREEN_LEVEL ? level_choice : item;
+            if (screen == SCREEN_GAMES || screen == SCREEN_GAME)
+                platform_native_cursor(drawn_selection, 1);
+            return;
+        }
+    }
+#endif
     drawn_screen = NO_SCREEN;
 
     if (screen != SCREEN_PLAY) {

@@ -2,12 +2,21 @@
    as a 20x18 block of background tiles, one tile per 8x8 cell; the phone's
    84x48 LCD is a window in the middle of it. A, Select or Start is the
    phone's Navi key, B is its C key, the D-pad scrolls and steers, and Start
-   on the first screen picks the full-screen variant. */
+   on the first screen picks the full-screen variant.
+
+   This file is in the ROM's first 16 KiB with the rest of the code; bank 1
+   holds the menus and the firmware's pictures and text, and is the bank
+   mapped but while a full-screen menu made at build time is put up from
+   banks 2 and 3 (native_tiles.h). */
 #include <stdint.h>
+
+#include <string.h>
 
 #include "game.h"
 #include "lcd.h"
 #include "menu.h"
+#include "native_gb.h"
+#include "native_tiles.h"
 #include "sound.h"
 
 #define REG(addr) (*(volatile uint8_t *)(addr))
@@ -313,6 +322,81 @@ static void present(void)
         LCDC = LCDC_ON;
 }
 
+/* The banks of the cartridge (MBC1) mapped at 0x4000. */
+#define MBC_ROM_BANK REG(0x2000)
+enum {
+    BANK_MENU = 1,
+    BANK_NATIVE,
+    BANK_NATIVE_TILES
+};
+const uint8_t native_bank = BANK_NATIVE, native_tile_bank = BANK_NATIVE_TILES;
+
+#define PALETTE 0xe4
+
+/* menu_draw showed a full-screen menu made at build time, or moved the
+   cursor on one: lcd_fb does not hold what is on the screen. */
+static uint8_t native_drew;
+
+uint8_t platform_native_show(uint16_t id)
+{
+    uint8_t shown;
+
+    MBC_ROM_BANK = BANK_NATIVE;
+    shown = native_show(id);
+    MBC_ROM_BANK = BANK_MENU;
+    if (!shown)
+        return 0;
+    /* The magnified rectangle's tiles are gone. */
+    zoomed = 0;
+    native_drew = 1;
+    return 1;
+}
+
+void platform_native_cursor(uint8_t row, uint8_t on)
+{
+    MBC_ROM_BANK = BANK_NATIVE;
+    native_cursor(row, on);
+    MBC_ROM_BANK = BANK_MENU;
+    native_drew = 1;
+}
+
+/* Something was drawn into lcd_fb since it was last shown. */
+static uint8_t lcd_drawn(void)
+{
+    const uint8_t *dirty = lcd_dirty;
+    uint16_t n;
+
+    for (n = sizeof lcd_dirty; n; n--)
+        if (*dirty++)
+            return 1;
+    return 0;
+}
+
+/* Puts what menu_draw drew on the screen, or nothing when that was a made
+   screen, which is up already. */
+static void show(void)
+{
+    uint16_t i;
+
+    if (native_drew) {
+        native_drew = 0;
+        memset(lcd_dirty, 0, sizeof lcd_dirty);
+        /* At power-on, present would have switched the LCD on. */
+        if (!(LCDC & 0x80))
+            LCDC = LCDC_ON;
+        return;
+    }
+    if (native_up && lcd_drawn()) {
+        MBC_ROM_BANK = BANK_NATIVE;
+        native_leave(PALETTE);
+        MBC_ROM_BANK = BANK_MENU;
+        /* The cells' tiles hold the made screen's. */
+        for (i = 0; i < sizeof lcd_dirty; i++)
+            lcd_dirty[i] = 1;
+    }
+    present();
+}
+
 /* The pad is read once a frame by the vertical-blank handler in crt0.s:
    pad_last is what was held then (A, B, Select, Start in bits 0-3, Right,
    Left, Up, Down in bits 4-7) and pad_latch collects every new press until
@@ -352,7 +436,7 @@ void main(void)
             VRAM_MAP[ty * 32 + tx] = (uint8_t)((ty * TILES_X + tx) % SPLIT_TILE);
     SCX = 0;
     SCY = 0;
-    BGP = 0xe4;
+    BGP = PALETTE;
     LYC = SPLIT_LINE - 1; /* the handler switches at the end of this line */
     STAT = 0x40; /* interrupt when LY reaches LYC */
 
@@ -377,7 +461,7 @@ void main(void)
                   : MENU_KEY_BACK);
     }
     menu_draw();
-    present();
+    show();
 
     IF = 0;
     IE = 0x03; /* vertical blank and LCD status */
@@ -413,7 +497,7 @@ void main(void)
            its board is on the screen. */
         if (changed) {
             menu_draw();
-            present();
+            show();
             seen = frame_count;
         }
 
@@ -426,7 +510,7 @@ void main(void)
         while (frames--) {
             if (menu_tick()) {
                 menu_draw();
-                present();
+                show();
             }
         }
     }

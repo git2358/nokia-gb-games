@@ -253,7 +253,7 @@ $(BUILD)/gb/%.rel: $(COMMON)/platform/gb/%.s
 $(BUILD)/nokia3410%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/native_put.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
 	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 -Wl-b_CODE_3=0x34000 -Wl-b_CODE_4=0x44000 \
 		-o $(BUILD)/gb/$(basename $(notdir $@)).ihx $^
-	@$(PYTHON) tools/gb_bank_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
+	@$(PYTHON) $(COMMON)/tools/gb_bank_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
 	$(MAKEBIN) -Z -yn NOKIA3410 -yt 0x1e -yo 8 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
 
 .SECONDARY: $(GB_RELS) $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/native_put.rel

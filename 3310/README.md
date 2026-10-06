@@ -411,7 +411,7 @@ the ignored `golden/`.
   reads its data by firmware address.
 - `tools/gb_run.c` runs a Game Boy ROM headlessly with scripted buttons,
   screenshots, sound capture, memory peeks and a profiler
-  (`tools/gb_profile.py`).
+  (`../common/tools/gb_profile.py`).
 - The firmware maps the core follows are `docs/games_applications_3310.md`,
   `docs/games_snake2_3310.md`, `docs/games_pairs2_3310.md` and
   `docs/games_bantumi_3310.md` in the MAME fork.

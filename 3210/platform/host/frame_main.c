@@ -15,6 +15,7 @@
 #include "game_assets.h"
 #include "lcd.h"
 #include "menu.h"
+#include "native_tiles.h"
 #include "pgm.h"
 #include "snake.h"
 #include "sound.h"
@@ -44,6 +45,8 @@ int main(int argc, char **argv)
     unsigned long seed = 0;
     int seeded = 0;
 
+    if (argc == 3 && strcmp(argv[1], "native") == 0)
+        return native_gen(argv[2]);
     if (argc != 3) {
         fprintf(stderr, "usage: frame NAME OUT.pgm\n");
         return 2;

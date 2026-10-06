@@ -1,4 +1,4 @@
-/* The build is freestanding; platform/gba/libc.c holds these. */
+/* The build is freestanding; common/platform/gba/libc.c holds these. */
 #ifndef GBA_STRING_H
 #define GBA_STRING_H
 

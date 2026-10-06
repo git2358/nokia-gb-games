@@ -15,6 +15,7 @@
 #include "games.h"
 #include "lcd.h"
 #include "menu.h"
+#include "native_tiles.h"
 #include "pgm.h"
 #include "sound.h"
 #include "sprite.h"
@@ -59,6 +60,8 @@ void platform_options_save(const struct game_options *in)
 
 int main(int argc, char **argv)
 {
+    if (argc == 3 && strcmp(argv[1], "native") == 0)
+        return native_gen(argv[2]);
     if (argc != 3) {
         fprintf(stderr, "usage: frame NAME OUT.pgm\n");
         return 2;

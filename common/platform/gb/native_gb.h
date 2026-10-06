@@ -10,6 +10,9 @@
    The port defines them. */
 extern const uint8_t native_bank, native_tile_bank;
 
+/* A made screen is up. */
+extern uint8_t native_up;
+
 /* native_tiles.c, called with native_bank mapped. */
 uint8_t native_show(uint16_t id);
 void native_cursor(uint8_t row, uint8_t on);

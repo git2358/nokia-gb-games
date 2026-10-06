@@ -1,6 +1,7 @@
 #include "menu.h"
 
 #include "font.h"
+#include "native_tiles.h"
 #include "game.h"
 #include "game_assets.h"
 #include "games.h"
@@ -126,6 +127,12 @@ static uint8_t board_drawn;    /* the LCD holds the running game's picture */
 uint8_t menu_drew_picture;
 static uint8_t full_screen;    /* the full-screen variant was chosen */
 static uint8_t view_mode;      /* which of the views below the LCD is set up for */
+#ifdef NATIVE_PLATFORM_TILES
+/* The full-screen menu the platform shows from its tiles (native_tiles.h),
+   NATIVE_NONE when it shows none, and the selection the cursor is on. */
+static uint16_t tiled_id = NATIVE_NONE;
+static uint8_t tiled_selection;
+#endif
 static uint8_t surround_used;  /* something is drawn around the phone's LCD */
 static struct game_settings settings;
 static uint16_t top_score;     /* the chosen maze's, which the 3410 keeps apart */
@@ -511,14 +518,19 @@ static void native_hint(const char *hint)
     font_draw(&NATIVE_FONT, NATIVE_MARGIN, NATIVE_HINT_Y, hint, 1);
 }
 
-static void native_row(uint8_t row, const char *label, uint8_t selected)
+static void native_cursor(uint8_t row)
 {
     uint8_t y = (uint8_t)(NATIVE_LIST_Y + row * NATIVE_ROW_HEIGHT), i;
 
-    font_draw(&NATIVE_FONT, NATIVE_TEXT_X, y + 1, label, 1);
+    for (i = 0; i < NATIVE_CURSOR_WIDTH; i++)
+        lcd_fill_rect(NATIVE_MARGIN + i, y + 2 + i, 1, NATIVE_CURSOR_HEIGHT - 2 * i, 1);
+}
+
+static void native_row(uint8_t row, const char *label, uint8_t selected)
+{
+    font_draw(&NATIVE_FONT, NATIVE_TEXT_X, NATIVE_LIST_Y + row * NATIVE_ROW_HEIGHT + 1, label, 1);
     if (selected)
-        for (i = 0; i < NATIVE_CURSOR_WIDTH; i++)
-            lcd_fill_rect(NATIVE_MARGIN + i, y + 2 + i, 1, NATIVE_CURSOR_HEIGHT - 2 * i, 1);
+        native_cursor(row);
 }
 
 static void native_list(const char *title, uint8_t count, uint8_t selection, const char *(*name)(uint8_t))
@@ -1028,6 +1040,129 @@ static void draw_phone(void)
     }
 }
 
+/* The full-screen menus made at build time (native_tiles.h), numbered:
+   Games, Select game, About, Game options, the mazes, the settings with
+   each combination of the switches' values, Snake II's menu without and
+   with Continue, and the instructions' pages. */
+#define NATIVE_ID_GAMES 0
+#define NATIVE_ID_SELECT 1
+#define NATIVE_ID_ABOUT 2
+#define NATIVE_ID_OPTIONS 3
+#define NATIVE_ID_MAZES 4
+#define NATIVE_ID_SETTINGS 5
+#define NATIVE_SWITCHES 3
+#define NATIVE_ID_GAME (NATIVE_ID_SETTINGS + (1 << NATIVE_SWITCHES))
+#define NATIVE_ID_HELP (NATIVE_ID_GAME + 2)
+#define NATIVE_ID_END (NATIVE_ID_HELP + HELP_PAGES)
+
+/* The full-screen menus with a cursor, and where it is. */
+static uint8_t native_listed(void)
+{
+    return (uint8_t)(screen == SCREEN_GAMES || screen == SCREEN_SELECT || screen == SCREEN_SETTINGS
+                     || screen == SCREEN_SETTING_VALUE || screen == SCREEN_GAME || screen == SCREEN_OPTIONS
+                     || screen == SCREEN_MAZES);
+}
+
+static uint8_t native_selection(void)
+{
+    switch (screen) {
+    case SCREEN_GAMES:
+        return games_item;
+    case SCREEN_SELECT:
+        return game;
+    case SCREEN_GAME:
+        return item;
+    case SCREEN_OPTIONS:
+        return option;
+    case SCREEN_MAZES:
+        return maze;
+    default:
+        return setting;
+    }
+}
+
+uint16_t menu_native_id(void)
+{
+    uint8_t i, bits = 0, n = 0;
+
+    switch (screen) {
+    case SCREEN_GAMES:
+        return NATIVE_ID_GAMES;
+    case SCREEN_SELECT:
+        return NATIVE_ID_SELECT;
+    case SCREEN_ABOUT:
+        return NATIVE_ID_ABOUT;
+    case SCREEN_OPTIONS:
+        return NATIVE_ID_OPTIONS;
+    case SCREEN_MAZES:
+        return NATIVE_ID_MAZES;
+    case SCREEN_SETTINGS:
+    case SCREEN_SETTING_VALUE:
+        for (i = 0; i < SETTING_COUNT; i++) {
+            const uint8_t *on = setting_switch(i);
+
+            if (on)
+                bits |= (uint8_t)((*on ? 1 : 0) << n++);
+        }
+        return (uint16_t)(NATIVE_ID_SETTINGS + bits);
+    case SCREEN_GAME:
+        return (uint16_t)(NATIVE_ID_GAME + (paused ? 1 : 0));
+    case SCREEN_HELP:
+        return (uint16_t)(NATIVE_ID_HELP + help_page);
+    default:
+        return NATIVE_NONE;
+    }
+}
+
+static void draw_native(void);
+
+/* The host draws them for native_gen.c; the platform that shows them has
+   no use for these. */
+#ifndef NATIVE_PLATFORM_TILES
+uint8_t menu_native_draw(uint16_t id)
+{
+    uint8_t i, n = 0;
+
+    if (id >= NATIVE_ID_END)
+        return NATIVE_END;
+    full_screen = 1;
+    /* No selection: the cursor is drawn over the picture. */
+    games_item = game = item = option = maze = setting = 0xff;
+    if (id == NATIVE_ID_GAMES) {
+        screen = SCREEN_GAMES;
+    } else if (id == NATIVE_ID_SELECT) {
+        screen = SCREEN_SELECT;
+    } else if (id == NATIVE_ID_ABOUT) {
+        screen = SCREEN_ABOUT;
+    } else if (id == NATIVE_ID_OPTIONS) {
+        screen = SCREEN_OPTIONS;
+    } else if (id == NATIVE_ID_MAZES) {
+        screen = SCREEN_MAZES;
+    } else if (id < NATIVE_ID_GAME) {
+        screen = SCREEN_SETTINGS;
+        for (i = 0; i < SETTING_COUNT; i++) {
+            uint8_t *on = setting_switch(i);
+
+            if (on)
+                *on = (uint8_t)(((id - NATIVE_ID_SETTINGS) >> n++) & 1);
+        }
+    } else if (id < NATIVE_ID_HELP) {
+        screen = SCREEN_GAME;
+        paused = (uint8_t)(id - NATIVE_ID_GAME);
+    } else {
+        screen = SCREEN_HELP;
+        help_page = (uint8_t)(id - NATIVE_ID_HELP);
+    }
+    draw_native();
+    return NATIVE_DRAWN;
+}
+
+void menu_native_cursor(uint8_t row)
+{
+    native_cursor(row);
+}
+#endif
+
 static void draw_native(void)
 {
     switch (screen) {
@@ -1079,6 +1214,11 @@ void menu_draw(void)
     uint8_t picture = screen == SCREEN_PLAY || screen == SCREEN_TITLE || screen == SCREEN_GAME_OVER
                       || screen == SCREEN_HIGH_SCORES;
     uint8_t mode = full_screen && screen != SCREEN_MAIN && !picture ? VIEW_NATIVE : VIEW_PHONE;
+#ifdef NATIVE_PLATFORM_TILES
+    uint16_t was_tiled = tiled_id;
+
+    tiled_id = NATIVE_NONE;
+#endif
 
     if (full_screen && screen == SCREEN_PLAY && LCD_HAS_SURROUND)
         mode = VIEW_BOARD;
@@ -1128,6 +1268,24 @@ void menu_draw(void)
         board_drawn = 1;
         return;
     }
+#ifdef NATIVE_PLATFORM_TILES
+    /* A full-screen menu made at build time; when it is up already, only
+       the cursor moves. */
+    if (mode == VIEW_NATIVE) {
+        uint16_t id = menu_native_id();
+        uint8_t selection = native_selection(), listed = native_listed();
+
+        if (id != NATIVE_NONE && (id == was_tiled || platform_native_show(id))) {
+            if (id == was_tiled && listed)
+                platform_native_cursor(tiled_selection, 0);
+            if (listed)
+                platform_native_cursor(selection, 1);
+            tiled_id = id;
+            tiled_selection = selection;
+            return;
+        }
+    }
+#endif
     lcd_clear();
     board_drawn = 0;
     if (mode == VIEW_NATIVE)

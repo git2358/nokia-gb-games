@@ -30,7 +30,7 @@ SDCC ?= sdcc
 MAKEBIN ?= makebin
 SDAS ?= sdasgb
 GB_FB := -DLCD_FB_WIDTH=160 -DLCD_FB_HEIGHT=144 -DLCD_PHONE_X=32 -DLCD_PHONE_Y=40
-GB_CFLAGS = -msm83 --opt-code-speed $(GB_FB) -DSNAKE2_STATE_AT=0xa100 -DSNAKE2_STATE_END=0xc000 -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_PRESENT -Icore -I$(COMMON)/core -Iplatform/gb -I$(ASSETS)
+GB_CFLAGS = -msm83 --opt-code-speed $(GB_FB) -DSNAKE2_STATE_AT=0xa100 -DSNAKE2_STATE_END=0xc000 -DLCD_PLATFORM_COLUMNS -DSPRITE_PLATFORM_PRESENT -DNATIVE_PLATFORM_TILES -Icore -I$(COMMON)/core -Iplatform/gb -I$(COMMON)/platform/gb -I$(ASSETS)
 # The SameBoy clone scripts/setup-sameboy.sh makes: its boot ROM, and its
 # core as a library (`make -C $(SAMEBOY) lib`) for tools/gb_run.
 SAMEBOY ?= ../tools/SameBoy
@@ -55,9 +55,11 @@ GB_TEST_ROM := $(BUILD)/nokia3410-keys.gb
 GB_BANK0 := platform/gb/main.c platform/gb/far.c platform/gb/screen.c $(COMMON)/core/lcd.c core/sprite.c core/games.c core/rand.c core/sound.c $(ASSETS)/game_tables.c
 GB_BANK1 := core/menu.c $(COMMON)/core/font.c platform/gb/save.c $(ASSETS)/game_assets.c
 GB_BANK2 := core/snake2.c core/title.c $(ASSETS)/snake2_data.c
+GB_BANK3 := $(COMMON)/platform/gb/native_tiles.c $(ASSETS)/native_data.c
+GB_BANK4 := $(ASSETS)/native_data.c
 gb_rels = $(patsubst %.c,$(BUILD)/gb/$(1)/%.rel,$(notdir $(2)))
 GB_RELS := $(call gb_rels,0,$(filter-out platform/gb/main.c,$(GB_BANK0))) $(call gb_rels,1,$(GB_BANK1)) \
-	$(call gb_rels,2,$(GB_BANK2))
+	$(call gb_rels,2,$(GB_BANK2)) $(call gb_rels,3,$(GB_BANK3)) $(call gb_rels,4,$(GB_BANK4))
 
 # Keys a test ROM presses at power-on (see menu_script in core/menu.c), for
 # scripted screenshots and the checks against the host's frame for them.
@@ -118,8 +120,8 @@ $(BUILD)/test_core: tests/test_core.c $(COMMON)/core/lcd.c core/rand.c core/spri
 test: $(BUILD)/test_core
 	$(BUILD)/test_core
 
-$(BUILD)/frame: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/frame: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(COMMON)/tools/native_gen.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(COMMON)/tools/native_gen.c $(CORE_SRC) $(ASSET_SRC)
 
 $(BUILD)/frame_%.pgm: $(BUILD)/frame
 	$(BUILD)/frame $* $@
@@ -198,7 +200,7 @@ FORCE:
 
 # Game Boy
 
-vpath %.c core $(COMMON)/core platform/gb $(ASSETS)
+vpath %.c core $(COMMON)/core platform/gb $(COMMON)/platform/gb $(ASSETS)
 
 # games.c reaches the game in bank 2 through far.c, and menu.c the title
 # and the game-over picture.
@@ -224,20 +226,37 @@ $(BUILD)/gb/0/main.rel $(BUILD)/gb/0/main-keys.rel: platform/gb/main.c $(CORE_HD
 	@mkdir -p $(BUILD)/gb/0
 	$(SDCC) $(GB_CFLAGS) '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -c $< -o $@
 
+$(BUILD)/gb/3/%.rel: %.c $(CORE_HDR) $(ASSET_SRC) $(COMMON)/platform/gb/native_gb.h
+	@mkdir -p $(BUILD)/gb/3
+	$(SDCC) $(GB_CFLAGS) --codeseg CODE_3 -c $< -o $@
+
+$(BUILD)/gb/4/%.rel: %.c
+	@mkdir -p $(BUILD)/gb/4
+	$(SDCC) $(GB_CFLAGS) -DNATIVE_PART_TILES --codeseg CODE_4 -c $< -o $@
+
+# The full-screen menus made at build time, drawn by the host build of the
+# core at the Game Boy's size (native_tiles.h).
+$(ASSETS)/native_data.c: $(BUILD)/frame_gb
+	$(BUILD)/frame_gb native $@
+
 $(BUILD)/gb/%.rel: platform/gb/%.s
 	@mkdir -p $(BUILD)/gb
 	$(SDAS) -o $@ $<
 
-# MBC5 with its rumble pin and battery-backed RAM, four ROM banks (three
+$(BUILD)/gb/%.rel: $(COMMON)/platform/gb/%.s
+	@mkdir -p $(BUILD)/gb
+	$(SDAS) -o $@ $<
+
+# MBC5 with its rumble pin and battery-backed RAM, eight ROM banks (five
 # used) and 8 KiB of RAM. The linker does not mind the first bank running
 # over into the second, so its end is checked here.
-$(BUILD)/nokia3410%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
-	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 \
+$(BUILD)/nokia3410%gb: $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/native_put.rel $(BUILD)/gb/0/main%rel $(GB_RELS)
+	$(SDCC) -msm83 --no-std-crt0 -Wl-b_CODE_1=0x14000 -Wl-b_CODE_2=0x24000 -Wl-b_CODE_3=0x34000 -Wl-b_CODE_4=0x44000 \
 		-o $(BUILD)/gb/$(basename $(notdir $@)).ihx $^
 	@$(PYTHON) tools/gb_bank_check.py $(BUILD)/gb/$(basename $(notdir $@)).map
-	$(MAKEBIN) -Z -yn NOKIA3410 -yt 0x1e -yo 4 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
+	$(MAKEBIN) -Z -yn NOKIA3410 -yt 0x1e -yo 8 -ya 1 $(BUILD)/gb/$(basename $(notdir $@)).ihx $@
 
-.SECONDARY: $(GB_RELS) $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel
+.SECONDARY: $(GB_RELS) $(BUILD)/gb/crt0.rel $(BUILD)/gb/blocks.rel $(BUILD)/gb/native_put.rel
 
 gb: $(GB_ROM)
 
@@ -248,8 +267,8 @@ $(BUILD)/gb_run: tools/gb_run.c
 	$(CC) -O2 -I$(SAMEBOY) -DGB_VERSION='"x"' -o $@ $< $(SAMEBOY)/build/lib/libsameboy.a -lm
 
 # The host's frame tool with the Game Boy's framebuffer.
-$(BUILD)/frame_gb: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
-	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(CORE_SRC) $(ASSET_SRC)
+$(BUILD)/frame_gb: platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(COMMON)/tools/native_gen.c $(CORE_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) $(GB_FB) $(INCLUDES) -o $@ platform/host/frame_main.c $(COMMON)/platform/host/pgm.c $(COMMON)/tools/native_gen.c $(CORE_SRC) $(ASSET_SRC)
 
 # The ROM presses KEYS at power-on; its screen at each of GB_FRAMES must be
 # one of the host's frames for those keys, to the pixel. With the default

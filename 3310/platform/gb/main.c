@@ -18,6 +18,7 @@
 #include "games.h"
 #include "lcd.h"
 #include "menu.h"
+#include "native_gb.h"
 #include "native_tiles.h"
 #include "si.h"
 #include "si_data.h"
@@ -196,6 +197,18 @@ void gb_clear_tiles(void);
    cursor on one: lcd_fb does not hold what is on the screen. */
 static uint8_t native_drew;
 
+/* Something was drawn into lcd_fb since it was last shown. */
+static uint8_t lcd_drawn(void)
+{
+    const uint8_t *dirty = lcd_dirty;
+    uint16_t n;
+
+    for (n = sizeof lcd_dirty; n; n--)
+        if (*dirty++)
+            return 1;
+    return 0;
+}
+
 uint8_t platform_native_show(uint16_t id)
 {
     if (direct) {
@@ -219,7 +232,7 @@ void sprite_present(uint8_t all)
 {
     uint8_t mode = lcd_zoom_w ? DIRECT_ZOOM : DIRECT_PLAIN;
 
-    if (far_native_leave(PALETTE))
+    if (native_up && far_native_leave(PALETTE))
         all = 1;
 
     if (direct != mode)
@@ -290,7 +303,7 @@ static void show(void)
     }
     if (menu_drew_picture)
         return;
-    if (far_native_leave(PALETTE)) {
+    if (native_up && lcd_drawn() && far_native_leave(PALETTE)) {
         /* The cells' tiles hold the made screen's. */
         for (i = 0; i < sizeof lcd_dirty; i++)
             lcd_dirty[i] = 1;

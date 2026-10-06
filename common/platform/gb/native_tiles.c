@@ -53,6 +53,7 @@ static const uint8_t full[8] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff 
 
 /* The screen up, as its data; null when none is. */
 static const uint16_t *shown;
+uint8_t native_up;
 
 /* The first cell of a row: its tile, and the number the map names it by. */
 static uint8_t row_first(uint8_t ty)
@@ -79,6 +80,7 @@ uint8_t native_show(uint16_t id)
         BGP = NATIVE_PALETTE;
     }
     shown = p;
+    native_up = 1;
     for (ty = 0; ty < CELLS_Y; ty++) {
         native_first = row_first(ty);
         p = native_row(p, row_tiles(ty));
@@ -130,6 +132,7 @@ uint8_t native_leave(uint8_t palette)
     if (!shown)
         return 0;
     shown = 0;
+    native_up = 0;
     BGP = palette;
     for (ty = 0; ty < CELLS_Y; ty++) {
         uint8_t first = row_first(ty);

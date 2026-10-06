@@ -18,6 +18,8 @@
 #include "games.h"
 #include "lcd.h"
 #include "menu.h"
+#include "native_gb.h"
+#include "native_tiles.h"
 #include "screen.h"
 #include "sound.h"
 
@@ -194,10 +196,52 @@ static void present(void)
     }
 }
 
+/* menu_draw showed a full-screen menu made at build time, or moved the
+   cursor on one: lcd_fb does not hold what is on the screen. */
+static uint8_t native_drew;
+
+uint8_t platform_native_show(uint16_t id)
+{
+    if (!far_native_show(id))
+        return 0;
+    native_drew = 1;
+    return 1;
+}
+
+void platform_native_cursor(uint8_t row, uint8_t on)
+{
+    far_native_cursor(row, on);
+    native_drew = 1;
+}
+
+/* Something was drawn into lcd_fb since it was last shown. */
+static uint8_t lcd_drawn(void)
+{
+    const uint8_t *dirty = lcd_dirty;
+    uint16_t n;
+
+    for (n = sizeof lcd_dirty; n; n--)
+        if (*dirty++)
+            return 1;
+    return 0;
+}
+
 /* Puts what menu_draw drew on the screen: the menus through lcd_fb, the
-   game through it too (screen.c). */
+   game through it too (screen.c), or a made screen, which is up already. */
 static void show(void)
 {
+    uint16_t i;
+
+    if (native_drew) {
+        native_drew = 0;
+        memset(lcd_dirty, 0, sizeof lcd_dirty);
+        return;
+    }
+    if (native_up && lcd_drawn() && far_native_leave(PALETTE)) {
+        /* The cells' tiles hold the made screen's. */
+        for (i = 0; i < sizeof lcd_dirty; i++)
+            lcd_dirty[i] = 1;
+    }
     present();
 }
 

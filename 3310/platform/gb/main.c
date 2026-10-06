@@ -200,6 +200,9 @@ static uint8_t native_drew;
 
 void platform_native_blank(void)
 {
+    /* Something else is drawn now: a made screen drawn before it, by a
+       key script with no show in between, is not what show puts up. */
+    native_drew = 0;
     if (native_up)
         BGP = 0;
 }
@@ -301,8 +304,6 @@ static void present(void)
    a menu after the game needs every tile made again. */
 static void show(void)
 {
-    uint16_t i;
-
     if (native_drew) {
         native_drew = 0;
         memset(lcd_dirty, 0, sizeof lcd_dirty);
@@ -318,8 +319,7 @@ static void show(void)
         gb_clear_tiles();
         strip_leave(0, direct == DIRECT_ZOOM);
         direct = 0;
-        for (i = 0; i < sizeof lcd_dirty; i++)
-            lcd_dirty[i] = 1;
+        memset(lcd_dirty, 1, sizeof lcd_dirty);
     }
     present();
 }
@@ -369,7 +369,6 @@ static uint8_t held_keys(void)
 void main(void)
 {
     uint8_t tx, ty, pressed, changed, seen = 0;
-    uint16_t i;
 
     wait_vblank();
     LCDC = 0;
@@ -387,8 +386,7 @@ void main(void)
     STAT = 0x40; /* interrupt when LY reaches LYC: the cuts in crt0.s */
 
     /* Video RAM holds whatever the boot ROM left: write every tile once. */
-    for (i = 0; i < sizeof lcd_dirty; i++)
-        lcd_dirty[i] = 1;
+    memset(lcd_dirty, 1, sizeof lcd_dirty);
 
     NR52 = 0x80; /* sound on, full volume, channel 2 to both sides */
     NR50 = 0x77;

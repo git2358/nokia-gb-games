@@ -363,6 +363,9 @@ void platform_native_cursor(uint8_t row, uint8_t on)
 
 void platform_native_blank(void)
 {
+    /* Something else is drawn now: a made screen drawn before it, by a
+       key script with no show in between, is not what show puts up. */
+    native_drew = 0;
     if (native_up)
         BGP = 0;
 }

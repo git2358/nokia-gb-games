@@ -7,7 +7,7 @@
 # Usage: scripts/copy-to-cards.sh [ROM...]
 #
 # With no arguments it takes every .gb and .gba in build/ except the
-# scripted test ROMs (*-keys.*). A card that is not mounted is skipped with
+# scripted test ROMs (*-keys.*) and the benchmark (*-bench.*). A card that is not mounted is skipped with
 # a note, and the rest are still done. Each copy is compared with its
 # source afterwards. Nothing is ejected.
 #
@@ -30,7 +30,7 @@ if [[ $# -gt 0 ]]; then
 else
   roms=()
   for rom in "$ROOT"/build/*.gb "$ROOT"/build/*.gba; do
-    [[ -f "$rom" && "$rom" != *-keys.* ]] && roms+=("$rom")
+    [[ -f "$rom" && "$rom" != *-keys.* && "$rom" != *-bench.* ]] && roms+=("$rom")
   done
 fi
 if [[ ${#roms[@]} -eq 0 ]]; then

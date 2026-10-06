@@ -20,8 +20,10 @@ Four sources:
 
 The Golden column says what checks it against the firmware: *frames* (a
 recorded MAME run that the port's frames must appear in, in order),
-*menus* (`golden/menus/`, frames that must be equal), or *no*. Neither kind
-compares timing, and sounds and rumble are never compared with MAME.
+*menus* (`golden/menus/`, frames that must be equal), *sounds* (the
+recorded runs' sound and vibrator calls, which the replay's must equal, call
+for call), or *no*. None of them compares timing, and only the 3410's Space
+Impact compares sounds and rumble with MAME.
 
 ## In short
 
@@ -201,8 +203,9 @@ substance. What is not:
 ## 3410
 
 The maps are the fork's `docs/games_snake2_3410.md`,
-`games_applications_3410.md` and `games_survey_3410.md`. Space Impact for
-the 3410 is mapped but not ported.
+`games_applications_3410.md` and `games_survey_3410.md`. Space Impact is
+ported from `games_si_3410.md`; of it, only the sounds and the vibrator
+are listed here.
 
 | Feature | Source | Evidence | Golden |
 |---|---|---|---|
@@ -219,11 +222,13 @@ the 3410 is mapped but not ported.
 | `rand` | measured | `rand_3f903c` named, not decompiled | frames |
 | Game over picture and box | traced + data | `0x24b77e`, `0x24b5c8` | menus |
 | Game over blink and length (422 units) | measured | the traced code counts 30 x 100 ms, about 0.4 s less | no |
-| Game over sounds `0xfa2` / `0xfa4` | traced, **not implemented** | `0x24b77e` | no |
+| Game over sounds `0xfa2` / `0xfa4` | traced | `0x24b77e`; codes `0x21` / `0x23` as below | no |
 | Top score per maze | traced | `0x24b4ec` | no |
 | High scores page | traced + data | `0x24d204`, `0x24f63c`, `0x3b268a` | menus (first box only) |
 | Death vibration | traced on/off points, port length | `0x3b25d4`; the port's 141 units are a round figure | no |
-| Eat and death sounds | data + inferred ids | `0xfa0`/`0xfa1` taken to be `0x1f`/`0x20` | no |
+| Eat and death sounds | traced + data | `0xfa0`/`0xfa1` are `0x1f`/`0x20`: `0x3f7d0e` maps an id through the halfwords at `0x4c3538`, and the tone task indexes the table from `0x4a9060`, 3 records early | no |
+| Space Impact's sounds: shot, wall or missile, beam, bonus, ship lost, game over or new top score | traced + data | `0x3b2510` calls, ids `0xfa5`, `0xfa6`, `0xfa8`, `0xfa0`, `0xfa7`, `0xfa2`/`0xfa4` mapped as above | sounds |
+| Space Impact's vibrator, three ticks | traced | `0x3b25d4`; on and off at the phone's ticks, the motor's pulses as in `rumble.h` | sounds |
 | Full-screen mode, cart-RAM saves, Lights | port | | no |
 
 ## Mismatches found
@@ -278,7 +283,6 @@ noted.
   order, not timing, and inject directions instead of keys.
 - `play_over` skips the `rand()` call `0x24b4ec` makes at every game over,
   so a second game under a fixed seed leaves the phone's sequence.
-- The game over sounds are missing, and the README doesn't say so.
 - The last game's record is kept in RAM; the phone stores it in NV.
 - The title ends on any key but Back; the map says only Navi.
 - A 3310 comment in `way()` about an off-screen first segment does not
@@ -304,8 +308,7 @@ traced:
    (3210): the list, Level page, Instructions paging, Settings pages, Done
    note and the Games icon stepper. The pixels are already checked, so this
    only matters for authenticity.
-3. The tone task: the script commands, the note unit, and which ids the
-   3410's `0xfa0`.. are.
+3. The tone task: the script commands and the note unit.
 4. The 3310's real timer unit, and the 3410's keys (`0x24f8ec`), events
    and timer.
 5. Golden runs for traced code that no run has reached:

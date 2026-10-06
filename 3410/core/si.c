@@ -5,7 +5,7 @@
    This file is the handler, the chapters, the HUD, pause and game over;
    the rest is in the files si_int.h lists.
 
-   Not done yet: the Instructions' demos, sounds and the vibrator. */
+   Not done yet: the Instructions' demos. */
 #include "si_int.h"
 
 /* The state, and the state as the game saved it when paused (0x3b2922),
@@ -23,6 +23,7 @@ static uint8_t si_have_saved;
 
 uint16_t si_keys_held;
 uint16_t si_records_changed;
+uint8_t si_sound, si_vibrate;
 uint16_t si_period;
 
 /* 0x258b94 */
@@ -295,6 +296,7 @@ void si_continue_enter(void) SI_FAR
 {
     uint8_t i;
 
+    si_vibrate = SI_VIBRATE_OFF;
     si_pic_reset();
     objects_clear();
     si.fill = 0;
@@ -336,6 +338,7 @@ static int continue_key(uint8_t key)
 void si_award(uint8_t kind, int amount) SI_FAR
 {
     if (kind == TYPE_BONUS) {
+        sound(SI_SOUND_BONUS);
         for (;;) {
             unsigned pick = (unsigned)game_rand() & 3;
             int x, y;
@@ -452,6 +455,7 @@ static void game_over_step(void)
             si_pic_create(SI_MODE_XOR, x, y, &si_pictures[SI_PIC_STAR], 1);
         }
         si_pic_create_fill(SI_MODE_COPY, W / 2 - 0x19, H / 2 - 6, 0x32, 0x14);
+        sound(si.score < si_top_score ? SI_SOUND_GAME_OVER : SI_SOUND_TOP_SCORE);
         box_make();
         si_pic_create(SI_MODE_XOR, BOX_X, BOX_Y, &si.box_image, 1);
         si.logo_top = si_pic_create(SI_MODE_COPY, (W - 0x50) / 2, 11, &si_pictures[SI_PIC_LOGO_TOP], 1);
@@ -518,8 +522,8 @@ static uint8_t tick(uint8_t event, uint8_t a)
             si_pic_set_mode(si.terrain_pic, SI_MODE_NONE);
         }
     }
-    if (si.vibration)
-        si.vibration--;
+    if (si.vibration && !--si.vibration)
+        si_vibrate = SI_VIBRATE_OFF;
 
     switch (si.phase) {
     case PHASE_CONTINUE:

@@ -38,6 +38,27 @@ enum {
     SI_DONE_CLOSE = 2    /* the game is over: back to its menu */
 };
 
+/* The sounds the game asks for (0x3b2510): codes in the phone's sound
+   table, as the 3410 maps its ids 0xfa0.. onto it (0x3f7d0e, less 3). */
+enum {
+    SI_SOUND_SHIP_HIT = 0x13,  /* 0xfa7: the ship destroyed */
+    SI_SOUND_SHOT = 0x14,      /* 0xfa5 */
+    SI_SOUND_SPECIAL = 0x15,   /* 0xfa6: a wall or a missile */
+    SI_SOUND_BEAM = 0x16,      /* 0xfa8 */
+    SI_SOUND_BONUS = 0x1f,     /* 0xfa0 */
+    SI_SOUND_GAME_OVER = 0x21, /* 0xfa2 */
+    SI_SOUND_TOP_SCORE = 0x23  /* 0xfa4: game over with a new top score */
+};
+
+/* What the last event asked of the buzzer and the vibrator (0x3b25d4),
+   for the caller to carry out and clear: a SI_SOUND_ code, the last if
+   there were several, or 0; and SI_VIBRATE_ON or _OFF, or 0. */
+enum {
+    SI_VIBRATE_ON = 1,
+    SI_VIBRATE_OFF = 2
+};
+extern uint8_t si_sound, si_vibrate;
+
 /* The keys held, a bit per key code, as the framework would answer the
    game's poll (0x3b29d0); the caller keeps it up to date. */
 extern uint16_t si_keys_held;
@@ -46,7 +67,8 @@ extern uint16_t si_period;
 
 /* What the High scores page shows (the phone's record, set up by the
    caller before SI_EVENT_HIGH_SCORES): the top score, and the last game's
-   in a second box when `si_show_last`. */
+   in a second box when `si_show_last`. The top score is also what a
+   game's end is measured against for its sound: set it before a game. */
 extern uint16_t si_top_score, si_last_score;
 extern uint8_t si_show_last;
 

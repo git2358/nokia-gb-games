@@ -49,7 +49,7 @@ DIGIT_GLYPHS = (0x49017C, 40)  # ten 4x5 digits, 4 bytes each
 # and length, and the command 11; a note of 0x40 is a rest, and the
 # commands 5 n ... 6 play what they enclose n times.
 SOUND_TABLE = 0x4A9078
-SOUND_IDS = [0x1F, 0x20, 0x22]  # the games' SOUND_ codes
+SOUND_IDS = [0x13, 0x14, 0x15, 0x16, 0x1F, 0x20, 0x21, 0x23]  # the games' SOUND_ codes (si.h, snake2.h)
 NOTE_FIRST, NOTE_LAST = 0x7C, 0xAB  # 440 Hz and 47 semitones above it
 NOTE_REST = 0x40
 SCRIPT_END, SCRIPT_REPEAT, SCRIPT_AGAIN = 0x0B, 0x05, 0x06

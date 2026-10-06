@@ -7,7 +7,9 @@
    (tools/si_events.py): the event, its arguments, and the keys the game
    would see held then. A frame is written each time the picture changes,
    as OUT_DIR/NNNNNN.pgm, numbered by the event that produced it. SEED is the
-   ANSI generator's state at New game, in hex. */
+   ANSI generator's state at New game, in hex. What each event asks of the
+   buzzer and the vibrator goes to OUT_DIR/sounds.txt, as si_events.py
+   writes the phone's. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,7 +40,7 @@ int main(int argc, char **argv)
     static uint8_t last[sizeof sprite_screen];
     char path[1024];
     unsigned event, a, b, keys, n = 0, written = 0, i;
-    FILE *events;
+    FILE *events, *sounds;
 
     if (argc != 4) {
         fprintf(stderr, "usage: si_replay EVENTS OUT_DIR SEED\n");
@@ -47,6 +49,12 @@ int main(int argc, char **argv)
     events = fopen(argv[1], "r");
     if (!events) {
         perror(argv[1]);
+        return 1;
+    }
+    snprintf(path, sizeof path, "%s/sounds.txt", argv[2]);
+    sounds = fopen(path, "w");
+    if (!sounds) {
+        perror(path);
         return 1;
     }
     game_srand((uint32_t)strtoul(argv[3], 0, 16));
@@ -71,6 +79,11 @@ int main(int argc, char **argv)
         }
         si_keys_held = (uint16_t)keys;
         done = si_event((uint8_t)event, (uint8_t)a);
+        if (si_sound)
+            fprintf(sounds, "%u snd %x\n", n, si_sound);
+        if (si_vibrate)
+            fprintf(sounds, "%u vib %s\n", n, si_vibrate == SI_VIBRATE_ON ? "on" : "off");
+        si_sound = si_vibrate = 0;
         if (getenv("SI_DEBUG_FROM") && n >= strtoul(getenv("SI_DEBUG_FROM"), 0, 0)
             && n <= strtoul(getenv("SI_DEBUG_TO"), 0, 0)) {
             printf("%04u %x %x: ", n, event, a);
@@ -107,6 +120,7 @@ int main(int argc, char **argv)
         written++;
     }
     fclose(events);
+    fclose(sounds);
     printf("%u events, %u frames in %s\n", n, written, argv[2]);
     return 0;
 }

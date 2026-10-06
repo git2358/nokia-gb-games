@@ -5,7 +5,7 @@
 
 #include <stdint.h>
 
-/* Starts one of the games' sounds (a SNAKE2_SOUND_ code) at
+/* Starts one of the games' sounds (a SNAKE2_SOUND_ or SI_SOUND_ code) at
    the next sound_tick, in place of the one in progress, as on the phone. */
 void sound_play(uint8_t sound);
 

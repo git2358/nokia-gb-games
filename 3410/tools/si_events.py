@@ -12,7 +12,10 @@ New game; "ff 3 0 0" is the autopilot setting the lives back to 3; KEYS
 has bit k set when the game would see key code k held
 (0x3b29d0: (byte & 0xf) >> 1 nonzero) at that call, as read when the game
 polls them in play), and OUT_DIR/setup.txt, the ANSI generator's state at New game in
-hex.
+hex. OUT_DIR/sounds.txt has, for each call that asked for them, "N snd
+CODE", the last sound asked for (0x3b2510) as a code in the phone's sound
+table (si.h's SI_SOUND_), and "N vib on" or "N vib off", the vibrator's
+last switch (0x3b25d4), N the call's line in events.txt.
 
 With --title the events start at the title (0x0e) instead, and setup.txt
 is the generator's state as the title found it: the title reseeds it from
@@ -22,6 +25,11 @@ logged state the 60 draws are undone from.
 import re
 import sys
 from pathlib import Path
+
+# The 3410's sound ids, as its table at 0x4c3538 (0x3f7d0e) maps them onto
+# the sound table, less 3.
+SOUND_CODES = {0xFA0: 0x1F, 0xFA1: 0x20, 0xFA2: 0x21, 0xFA3: 0x22, 0xFA4: 0x23,
+               0xFA5: 0x14, 0xFA6: 0x15, 0xFA7: 0x13, 0xFA8: 0x16}
 
 
 def undo(state, draws):
@@ -49,9 +57,17 @@ def main():
             # pseudo-event before that call, whichever of the two
             # breakpoints logged first.
             if last_was_call:
-                events.insert(len(events) - 1, "ff 3 0 0")
+                events.insert(len(events) - 1, ["ff 3 0 0", None, None])
             else:
-                events.append("ff 3 0 0")
+                events.append(["ff 3 0 0", None, None])
+            continue
+        s = re.search(r"SI(SND|VIB) (\w+)", line)
+        if s and seed is not None and events:
+            value = int(s.group(2), 16)
+            if s.group(1) == "SND":
+                events[-1][1] = f"snd {SOUND_CODES[value]:x}"
+            else:
+                events[-1][2] = "vib on" if value else "vib off"
             continue
         last_was_call = "SIEV" in line
         k = re.search(r"SIKEYS keys=(\w+)", line)
@@ -59,8 +75,8 @@ def main():
             # The poll's own reading replaces the one at the handler's entry.
             raw = bytes.fromhex(k.group(1).rjust(24, "0"))
             keys = sum(1 << n for n, v in enumerate(raw) if (v & 0xf) >> 1)
-            parts = events[-1].split()
-            events[-1] = " ".join(parts[:3] + [f"{keys:x}"])
+            parts = events[-1][0].split()
+            events[-1][0] = " ".join(parts[:3] + [f"{keys:x}"])
             continue
         m = re.search(r"SIEV (\w+) (\w+) (\w+) c=\d+ seed=(\w+) keys=(\w+)", line)
         if not m:
@@ -80,11 +96,13 @@ def main():
                 seed = m.group(4)
         elif seed == "title" and event == 0:
             seed = f"{undo(int(m.group(4), 16), 60):08x}"
-        events.append(f"{event:x} {a:x} {b:x} {keys:x}")
+        events.append([f"{event:x} {a:x} {b:x} {keys:x}", None, None])
     if seed is None:
         sys.exit(f"{sys.argv[1]}: no New game in the log")
     out.mkdir(parents=True, exist_ok=True)
-    (out / "events.txt").write_text("\n".join(events) + "\n")
+    (out / "events.txt").write_text("".join(e[0] + "\n" for e in events))
+    (out / "sounds.txt").write_text("".join(f"{n} {asked}\n" for n, e in enumerate(events)
+                                            for asked in e[1:] if asked))
     (out / "setup.txt").write_text(seed + "\n")
     print(f"{out}: {len(events)} events, seed {seed}")
 

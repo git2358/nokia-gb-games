@@ -12,6 +12,7 @@
 #include "si_rows.h"
 #endif
 #include "snake2.h"
+#include "sound.h"
 #include "sprite.h"
 #include "title.h"
 #include "version.h"
@@ -665,6 +666,9 @@ static void play_over(void)
     screen = SCREEN_GAME_OVER;
     board_drawn = 0;
     over_start(final_score, new_top_score);
+    /* 0x24b77e */
+    if (games_options.sounds)
+        sound_play(new_top_score ? SNAKE2_SOUND_TOP_SCORE : SNAKE2_SOUND_GAME_OVER);
 }
 
 static void play_start(void)
@@ -867,9 +871,30 @@ static void si_closed(void)
     screen = SCREEN_SI_MENU;
 }
 
-static uint8_t si_send(uint8_t event, uint8_t a)
+/* Calls the game, then carries out what it asked of the buzzer and the
+   vibrator. The vibrator runs for the three ticks the game counts it
+   down over, on games.c's timer, as the phone's own timer would keep it
+   going through a pause. */
+static uint8_t si_call(uint8_t event, uint8_t a)
 {
     uint8_t done = si_event(event, a);
+
+    if (si_sound) {
+        if (games_options.sounds)
+            sound_play(si_sound);
+        si_sound = 0;
+    }
+    if (si_vibrate == SI_VIBRATE_ON)
+        games_vibrate_for((uint8_t)(3 * si_period_units()));
+    else if (si_vibrate == SI_VIBRATE_OFF)
+        games_quiet();
+    si_vibrate = 0;
+    return done;
+}
+
+static uint8_t si_send(uint8_t event, uint8_t a)
+{
+    uint8_t done = si_call(event, a);
 
     if (done & SI_DONE_CLOSE) {
         si_closed();
@@ -883,7 +908,7 @@ static void si_open(uint8_t which, uint8_t event)
 {
     screen = which;
     board_drawn = 0;
-    si_event(event, 0);
+    si_call(event, 0);
     si_units = si_period_units();
 }
 
@@ -894,7 +919,7 @@ static uint8_t si_elapse(void)
     for (si_us += MENU_FRAME_US; si_us >= GAMES_UNIT_US; si_us -= GAMES_UNIT_US) {
         if (!si_units || --si_units)
             continue;
-        done = si_event(SI_EVENT_TICK, 0);
+        done = si_call(SI_EVENT_TICK, 0);
         si_units = si_period_units();
         if (done & SI_DONE_CLOSE) {
             si_closed();
@@ -931,7 +956,7 @@ static uint8_t si_play_key(uint8_t key)
 
     if (code == SI_NO_CODE) {
         /* Pause: the game saves itself and closes, as on the phone. */
-        si_event(SI_EVENT_PAUSE, 0);
+        si_call(SI_EVENT_PAUSE, 0);
         si_keys_held = 0;
         si_held = 0;
         si_units = 0;
@@ -966,11 +991,12 @@ static uint8_t si_play_held(uint8_t keys)
 
 static void si_menu_select(void)
 {
+    si_top_score = si_top;
     switch (si_item_id(si_item)) {
     case SI_ITEM_CONTINUE:
         /* As the phone does: a new game, then the state it saved. */
         si_paused = 0;
-        si_event(SI_EVENT_NEW_GAME, 0);
+        si_call(SI_EVENT_NEW_GAME, 0);
         si_open(SCREEN_SI_PLAY, SI_EVENT_CONTINUE);
         break;
     case SI_ITEM_NEW_GAME:
@@ -978,7 +1004,6 @@ static void si_menu_select(void)
         si_open(SCREEN_SI_PLAY, SI_EVENT_NEW_GAME);
         break;
     case SI_ITEM_HIGH_SCORES:
-        si_top_score = si_top;
         si_last_score = si_last;
         si_show_last = si_last_played;
         si_open(SCREEN_SI_SCORES, SI_EVENT_HIGH_SCORES);

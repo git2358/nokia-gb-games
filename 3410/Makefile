@@ -227,6 +227,10 @@ check-golden: $(BUILD)/replay $(BUILD)/si_replay
 		if [ -f $$dir/events.txt ]; then \
 			out=$$(mktemp -d) && $(BUILD)/si_replay $$dir/events.txt $$out $$(cat $$dir/setup.txt) && \
 			$(PYTHON) tools/check_replay.py $$out $$dir || exit 1; \
+			if [ -f $$dir/sounds.txt ]; then \
+				diff $$dir/sounds.txt $$out/sounds.txt > $$out/sounds.diff \
+					|| { echo "$$dir: sounds differ (phone <, replay >):"; head -20 $$out/sounds.diff; exit 1; }; \
+			fi; \
 		else echo "no $$dir/events.txt: run make golden-si; skipped"; fi; \
 	done
 

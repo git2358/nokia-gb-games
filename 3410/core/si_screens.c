@@ -73,6 +73,7 @@ void si_keys_poll(void) SI_FAR
         si_spawn(si.shot_type, si.mode, x + 6, y + 3);
         si.cooldown = 1;
         si.fire_count++;
+        sound(SI_SOUND_SHOT);
     }
     if (!held(4) && !held(6)) {
         si.special_latch = 0;
@@ -90,11 +91,13 @@ void si_keys_poll(void) SI_FAR
                 si_set_template(&si.rec[k], TYPE_BEAM);
                 si.rec[k].pic = si.beam_line;
                 si.specials--;
+                sound(SI_SOUND_BEAM);
                 draw_number(si.count_digits, (unsigned)(int)si.specials & 0xffff, 2);
             }
         } else {
             si_spawn(si.special, si.mode, x + 6, y + 3);
             si.specials--;
+            sound(SI_SOUND_SPECIAL);
             draw_number(si.count_digits, (unsigned)(int)si.specials & 0xffff, 2);
         }
     }

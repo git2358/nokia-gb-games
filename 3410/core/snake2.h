@@ -17,11 +17,13 @@
 
 #include "game.h"
 
-/* Sounds the game asks for. */
+/* Sounds the game asks for: codes in the phone's sound table, as the 3410
+   maps its ids 0xfa0.. onto it (si.h). */
 enum {
-    SNAKE2_SOUND_EAT = 0x1f,
-    SNAKE2_SOUND_DEATH = 0x20,
-    SNAKE2_SOUND_FULL = 0x22 /* the snake fills its ring; cannot happen */
+    SNAKE2_SOUND_EAT = 0x1f,       /* 0xfa0 */
+    SNAKE2_SOUND_DEATH = 0x20,     /* 0xfa1 */
+    SNAKE2_SOUND_GAME_OVER = 0x21, /* 0xfa2, from the game-over picture */
+    SNAKE2_SOUND_TOP_SCORE = 0x23  /* 0xfa4: game over with a new top score */
 };
 
 /* The levels and mazes the menus offer: ctx->level is 1 to

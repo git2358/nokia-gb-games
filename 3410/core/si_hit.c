@@ -350,6 +350,7 @@ static void ship_destroyed(void)
     explode(si.ship);
     si.ship_lost = 1;
     vibrate();
+    sound(SI_SOUND_SHIP_HIT);
 }
 
 /* 0x25bd24 */
@@ -363,6 +364,7 @@ void si_ship_collisions(void) SI_FAR
         si.ship_lost = 1;
         explode(si.ship);
         vibrate();
+        sound(SI_SOUND_SHIP_HIT);
     }
     if (si.shield == NO_RECORD && (hit = find_hit(si.ship)) != 0
         && (si.rec[hit].type == TYPE_BULLET || ship_pixel_collide(hit) == 1)) {

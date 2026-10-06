@@ -271,10 +271,18 @@ SI_HELPER void explode(uint8_t k)
     si_pic_set_frames(PIC(k), type_frames(TYPE_EXPLOSION), 5);
 }
 
+/* For three ticks, running out in tick(). */
 SI_HELPER void vibrate(void)
 {
-    if (!si.vibration)
+    if (!si.vibration) {
+        si_vibrate = SI_VIBRATE_ON;
         si.vibration = 3;
+    }
+}
+
+SI_HELPER void sound(uint8_t code)
+{
+    si_sound = code;
 }
 
 SI_HELPER int kills(void)

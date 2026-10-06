@@ -34,15 +34,16 @@ What is there so far:
   ready, the same to the pixel, and keeps the phone's pace with a picture
   nearly every tick, about nine a second where the phone shows ten;
 - the games' Settings (Game sounds, Game lights, Shakes, Club Nokia ID),
-  the vibrator as a rumble motor (from a death to the second blink, as on
-  the 3410, but half as long, see `../common/core/rumble.h`), and the 3310's eat and death sounds, which the 3410 holds too
-  but which have not been checked against it yet;
+  the vibrator as a rumble motor (Snake II's from a death to the second
+  blink, Space Impact's for three ticks, as on the 3410, but half as
+  long, see `../common/core/rumble.h`), and the games' sounds: Snake
+  II's eat, death and game over, and every one of Space Impact's, which
+  its replays check against the phone's, call for call;
 - the top score and the chosen level and maze, kept in battery-backed
   cartridge RAM.
 
-Not yet: Bumper, Bantumi and Link5, Space Impact's sounds, vibrator and
-Instructions demos, the main menu's Games icon and the lists' sliding
-highlight.
+Not yet: Bumper, Bantumi and Link5, Space Impact's Instructions demos,
+the main menu's Games icon and the lists' sliding highlight.
 
 The game is shown at the phone's size, in the middle of the Game Boy's
 screen. Start on the first screen picks the full-screen variant, whose

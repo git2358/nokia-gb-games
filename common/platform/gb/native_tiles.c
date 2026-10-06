@@ -42,7 +42,8 @@
 #define MAP ((uint8_t *)0x9800)
 
 extern const uint16_t native_screen_count;
-extern const uint16_t native_screen_data[];
+extern const uint16_t native_row_data[];
+extern const uint16_t native_screen_rows[];
 extern const uint16_t native_screen_start[];
 extern const uint8_t native_cursor_data[];
 extern const uint16_t native_cursor_start[];
@@ -51,9 +52,13 @@ extern const uint8_t native_tiles[][8];
 static const uint8_t empty[8];
 static const uint8_t full[8] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 
-/* The screen up, as its data; null when none is. */
+/* The screen up, as where its rows are in native_row_data; null when none
+   is. */
 static const uint16_t *shown;
 uint8_t native_up;
+/* The list row the cursor is drawn on, NO_ROW for none. */
+#define NO_ROW 0xff
+static uint8_t cursor_row = NO_ROW;
 
 /* The first cell of a row: its tile, and the number the map names it by. */
 static uint8_t row_first(uint8_t ty)
@@ -68,34 +73,48 @@ static uint8_t *row_tiles(uint8_t ty)
 
 uint8_t native_show(uint16_t id)
 {
-    const uint16_t *p;
-    uint8_t ty;
+    const uint16_t *rows, *was, *old;
+    uint8_t ty, n;
 
     if (id >= native_screen_count || native_screen_start[id] == 0xffff)
         return 0;
-    p = native_screen_data + native_screen_start[id];
-    if (!shown) {
+    rows = native_screen_rows + native_screen_start[id];
+    /* Over a made screen, only the cells whose tiles differ are copied:
+       the cursor's cells are made plain first. */
+    was = shown;
+    if (was && cursor_row != NO_ROW)
+        native_cursor(cursor_row, 0);
+    if (!was) {
         native_put_tile(EMPTY_TILE, empty);
         native_put_tile(FULL_TILE, full);
     }
-    shown = p;
+    shown = rows;
     native_up = 1;
     for (ty = 0; ty < CELLS_Y; ty++) {
+        memset(native_old, 0, sizeof native_old);
+        if (was) {
+            /* The same row: nothing to do. */
+            if (was[ty] == rows[ty])
+                continue;
+            old = native_row_data + was[ty];
+            for (n = (uint8_t)*old++; n; n--, old++)
+                native_old[(uint8_t)(*old >> 11)] = *old & 0x7ff;
+        }
         native_first = row_first(ty);
-        p = native_row(p, row_tiles(ty));
+        native_row(native_row_data + rows[ty], row_tiles(ty));
         native_put_row(MAP + ty * 32, native_map_row);
     }
+    /* In case the screen was blanked (platform_native_blank). */
+    BGP = NATIVE_PALETTE;
     return 1;
 }
 
 /* The tile of the screen up at a cell: 0 empty, 1 full, or a made one. */
 static uint16_t shown_tile(uint8_t tx, uint8_t ty)
 {
-    const uint16_t *p = shown;
-    uint8_t row, n;
+    const uint16_t *p = native_row_data + shown[ty];
+    uint8_t n;
 
-    for (row = 0; row < ty; row++)
-        p += *p + 1;
     for (n = (uint8_t)*p++; n; n--, p++)
         if ((uint8_t)(*p >> 11) == tx)
             return *p & 0x7ff;
@@ -108,6 +127,10 @@ void native_cursor(uint8_t row, uint8_t on)
 
     if (!shown || row >= NATIVE_CURSOR_ROWS)
         return;
+    if (on)
+        cursor_row = row;
+    else if (row == cursor_row)
+        cursor_row = NO_ROW;
     c = native_cursor_data + native_cursor_start[row];
     end = native_cursor_data + native_cursor_start[row + 1];
     for (; c != end; c += 10) {
@@ -133,6 +156,7 @@ uint8_t native_leave(void)
         return 0;
     shown = 0;
     native_up = 0;
+    cursor_row = NO_ROW;
     /* The screen blanked at once by the palette, every colour light, while
        the cells' own tiles are made from lcd_fb and the tile map is put
        back; then it all comes up together. */

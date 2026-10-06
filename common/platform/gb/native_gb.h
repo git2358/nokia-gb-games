@@ -36,8 +36,11 @@ void native_put_row(uint8_t *map, const uint8_t *bytes);
 void native_put_byte(uint8_t *at, uint8_t value);
 /* A row of a screen: the tiles of its made cells copied to theirs, the
    row's first at `tiles`, and native_map_row filled in, each cell's own
-   tile being native_first + its column. Returns the next row. */
+   tile being native_first + its column. A cell whose tile in native_old,
+   the screen up's, is the same is not copied again. Returns the next
+   row. */
 extern uint8_t native_first, native_map_row[20];
+extern uint16_t native_old[20];
 const uint16_t *native_row(const uint16_t *row, uint8_t *tiles);
 /* A row of lcd_fb's 20 cells, from its first byte, to their tiles. */
 void native_fb_row(uint8_t *tiles, const uint8_t *fb);

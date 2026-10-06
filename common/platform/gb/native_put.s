@@ -24,6 +24,8 @@ _native_first::
 	.ds	1
 _native_map_row::
 	.ds	20
+_native_old::
+	.ds	40
 row_tiles:
 	.ds	2
 next:
@@ -162,8 +164,8 @@ _native_put_byte::
 
 ;; const uint16_t *native_row(const uint16_t *row, uint8_t *tiles): a row
 ;; of a screen (native_gen.c): its made cells' tiles copied from the tiles'
-;; bank to theirs, from `tiles` on, and native_map_row filled in. Returns
-;; the next row.
+;; bank to theirs, from `tiles` on, but where native_old has the same tile
+;; for the cell, and native_map_row filled in. Returns the next row.
 _native_row::
 	ld	a, c
 	ld	(#row_tiles), a
@@ -218,6 +220,22 @@ _native_row::
 	ld	a, (#_native_first)
 	add	a, c
 	ld	(hl), a			; the cell's own tile
+	;; Nothing to copy when the screen up has the same tile there.
+	ld	hl, #_native_old
+	ld	a, c
+	add	a, a
+	add	a, l
+	ld	l, a
+	jr	nc, 41$
+	inc	h
+41$:
+	ld	a, (hl+)
+	cp	a, e
+	jr	nz, 42$
+	ld	a, (hl)
+	cp	a, d
+	jp	z, 8$
+42$:
 	dec	de
 	dec	de
 	ld	h, d

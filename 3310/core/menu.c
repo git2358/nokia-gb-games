@@ -955,8 +955,8 @@ static void help_more(void)
 /* The full-screen menus made at build time (native_tiles.h), numbered:
    the list of games, About, Snake II's mazes, Pairs II's modes, the
    settings with each combination of the switches' values, each game's menu
-   with and without Continue, and each game's instructions page by page.
-   Pairs II's menus are its modes' own, so a "menu" here is a game or, past
+   with and without Continue, each game's instructions page by page, and
+   the first screen with each picture of the Games icon. Pairs II's menus are its modes' own, so a "menu" here is a game or, past
    GAME_COUNT, Pairs II's Puzzle. */
 #define NATIVE_ID_GAMES 0
 #define NATIVE_ID_ABOUT 1
@@ -968,7 +968,8 @@ static void help_more(void)
 #define NATIVE_MENUS (2 * GAME_COUNT)
 #define NATIVE_ID_HELP (NATIVE_ID_GAME + 2 * NATIVE_MENUS)
 #define NATIVE_HELP_PAGES 16
-#define NATIVE_ID_END (NATIVE_ID_HELP + NATIVE_MENUS * NATIVE_HELP_PAGES)
+#define NATIVE_ID_MAIN (NATIVE_ID_HELP + NATIVE_MENUS * NATIVE_HELP_PAGES)
+#define NATIVE_ID_END (NATIVE_ID_MAIN + GAMES_ICON_PICTURES)
 
 static uint8_t native_menu(void)
 {
@@ -1006,6 +1007,8 @@ uint16_t menu_native_id(void)
     uint8_t i, bits = 0, n = 0;
 
     switch (screen) {
+    case SCREEN_MAIN:
+        return (uint16_t)(NATIVE_ID_MAIN + icon_steps % GAMES_ICON_PICTURES);
     case SCREEN_GAMES:
         return NATIVE_ID_GAMES;
     case SCREEN_ABOUT:
@@ -1077,6 +1080,12 @@ uint8_t menu_native_draw(uint16_t id)
         paused_game = game;
         paused_mode = pairs_mode;
         native_game();
+    } else if (id >= NATIVE_ID_MAIN) {
+        screen = SCREEN_MAIN;
+        full_screen = 0;
+        icon_steps = (uint8_t)(id - NATIVE_ID_MAIN);
+        lcd_view_phone();
+        draw_main();
     } else {
         screen = SCREEN_HELP;
         if (!native_menu_set((uint8_t)((id - NATIVE_ID_HELP) / NATIVE_HELP_PAGES)))
@@ -1669,6 +1678,12 @@ void menu_draw(void)
        first screen's hint around the LCD stays as it is. */
     if (sparkle_only && screen == SCREEN_MAIN) {
         sparkle_only = 0;
+#ifdef NATIVE_PLATFORM_TILES
+        /* Made at build time with each picture: only the icon's cells
+           change. */
+        if (native_tiled && platform_native_show(menu_native_id()))
+            return;
+#endif
         lcd_view_phone();
         draw_games_icon();
         return;
@@ -1723,11 +1738,14 @@ void menu_draw(void)
     }
 #ifdef NATIVE_PLATFORM_TILES
     native_tiled = 0;
-    if (mode == VIEW_NATIVE) {
+    if (mode == VIEW_NATIVE || screen == SCREEN_MAIN) {
         uint16_t id = menu_native_id();
 
         if (id != NATIVE_NONE && platform_native_show(id)) {
             native_tiled = 1;
+            /* The first screen draws around the LCD. */
+            if (screen == SCREEN_MAIN)
+                surround_used = LCD_HAS_SURROUND;
             drawn_screen = screen;
             drawn_selection = native_selection();
             if (native_listed())

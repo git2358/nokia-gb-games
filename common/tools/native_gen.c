@@ -9,8 +9,9 @@
    the full one, which are not written out: the screen names them from two
    tiles of video RAM kept for them.
 
-   A screen is, for each of the 18 rows of cells, the number of cells in it
-   that are not empty and then for each one (column << 11 | tile). The
+   A row of a screen is the number of its cells that are not empty and then
+   for each one (column << 11 | tile). Rows alike are kept once, and a
+   screen is where each of its 18 rows is among them. The
    cursor on each list row is the cells it touches, with their bytes as
    drawn on an empty screen. */
 #include <stdio.h>
@@ -63,9 +64,28 @@ static void fresh(void)
     lcd_clear();
 }
 
+/* The rows kept so far, end to end; returns where `row` is among them,
+   adding it if it is new. */
+static uint16_t rows[MAX_SCREENS * (CELLS_Y + CELLS_X * CELLS_Y)];
+static unsigned rows_used;
+
+static unsigned keep_row(const uint16_t *row)
+{
+    unsigned at = 0, size = row[0] + 1u;
+
+    while (at < rows_used) {
+        if (rows[at] == row[0] && !memcmp(rows + at, row, size * sizeof *row))
+            return at;
+        at += rows[at] + 1u;
+    }
+    memcpy(rows + rows_used, row, size * sizeof *row);
+    rows_used += size;
+    return at;
+}
+
 int native_gen(const char *path)
 {
-    static uint16_t data[MAX_SCREENS * (CELLS_Y + CELLS_X * CELLS_Y)];
+    static uint16_t screen_rows[MAX_SCREENS * CELLS_Y];
     static long start[MAX_SCREENS];
     unsigned ids = 0, used = 0, n = 0, screens = 0, i, row;
     FILE *out = fopen(path, "w");
@@ -90,9 +110,9 @@ int native_gen(const char *path)
         start[ids] = n;
         screens++;
         for (ty = 0; ty < CELLS_Y; ty++) {
-            unsigned count_at = n++;
+            uint16_t one[1 + CELLS_X];
 
-            data[count_at] = 0;
+            one[0] = 0;
             for (tx = 0; tx < CELLS_X; tx++) {
                 uint8_t bytes[8];
                 unsigned id;
@@ -101,9 +121,9 @@ int native_gen(const char *path)
                 id = tile_id(bytes);
                 if (!id)
                     continue;
-                data[n++] = (uint16_t)(tx << 11 | id);
-                data[count_at]++;
+                one[1 + one[0]++] = (uint16_t)(tx << 11 | id);
             }
+            screen_rows[n++] = (uint16_t)keep_row(one);
         }
     }
 
@@ -122,9 +142,12 @@ int native_gen(const char *path)
         fprintf(out, " },\n");
     }
     fprintf(out, "};\n#else\n\nconst uint16_t native_screen_count = %u;\n\n", ids);
-    fprintf(out, "const uint16_t native_screen_data[] = {");
+    fprintf(out, "const uint16_t native_row_data[] = {");
+    for (i = 0; i < rows_used; i++)
+        fprintf(out, "%s0x%04x,", i % 12 ? " " : "\n    ", rows[i]);
+    fprintf(out, "\n};\n\nconst uint16_t native_screen_rows[] = {");
     for (i = 0; i < n; i++)
-        fprintf(out, "%s0x%04x,", i % 12 ? " " : "\n    ", data[i]);
+        fprintf(out, "%s%u,", i % CELLS_Y ? " " : "\n    ", screen_rows[i]);
     fprintf(out, "\n};\n\nconst uint16_t native_screen_start[] = {");
     for (i = 0; i < ids; i++)
         fprintf(out, "%s%ld,", i % 12 ? " " : "\n    ", start[i] < 0 ? 0xffffL : start[i]);
@@ -165,6 +188,6 @@ int native_gen(const char *path)
     if (fclose(out))
         return 1;
     printf("%s: %u screens, %u tiles (%u bytes), %u bytes of screens, %u of cursor\n", path, screens,
-           tile_count - 2, (tile_count - 2) * 8, n * 2 + ids * 2, used);
+           tile_count - 2, (tile_count - 2) * 8, rows_used * 2 + n * 2 + ids * 2, used);
     return 0;
 }

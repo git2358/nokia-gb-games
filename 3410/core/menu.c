@@ -1043,7 +1043,7 @@ static void draw_phone(void)
 /* The full-screen menus made at build time (native_tiles.h), numbered:
    Games, Select game, About, Game options, the mazes, the settings with
    each combination of the switches' values, Snake II's menu without and
-   with Continue, and the instructions' pages. */
+   with Continue, the instructions' pages, and the first screen. */
 #define NATIVE_ID_GAMES 0
 #define NATIVE_ID_SELECT 1
 #define NATIVE_ID_ABOUT 2
@@ -1053,7 +1053,8 @@ static void draw_phone(void)
 #define NATIVE_SWITCHES 3
 #define NATIVE_ID_GAME (NATIVE_ID_SETTINGS + (1 << NATIVE_SWITCHES))
 #define NATIVE_ID_HELP (NATIVE_ID_GAME + 2)
-#define NATIVE_ID_END (NATIVE_ID_HELP + HELP_PAGES)
+#define NATIVE_ID_MAIN (NATIVE_ID_HELP + HELP_PAGES)
+#define NATIVE_ID_END (NATIVE_ID_MAIN + 1)
 
 /* The full-screen menus with a cursor, and where it is. */
 static uint8_t native_listed(void)
@@ -1086,6 +1087,8 @@ uint16_t menu_native_id(void)
     uint8_t i, bits = 0, n = 0;
 
     switch (screen) {
+    case SCREEN_MAIN:
+        return NATIVE_ID_MAIN;
     case SCREEN_GAMES:
         return NATIVE_ID_GAMES;
     case SCREEN_SELECT:
@@ -1115,6 +1118,7 @@ uint16_t menu_native_id(void)
 }
 
 static void draw_native(void);
+static void draw_main(void);
 
 /* The host draws them for native_gen.c; the platform that shows them has
    no use for these. */
@@ -1149,6 +1153,12 @@ uint8_t menu_native_draw(uint16_t id)
     } else if (id < NATIVE_ID_HELP) {
         screen = SCREEN_GAME;
         paused = (uint8_t)(id - NATIVE_ID_GAME);
+    } else if (id == NATIVE_ID_MAIN) {
+        screen = SCREEN_MAIN;
+        full_screen = 0;
+        lcd_view_phone();
+        draw_main();
+        return NATIVE_DRAWN;
     } else {
         screen = SCREEN_HELP;
         help_page = (uint8_t)(id - NATIVE_ID_HELP);
@@ -1251,7 +1261,7 @@ void menu_draw(void)
     }
 
 #ifdef NATIVE_PLATFORM_TILES
-    if (mode != VIEW_NATIVE)
+    if (picture)
         platform_native_blank();
 #endif
     if (screen == SCREEN_PLAY) {
@@ -1275,11 +1285,14 @@ void menu_draw(void)
 #ifdef NATIVE_PLATFORM_TILES
     /* A full-screen menu made at build time; when it is up already, only
        the cursor moves. */
-    if (mode == VIEW_NATIVE) {
+    if (mode == VIEW_NATIVE || screen == SCREEN_MAIN) {
         uint16_t id = menu_native_id();
         uint8_t selection = native_selection(), listed = native_listed();
 
         if (id != NATIVE_NONE && (id == was_tiled || platform_native_show(id))) {
+            /* The first screen draws around the LCD. */
+            if (screen == SCREEN_MAIN)
+                surround_used = LCD_HAS_SURROUND;
             if (id == was_tiled && listed)
                 platform_native_cursor(tiled_selection, 0);
             if (listed)

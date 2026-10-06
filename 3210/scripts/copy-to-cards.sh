@@ -9,8 +9,9 @@
 # a note, and the rest are still done. Each copy is compared with its
 # source afterwards. Nothing is ejected.
 #
-# A .gba without the boot logo is not copied: a console refuses it. Build
-# it with `make gba GBA_LOGO_FROM=/path/to/some.gba`.
+# A .gba without the boot logo is not copied: a console refuses it. The
+# build copies the logo from a ROM it finds (common/tools/gbafix.py), or
+# from `make gba GBA_LOGO_FROM=/path/to/some.gba`.
 #
 # Exit status: 0 when every ROM reached every mounted card it belongs on
 # and at least one card was there; 1 when a copy failed, a ROM was refused,
@@ -73,7 +74,7 @@ for rom in "${roms[@]}"; do
       ;;
     *.gba)
       if ! has_logo "$rom"; then
-        echo "REFUSED  $(basename "$rom"): no boot logo; build it with GBA_LOGO_FROM" >&2
+        echo "REFUSED  $(basename "$rom"): no boot logo; see common/tools/gbafix.py" >&2
         failed=$((failed + 1))
         continue
       fi

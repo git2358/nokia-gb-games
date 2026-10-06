@@ -161,29 +161,47 @@ void platform_tone(uint16_t hz)
    LCD_ZOOM is done here, pixel by pixel; LCD_GAME_ZOOM by the hardware. */
 static uint8_t shown_x, shown_y, shown_w, shown_h, shown_by;
 
-/* One framebuffer pixel that changed: inside the magnified rectangle it is
-   a block in the middle of the screen; outside, it goes where it is unless
-   the magnified picture covers that spot. */
-static void plot(int x, int y)
+/* The cells are drawn pixel by pixel, the whole screen's when it changes:
+   those two run as ARM code from the internal work RAM, several times
+   faster than Thumb code from the cartridge. */
+#define IWRAM_CODE __attribute__((section(".iwram"), target("arm"), long_call, noinline))
+
+/* A cell any of which lies in the magnified rectangle: its pixels in the
+   rectangle LCD_ZOOM times their size in the middle of the screen, the
+   others at their own place where the magnified picture does not cover
+   it. */
+IWRAM_CODE static void plot_cell_zoomed(int cx, int cy)
 {
-    uint16_t color = lcd_fb_pixel(x, y) ? COLOR_SET : COLOR_CLEAR;
     int zw = shown_w * LCD_ZOOM, zh = shown_h * LCD_ZOOM;
     int zx = (SCREEN_W - zw) / 2, zy = (SCREEN_H - zh) / 2;
-    int px = x - shown_x, py = y - shown_y, i, j;
+    const uint8_t *src = lcd_fb + cy * 8 * LCD_STRIDE + cx;
+    int x, y, i, j;
 
-    if (px >= 0 && px < shown_w && py >= 0 && py < shown_h) {
-        uint16_t *at = VRAM + (zy + py * LCD_ZOOM) * SCREEN_W + zx + px * LCD_ZOOM;
+    for (y = cy * 8; y < cy * 8 + 8; y++, src += LCD_STRIDE) {
+        uint8_t bits = *src;
+        int py = y - shown_y, row_in = py >= 0 && py < shown_h;
+        int row_out = y < zy || y >= zy + zh;
+        uint16_t *zoomed = row_in ? VRAM + (zy + py * LCD_ZOOM) * SCREEN_W + zx : VRAM;
 
-        for (j = 0; j < LCD_ZOOM; j++, at += SCREEN_W)
-            for (i = 0; i < LCD_ZOOM; i++)
-                at[i] = color;
-    } else if (x < zx || x >= zx + zw || y < zy || y >= zy + zh) {
-        VRAM[y * SCREEN_W + x] = color;
+        for (x = cx * 8; x < cx * 8 + 8; x++, bits <<= 1) {
+            uint16_t color = bits & 0x80 ? COLOR_SET : COLOR_CLEAR;
+            int px = x - shown_x;
+
+            if (row_in && px >= 0 && px < shown_w) {
+                uint16_t *at = zoomed + px * LCD_ZOOM;
+
+                for (j = 0; j < LCD_ZOOM; j++, at += SCREEN_W)
+                    for (i = 0; i < LCD_ZOOM; i++)
+                        at[i] = color;
+            } else if (row_out || x < zx || x >= zx + zw) {
+                VRAM[y * SCREEN_W + x] = color;
+            }
+        }
     }
 }
 
 /* An 8x8 cell at its own place, eight pixels from each framebuffer byte. */
-static void plot_cell(int cx, int cy)
+IWRAM_CODE static void plot_cell(int cx, int cy)
 {
     const uint8_t *src = lcd_fb + cy * 8 * LCD_STRIDE + cx;
     uint16_t *dst = VRAM + cy * 8 * SCREEN_W + cx * 8;
@@ -256,7 +274,7 @@ static void present(void)
     uint8_t all = lcd_zoom_x != shown_x || lcd_zoom_y != shown_y || lcd_zoom_w != shown_w || lcd_zoom_h != shown_h
                   || lcd_zoom_by != shown_by;
     uint8_t hardware;
-    int cx, cy, x, y, cover;
+    int cx, cy, cover;
 
     shown_x = lcd_zoom_x;
     shown_y = lcd_zoom_y;
@@ -286,9 +304,7 @@ static void present(void)
                 if (cover == CELL_COVERED)
                     continue;
             }
-            for (y = cy * 8; y < cy * 8 + 8; y++)
-                for (x = cx * 8; x < cx * 8 + 8; x++)
-                    plot(x, y);
+            plot_cell_zoomed(cx, cy);
         }
     }
     /* After the picture, so that what the hardware magnifies is in place. */

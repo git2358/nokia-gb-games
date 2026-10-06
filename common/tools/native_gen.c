@@ -129,9 +129,9 @@ int native_gen(const char *path)
 
     fprintf(out, "/* Made by native_gen.c from the firmware's fonts and text: not to be\n"
                  "   committed. */\n#include <stdint.h>\n\n");
-    /* The tiles fill a bank of their own: the file is compiled once for
-       each part. */
-    fprintf(out, "#ifdef NATIVE_PART_TILES\n");
+    /* On the Game Boy the tiles fill a bank of their own and the file is
+       compiled once for each part; elsewhere once, with both. */
+    fprintf(out, "#ifndef NATIVE_PART_SCREENS\n");
     fprintf(out, "const uint8_t native_tiles[][8] = {\n");
     for (i = 2; i < tile_count; i++) {
         unsigned b;
@@ -141,7 +141,7 @@ int native_gen(const char *path)
             fprintf(out, " 0x%02x,", tiles[i][b]);
         fprintf(out, " },\n");
     }
-    fprintf(out, "};\n#else\n\nconst uint16_t native_screen_count = %u;\n\n", ids);
+    fprintf(out, "};\n#endif\n#ifndef NATIVE_PART_TILES\n\nconst uint16_t native_screen_count = %u;\n\n", ids);
     fprintf(out, "const uint16_t native_row_data[] = {");
     for (i = 0; i < rows_used; i++)
         fprintf(out, "%s0x%04x,", i % 12 ? " " : "\n    ", rows[i]);

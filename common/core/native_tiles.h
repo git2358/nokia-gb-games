@@ -54,6 +54,10 @@ void platform_native_cursor(uint8_t row, uint8_t on);
    rather than showing the old screen meanwhile. */
 void platform_native_blank(void);
 
+/* The GBA's (with NATIVE_PLATFORM_FB, native_fb.c): screen `id` into
+   lcd_fb, marking the cells that change; returns 0 if there is none. */
+uint8_t native_fb_show(uint16_t id);
+
 /* For the host: writes the tiles of every numbered screen as C source.
    Returns nonzero on failure. */
 int native_gen(const char *path);

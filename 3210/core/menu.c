@@ -1316,6 +1316,23 @@ void menu_draw(void)
     }
     platform_native_blank();
 #endif
+#ifdef NATIVE_PLATFORM_FB
+    /* Made at build time: unpacked into the framebuffer, the cursor drawn
+       over it. */
+    if (mode == VIEW_NATIVE || screen == SCREEN_MAIN) {
+        uint16_t id = menu_native_id();
+
+        if (id != NATIVE_NONE && native_fb_show(id)) {
+            if (screen == SCREEN_MAIN)
+                surround_used = LCD_HAS_SURROUND;
+            drawn_screen = screen;
+            drawn_selection = screen == SCREEN_GAMES ? game : screen == SCREEN_LEVEL ? level_choice : item;
+            if (screen == SCREEN_GAMES || screen == SCREEN_GAME)
+                native_cursor(drawn_selection, 1);
+            return;
+        }
+    }
+#endif
     drawn_screen = NO_SCREEN;
 
     if (screen != SCREEN_PLAY) {

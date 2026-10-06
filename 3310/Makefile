@@ -92,7 +92,8 @@ GBA_TEST_ROM := $(BUILD)/nokia3310-keys.gba
 KEYS ?= sdsss
 # The game without the menus, for tools that drive it directly.
 GAME_SRC := $(filter-out core/menu.c $(COMMON)/core/font.c,$(CORE_SRC))
-GBA_SRC := platform/gba/crt0.s platform/gba/main.c $(COMMON)/platform/gba/libc.c $(CORE_SRC) $(ASSET_SRC)
+GBA_SRC := platform/gba/crt0.s platform/gba/main.c $(COMMON)/platform/gba/libc.c $(COMMON)/platform/gba/native_fb.c \
+	$(CORE_SRC) $(ASSET_SRC) $(BUILD)/gba/native_data.c
 
 # The recorded Space Impact run the core is checked against: the keys, the
 # seed the title animation leaves the games' random generator with, and
@@ -376,9 +377,12 @@ $(BUILD)/gb/%.rel: $(COMMON)/platform/gb/%.s
 	@mkdir -p $(BUILD)/gb
 	$(SDAS) -o $@ $<
 
+# The screens' half of the made menus' file; the tiles' is in the next bank.
+$(BUILD)/gb/7/native_data.rel: GB_PART := -DNATIVE_PART_SCREENS
+
 $(BUILD)/gb/7/%.rel: %.c $(CORE_HDR) $(ASSET_SRC) $(COMMON)/platform/gb/native_gb.h
 	@mkdir -p $(BUILD)/gb/7
-	$(SDCC) $(GB_CFLAGS) --codeseg CODE_7 -c $< -o $@
+	$(SDCC) $(GB_CFLAGS) $(GB_PART) --codeseg CODE_7 -c $< -o $@
 
 $(BUILD)/gb/8/%.rel: %.c
 	@mkdir -p $(BUILD)/gb/8
@@ -433,7 +437,13 @@ run-gb: $(GB_ROM)
 
 $(BUILD)/gba/nokia3310.elf $(BUILD)/gba/nokia3310-keys.elf: $(GBA_SRC) $(CORE_HDR) $(COMMON)/platform/gba/gba.ld FORCE
 	@mkdir -p $(BUILD)/gba
-	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(COMMON)/core -I$(ASSETS) -I$(COMMON)/platform/gba/include '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -nostdlib -T $(COMMON)/platform/gba/gba.ld -Wl,-Map,$(basename $@).map -o $@ $(GBA_SRC) -lgcc
+	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(COMMON)/core -I$(ASSETS) -I$(COMMON)/platform/gba/include -DNATIVE_PLATFORM_FB '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -nostdlib -T $(COMMON)/platform/gba/gba.ld -Wl,--no-warn-rwx-segments -Wl,-Map,$(basename $@).map -o $@ $(GBA_SRC) -lgcc
+
+# The full-screen menus made at build time, drawn by the host build of the
+# core at the GBA's size (native_tiles.h).
+$(BUILD)/gba/native_data.c: $(BUILD)/frame_gba
+	@mkdir -p $(BUILD)/gba
+	$(BUILD)/frame_gba native $@
 
 $(GBA_ROM): $(BUILD)/gba/nokia3310.elf $(COMMON)/tools/gbafix.py FORCE
 	$(ARM_OBJCOPY) -O binary $< $@

@@ -27,6 +27,8 @@ SECTIONS
     {
         __data_start = .;
         *(.data .data.*)
+        /* Code that runs faster from here than from the cartridge. */
+        *(.iwram .iwram.*)
         . = ALIGN(4);
         __data_end = .;
     } > iwram AT > rom

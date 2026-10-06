@@ -226,9 +226,12 @@ $(BUILD)/gb/0/main.rel $(BUILD)/gb/0/main-keys.rel: platform/gb/main.c $(CORE_HD
 	@mkdir -p $(BUILD)/gb/0
 	$(SDCC) $(GB_CFLAGS) '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -c $< -o $@
 
+# The screens' half of the made menus' file; the tiles' is in the next bank.
+$(BUILD)/gb/3/native_data.rel: GB_PART := -DNATIVE_PART_SCREENS
+
 $(BUILD)/gb/3/%.rel: %.c $(CORE_HDR) $(ASSET_SRC) $(COMMON)/platform/gb/native_gb.h
 	@mkdir -p $(BUILD)/gb/3
-	$(SDCC) $(GB_CFLAGS) --codeseg CODE_3 -c $< -o $@
+	$(SDCC) $(GB_CFLAGS) $(GB_PART) --codeseg CODE_3 -c $< -o $@
 
 $(BUILD)/gb/4/%.rel: %.c
 	@mkdir -p $(BUILD)/gb/4

@@ -58,7 +58,8 @@ KEYS ?=
 GB_FRAME := menu-$(KEYS)
 GB_REL := $(patsubst %.c,$(BUILD)/gb/%.rel,$(notdir $(CORE_SRC))) $(BUILD)/gb/game_assets.rel \
 	$(BUILD)/gb/native_tiles.rel $(BUILD)/gb/native_data.rel $(BUILD)/gb/native_data_tiles.rel
-GBA_SRC := platform/gba/crt0.s platform/gba/main.c $(COMMON)/platform/gba/libc.c $(CORE_SRC) $(ASSET_SRC)
+GBA_SRC := platform/gba/crt0.s platform/gba/main.c $(COMMON)/platform/gba/libc.c $(COMMON)/platform/gba/native_fb.c \
+	$(CORE_SRC) $(ASSET_SRC) $(BUILD)/gba/native_data.c
 
 vpath %.c core $(COMMON)/core platform/gb $(COMMON)/platform/gb
 
@@ -180,7 +181,7 @@ $(ASSETS)/native_data.c: $(BUILD)/frame_gb
 
 $(BUILD)/gb/native_data.rel: $(ASSETS)/native_data.c
 	@mkdir -p $(BUILD)/gb
-	$(SDCC) -msm83 --codeseg CODE_2 -c $< -o $@
+	$(SDCC) -msm83 -DNATIVE_PART_SCREENS --codeseg CODE_2 -c $< -o $@
 
 $(BUILD)/gb/native_data_tiles.rel: $(ASSETS)/native_data.c
 	@mkdir -p $(BUILD)/gb
@@ -242,7 +243,13 @@ run-gb: $(GB_ROM)
 
 $(BUILD)/gba/nokia3210.elf $(BUILD)/gba/nokia3210-keys.elf: $(GBA_SRC) $(CORE_HDR) $(COMMON)/platform/gba/gba.ld FORCE
 	@mkdir -p $(BUILD)/gba
-	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(COMMON)/core -I$(ASSETS) -I$(COMMON)/platform/gba/include '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -nostdlib -T $(COMMON)/platform/gba/gba.ld -Wl,-Map,$(basename $@).map -o $@ $(GBA_SRC) -lgcc
+	$(ARM_CC) $(ARM_CFLAGS) $(GBA_FB) -Icore -I$(COMMON)/core -I$(ASSETS) -I$(COMMON)/platform/gba/include -DNATIVE_PLATFORM_FB '-DSTART_KEYS="$(if $(findstring keys,$@),$(KEYS))"' -nostdlib -T $(COMMON)/platform/gba/gba.ld -Wl,--no-warn-rwx-segments -Wl,-Map,$(basename $@).map -o $@ $(GBA_SRC) -lgcc
+
+# The full-screen menus made at build time, drawn by the host build of the
+# core at the GBA's size (native_tiles.h).
+$(BUILD)/gba/native_data.c: $(BUILD)/frame_gba
+	@mkdir -p $(BUILD)/gba
+	$(BUILD)/frame_gba native $@
 
 $(GBA_ROM): $(BUILD)/gba/nokia3210.elf $(COMMON)/tools/gbafix.py FORCE
 	$(ARM_OBJCOPY) -O binary $< $@

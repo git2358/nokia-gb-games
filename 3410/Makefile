@@ -44,7 +44,7 @@ BUILD := build
 # The code the three ports share.
 COMMON := ../common
 ASSETS := $(BUILD)/assets
-ASSET_SRC := $(ASSETS)/game_assets.c $(ASSETS)/snake2_data.c $(ASSETS)/game_tables.c
+ASSET_SRC := $(ASSETS)/game_assets.c $(ASSETS)/snake2_data.c $(ASSETS)/game_tables.c $(ASSETS)/si_data.c
 CORE_SRC := $(wildcard core/*.c) $(wildcard $(COMMON)/core/*.c)
 CORE_HDR := $(wildcard core/*.h) $(wildcard $(COMMON)/core/*.h)
 INCLUDES := -Icore -I$(COMMON)/core -Iplatform/host -I$(COMMON)/platform/host -I$(ASSETS)
@@ -108,10 +108,10 @@ install-roms:
 
 assets: $(ASSET_SRC)
 
-$(ASSETS)/game_assets.c: tools/extract_assets.py
+$(ASSETS)/game_assets.c: tools/extract_assets.py tools/extract_si.py
 	$(PYTHON) tools/extract_assets.py "$(DUMP)" $(ASSETS)
 
-$(ASSETS)/snake2_data.c $(ASSETS)/game_tables.c: $(ASSETS)/game_assets.c
+$(ASSETS)/snake2_data.c $(ASSETS)/game_tables.c $(ASSETS)/si_data.c: $(ASSETS)/game_assets.c
 
 $(BUILD)/test_core: tests/test_core.c $(COMMON)/core/lcd.c core/rand.c core/sprite.c $(CORE_HDR)
 	@mkdir -p $(BUILD)
@@ -127,6 +127,9 @@ $(BUILD)/frame_%.pgm: $(BUILD)/frame
 	$(BUILD)/frame $* $@
 
 frames: $(BUILD)/frame_testcard.pgm $(BUILD)/frame_start.pgm $(BUILD)/frame_run-300.pgm
+
+$(BUILD)/si_replay: platform/host/si_replay_main.c $(COMMON)/platform/host/pgm.c $(GAME_SRC) $(CORE_HDR) $(ASSET_SRC)
+	$(CC) $(CFLAGS) -DSI_DEBUG $(INCLUDES) -o $@ platform/host/si_replay_main.c $(COMMON)/platform/host/pgm.c $(GAME_SRC) $(ASSET_SRC)
 
 $(BUILD)/replay: platform/host/replay_main.c $(COMMON)/platform/host/pgm.c $(GAME_SRC) $(CORE_HDR) $(ASSET_SRC)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ platform/host/replay_main.c $(COMMON)/platform/host/pgm.c $(GAME_SRC) $(ASSET_SRC)
@@ -163,9 +166,11 @@ golden-snake:
 # [:SWITCHES], the switches more of the autopilot's, comma-separated: a
 # plays on through its continues, b fires the special weapon and pauses
 # once, c stays put without firing and is left to lose, through the
-# continue screen to the end of the game. Not replayed yet: the port's
-# Space Impact is to come.
-SI_GOLDENS ?= a:120:SI_CONTINUE=1 b:90:SI_SPECIAL_AT=10+25+40,SI_PAUSE_AT=30 c:150:SI_IDLE=1,SI_FIRE_EVERY=0
+# continue screen to the end of the game; d cannot lose (the autopilot sets
+# the lives back, and the replay does the same) and so plays on through the
+# chapters. check-golden replays them all (platform/host/si_replay_main.c).
+SI_GOLDENS ?= a:120:SI_CONTINUE=1 b:90:SI_SPECIAL_AT=10+25+40,SI_PAUSE_AT=30 c:150:SI_IDLE=1,SI_FIRE_EVERY=0 \
+	d:900:SI_IMMORTAL=1,SI_FIRE_EVERY=8
 SI_KEYS := enter,wait1500,up,wait300,up,wait300,up,wait300,up,wait1000,enter,wait1500,enter,wait1500,down,wait500,enter,wait5000,enter,wait3000
 
 golden-si:
@@ -182,12 +187,18 @@ golden-si:
 	done
 
 # Skipped when the reference runs have not been recorded.
-check-golden: $(BUILD)/replay
+check-golden: $(BUILD)/replay $(BUILD)/si_replay
 	@for dir in golden/snake2-*; do \
 		if [ -f $$dir/events.txt ]; then \
 			out=$$(mktemp -d) && $(BUILD)/replay $$dir/events.txt $$out $$(cat $$dir/setup.txt) && \
 			$(PYTHON) tools/check_replay.py $$out $$dir || exit 1; \
 		else echo "no $$dir/events.txt: run make golden-snake; skipped"; fi; \
+	done
+	@for dir in golden/si-*; do \
+		if [ -f $$dir/events.txt ]; then \
+			out=$$(mktemp -d) && $(BUILD)/si_replay $$dir/events.txt $$out $$(cat $$dir/setup.txt) && \
+			$(PYTHON) tools/check_replay.py $$out $$dir || exit 1; \
+		else echo "no $$dir/events.txt: run make golden-si; skipped"; fi; \
 	done
 
 # The menu pages against frames of the phone's own, captured in MAME and

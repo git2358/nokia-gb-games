@@ -32,11 +32,12 @@ extern uint8_t far_mapped;
    the count in eights) supplies it. */
 #ifdef SI_ROWS_FILL
 void SI_ROWS_FILL(uint8_t *dst, uint8_t value, uint8_t eights);
-#define screen_fill(value) SI_ROWS_FILL(si_rows_screen, (value), SI_ROWS_SCREEN_SIZE / 8)
+#define screen_fill_bytes(value, n) SI_ROWS_FILL(si_rows_screen, (value), (uint8_t)((n) / 8))
 typedef char screen_eights[SI_ROWS_SCREEN_SIZE / 8 < 256 ? 1 : -1];
 #else
-#define screen_fill(value) memset(si_rows_screen, (value), SI_ROWS_SCREEN_SIZE)
+#define screen_fill_bytes(value, n) memset(si_rows_screen, (value), (n))
 #endif
+#define screen_fill(value) screen_fill_bytes(value, SI_ROWS_SCREEN_SIZE)
 
 /* The first byte of row y. */
 static uint8_t *row_start(uint8_t y)
@@ -377,7 +378,12 @@ static void draw_fill(const struct si_pic *p, uint8_t op)
         return;
     /* All of the screen, set: what the game's black ground is. */
     if (!x && !top && end == LCD_WIDTH && bottom == LCD_HEIGHT && op != SI_OP_XOR) {
-        screen_fill(0xff);
+        /* Its rows only: those below, in the last row of tiles, stay
+           clear. */
+        screen_fill_bytes(0xff, (LCD_HEIGHT / 8) * ROW_BYTES);
+        for (x = 0; x < SI_ROWS_TILES_X; x++)
+            for (top = 0; top < (LCD_HEIGHT & 7); top++)
+                si_rows_screen[(LCD_HEIGHT / 8) * ROW_BYTES + x * 8 + top] = 0xff;
         return;
     }
     x8 = x >> 3;
@@ -419,17 +425,22 @@ static void draw_line(const struct si_pic *p, uint8_t op)
     }
 }
 
+/* In work RAM, which starts clear. */
+static uint8_t cleared_once;
+
 void si_rows_render(void) SI_FAR
 {
     uint8_t id;
 
     /* Cleared first, unless the first picture sets all of it anyway: the
-       game's black ground. */
+       game's black ground. Nothing draws below the screen's last row, in
+       its last row of tiles, which is cleared at least once. */
     id = si_pics[0].next;
-    if (!id || si_pics[id].kind != SI_PIC_FILL || si_pic_op(si_pics[id].mode) == SI_OP_XOR
+    if (!cleared_once || !id || si_pics[id].kind != SI_PIC_FILL || si_pic_op(si_pics[id].mode) == SI_OP_XOR
         || si_pic_op(si_pics[id].mode) == SI_OP_NONE || si_pics[id].x > 0
         || si_pics[id].y > 0 || si_pics[id].x + si_pics[id].x2 < LCD_WIDTH || si_pics[id].y + si_pics[id].y2 < LCD_HEIGHT)
         screen_fill(0);
+    cleared_once = 1;
     for (id = si_pics[0].next; id; id = si_pics[id].next) {
         const struct si_pic *p = &si_pics[id];
         uint8_t op = si_pic_op(p->mode);
@@ -448,9 +459,4 @@ void si_rows_render(void) SI_FAR
             break;
         }
     }
-    /* Below the screen's last row, in its last row of tiles: clear, as
-       the whole-screen fill leaves it set. */
-    for (id = 0; id < SI_ROWS_TILES_X; id++)
-        memset(si_rows_screen + (SI_ROWS_TILES_Y - 1) * ROW_BYTES + id * 8 + (LCD_HEIGHT & 7), 0,
-               8 - (LCD_HEIGHT & 7));
 }

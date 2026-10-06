@@ -23,6 +23,25 @@ RP_Y = _gb_rows + 7
 RP_FIRST = _gb_rows + 8
 RP_LAST = _gb_rows + 9
 RP_OP = _gb_rows + 10
+;; rows_put_wide's: 8 * n, and the stride less n.
+rp_back:
+	.ds	1
+rp_skip:
+	.ds	1
+;; gb_rows_put's own: the column's source and screen, columns left, its
+;; mask, rows left and row in its tile.
+cp_src:
+	.ds	2
+cp_dst:
+	.ds	2
+cp_left:
+	.ds	1
+cp_mask:
+	.ds	1
+cp_rows:
+	.ds	1
+cp_y:
+	.ds	1
 ;; gb_rows_made's: the picture's place, size, op and so on.
 rm_x:
 	.ds	2
@@ -71,27 +90,213 @@ pr_tx:
 
 	.area	_HOME
 ;; void gb_rows_put(void): core/si_rows.c's put_rows_loop. h rows of n
-;; bytes, each byte of a row 8 on from the last (the next tile: si_rows'
-;; rows of tiles are 128 bytes from a 128-byte boundary, so that is always
-;; within the same 256), the next row one on, or on to the next row of
-;; tiles after a tile's eighth; the first byte of a row masked with
-;; `first`, the last with `last`; op 1 copies under the mask, 2 ors, 3
-;; xors.
+;; bytes, each byte of a row 8 on from the last in the screen (the next
+;; tile), the first byte of a row masked with `first`, the last with
+;; `last`; op 1 copies under the mask, 2 ors, 3 xors. A picture one or two
+;; bytes across is done a byte column at a time (wider ones a row at a
+;; time, rows_put_wide): down a column, the screen's bytes are one apart within a
+;; tile and 128 - 8 apart from a tile to the one below (si_rows' rows of
+;; tiles are 128 bytes), and the source's a stride apart.
 _gb_rows_put::
+	ld	a, (#RP_N)
+	cp	a, #3
+	jp	nc, rows_put_wide
+	ld	a, (#RP_SRC)
+	ld	(#cp_src), a
+	ld	a, (#RP_SRC + 1)
+	ld	(#cp_src + 1), a
+	ld	a, (#RP_DST)
+	ld	(#cp_dst), a
+	ld	a, (#RP_DST + 1)
+	ld	(#cp_dst + 1), a
+	ld	a, (#RP_N)
+	ld	(#cp_left), a
+	ld	a, (#RP_FIRST)
+	ld	(#cp_mask), a
+cp_column:
+	ld	a, (#cp_left)
+	dec	a
+	jr	nz, 1$
+	ld	a, (#RP_LAST)		; the last column: its mask too
+	ld	b, a
+	ld	a, (#cp_mask)
+	and	a, b
+	ld	(#cp_mask), a
+1$:
+	ld	a, (#cp_src)
+	ld	e, a
+	ld	a, (#cp_src + 1)
+	ld	d, a
+	ld	a, (#cp_dst)
+	ld	l, a
+	ld	a, (#cp_dst + 1)
+	ld	h, a
+	ld	a, (#RP_H)
+	ld	(#cp_rows), a
+	ld	a, (#RP_Y)
+	ld	(#cp_y), a
+	ld	a, (#RP_OP)
+	cp	a, #2
+	jp	z, cp_or
+	jp	c, cp_copy
+cp_xor:
+	;; A run down one tile: 8 less its row, or the rows left.
+	ld	a, (#cp_y)
+	ld	b, a
+	ld	a, #8
+	sub	a, b
+	ld	b, a
+	ld	a, (#cp_rows)
+	cp	a, b
+	jr	nc, 1$
+	ld	b, a
+1$:
+	sub	a, b
+	ld	(#cp_rows), a
+	ld	a, (#cp_mask)
+	ld	c, a
+2$:
+	ld	a, (de)
+	and	a, c
+	xor	a, (hl)
+	ld	(hl+), a
+	ld	a, (#RP_STRIDE)
+	add	a, e
+	ld	e, a
+	jr	nc, 3$
+	inc	d
+3$:
+	dec	b
+	jr	nz, 2$
+	ld	a, (#cp_rows)
+	or	a, a
+	jr	z, cp_column_done
+	xor	a, a
+	ld	(#cp_y), a
+	ld	bc, #128 - 8		; the same column in the row of tiles below
+	add	hl, bc
+	jr	cp_xor
+cp_or:
+	;; A run down one tile: 8 less its row, or the rows left.
+	ld	a, (#cp_y)
+	ld	b, a
+	ld	a, #8
+	sub	a, b
+	ld	b, a
+	ld	a, (#cp_rows)
+	cp	a, b
+	jr	nc, 1$
+	ld	b, a
+1$:
+	sub	a, b
+	ld	(#cp_rows), a
+	ld	a, (#cp_mask)
+	ld	c, a
+2$:
+	ld	a, (de)
+	and	a, c
+	or	a, (hl)
+	ld	(hl+), a
+	ld	a, (#RP_STRIDE)
+	add	a, e
+	ld	e, a
+	jr	nc, 3$
+	inc	d
+3$:
+	dec	b
+	jr	nz, 2$
+	ld	a, (#cp_rows)
+	or	a, a
+	jr	z, cp_column_done
+	xor	a, a
+	ld	(#cp_y), a
+	ld	bc, #128 - 8		; the same column in the row of tiles below
+	add	hl, bc
+	jr	cp_or
+cp_copy:
+	;; A run down one tile: 8 less its row, or the rows left.
+	ld	a, (#cp_y)
+	ld	b, a
+	ld	a, #8
+	sub	a, b
+	ld	b, a
+	ld	a, (#cp_rows)
+	cp	a, b
+	jr	nc, 1$
+	ld	b, a
+1$:
+	sub	a, b
+	ld	(#cp_rows), a
+	ld	a, (#cp_mask)
+	ld	c, a
+2$:
+	ld	a, (de)
+	xor	a, (hl)
+	and	a, c
+	xor	a, (hl)
+	ld	(hl+), a
+	ld	a, (#RP_STRIDE)
+	add	a, e
+	ld	e, a
+	jr	nc, 3$
+	inc	d
+3$:
+	dec	b
+	jr	nz, 2$
+	ld	a, (#cp_rows)
+	or	a, a
+	jr	z, cp_column_done
+	xor	a, a
+	ld	(#cp_y), a
+	ld	bc, #128 - 8		; the same column in the row of tiles below
+	add	hl, bc
+	jr	cp_copy
+cp_column_done:
+	ld	a, (#cp_left)
+	dec	a
+	ret	z
+	ld	(#cp_left), a
+	ld	a, #0xff
+	ld	(#cp_mask), a
+	ld	hl, #cp_src		; the next column: one on in the source,
+	inc	(hl)
+	jr	nz, 1$
+	inc	hl
+	inc	(hl)
+1$:
+	ld	a, (#cp_dst)		; 8 on in the screen (within its 256)
+	add	a, #8
+	ld	(#cp_dst), a
+	jp	cp_column
+
+;; gb_rows_put for a picture three bytes across or more, a row at a time:
+;; the source and the screen stay in de and hl from row to row, a row
+;; ending 8 * n on in the screen and n on in the source.
+rows_put_wide:
+	ld	a, (#RP_N)
+	add	a, a
+	add	a, a
+	add	a, a
+	ld	(#rp_back), a		; 8 * n
+	ld	a, (#RP_N)
+	ld	b, a
+	ld	a, (#RP_STRIDE)
+	sub	a, b
+	ld	(#rp_skip), a		; stride - n, maybe less than 0
+	ld	a, (#RP_SRC)
+	ld	e, a
+	ld	a, (#RP_SRC + 1)
+	ld	d, a
+	ld	a, (#RP_DST)
+	ld	l, a
+	ld	a, (#RP_DST + 1)
+	ld	h, a
 	ld	a, (#RP_OP)
 	cp	a, #2
 	jp	z, put_or
 	jp	c, put_copy
 put_xor:
 1$:
-	ld	a, (#RP_SRC)
-	ld	e, a
-	ld	a, (#RP_SRC + 1)
-	ld	d, a
-	ld	a, (#RP_DST)
-	ld	l, a
-	ld	a, (#RP_DST + 1)
-	ld	h, a
 	ld	a, (#RP_N)
 	ld	b, a
 	ld	a, (#RP_FIRST)
@@ -131,19 +336,15 @@ put_xor:
 	and	a, c
 	xor	a, (hl)
 	ld	(hl), a
+	inc	de
+	ld	a, l
+	add	a, #8
+	ld	l, a
 	call	row_next
 	jr	nz, 1$
 	ret
 put_or:
 1$:
-	ld	a, (#RP_SRC)
-	ld	e, a
-	ld	a, (#RP_SRC + 1)
-	ld	d, a
-	ld	a, (#RP_DST)
-	ld	l, a
-	ld	a, (#RP_DST + 1)
-	ld	h, a
 	ld	a, (#RP_N)
 	ld	b, a
 	ld	a, (#RP_FIRST)
@@ -183,19 +384,15 @@ put_or:
 	and	a, c
 	or	a, (hl)
 	ld	(hl), a
+	inc	de
+	ld	a, l
+	add	a, #8
+	ld	l, a
 	call	row_next
 	jr	nz, 1$
 	ret
 put_copy:
 1$:
-	ld	a, (#RP_SRC)
-	ld	e, a
-	ld	a, (#RP_SRC + 1)
-	ld	d, a
-	ld	a, (#RP_DST)
-	ld	l, a
-	ld	a, (#RP_DST + 1)
-	ld	h, a
 	ld	a, (#RP_N)
 	ld	b, a
 	ld	a, (#RP_FIRST)
@@ -236,39 +433,50 @@ put_copy:
 	and	a, c
 	xor	a, (hl)
 	ld	(hl), a
+	inc	de
+	ld	a, l
+	add	a, #8
+	ld	l, a
 	call	row_next
 	jr	nz, 1$
 	ret
-;; On to the next row: the source by the stride, the screen one on or to
-;; the next row of tiles. Returns with Z set when it was the last.
+;; On to the next row, de from the row's end by the stride less n, hl
+;; back to the row's start and one on, or to the next row of tiles.
+;; Returns with Z set when it was the last.
 row_next:
-	ld	a, (#RP_STRIDE)
+	ld	a, (#rp_skip)
 	ld	c, a
-	ld	hl, #RP_SRC
-	ld	a, (hl)
+	rlca
+	sbc	a, a			; its sign, for the high byte
+	ld	b, a
+	ld	a, e
 	add	a, c
-	ld	(hl+), a
-	jr	nc, 1$
-	inc	(hl)
-1$:
-	ld	hl, #RP_Y
-	ld	a, (hl)
+	ld	e, a
+	ld	a, d
+	adc	a, b
+	ld	d, a
+	ld	a, (#rp_back)
+	ld	b, a
+	ld	a, l
+	sub	a, b
+	ld	l, a
+	ld	a, (#RP_Y)
 	inc	a
 	and	a, #7
-	ld	(hl), a
-	ld	c, #1
-	jr	nz, 2$
-	ld	c, #128 - 7
+	ld	(#RP_Y), a
+	jr	z, 1$
+	inc	l
+	jr	2$
+1$:
+	ld	a, l
+	add	a, #128 - 7
+	ld	l, a
+	jr	nc, 2$
+	inc	h
 2$:
-	ld	hl, #RP_DST
-	ld	a, (hl)
-	add	a, c
-	ld	(hl+), a
-	jr	nc, 3$
-	inc	(hl)
-3$:
-	ld	hl, #RP_H
-	dec	(hl)
+	ld	a, (#RP_H)
+	dec	a
+	ld	(#RP_H), a
 	ret
 
 ;; void gb_fill(uint8_t *dst, uint8_t value, uint8_t eights): sets
@@ -776,23 +984,34 @@ plane_rows:
 	ei
 	ret
 
-;; uint8_t gb_any_dirty(void): whether any of lcd_dirty's 360 cells is set.
+;; uint8_t gb_any_dirty(void): whether any of lcd_dirty's 360 cells is set,
+;; eight at a time.
 _gb_any_dirty::
 	ld	hl, #_lcd_dirty
-	ld	b, #3			; three times 120
+	ld	b, #45
+	xor	a, a
 1$:
-	ld	c, #120
-2$:
-	ld	a, (hl+)
-	or	a, a
-	jr	nz, 3$
-	dec	c
+	or	a, (hl)
+	inc	hl
+	or	a, (hl)
+	inc	hl
+	or	a, (hl)
+	inc	hl
+	or	a, (hl)
+	inc	hl
+	or	a, (hl)
+	inc	hl
+	or	a, (hl)
+	inc	hl
+	or	a, (hl)
+	inc	hl
+	or	a, (hl)
+	inc	hl
 	jr	nz, 2$
 	dec	b
 	jr	nz, 1$
-	xor	a, a
 	ret
-3$:
+2$:
 	ld	a, #1
 	ret
 

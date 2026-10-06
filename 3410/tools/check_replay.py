@@ -10,6 +10,7 @@ must therefore appear in the golden run, in order. The check reports the
 first replayed frame that does not, against the golden frames around where
 it should be.
 """
+import re
 import sys
 from pathlib import Path
 
@@ -18,6 +19,14 @@ W, H = 96, 65
 
 def pixels(path):
     return Path(path).read_bytes()[-W * H:]
+
+
+def frame_order(path):
+    """By the frame's number (MAME's after lcdmirror_, else the first in the
+    name): MAME's count grows past four digits in a long run, and the names
+    then no longer sort as text."""
+    digits = re.search(r"lcdmirror_(\d+)", path.name) or re.search(r"(\d+)", path.name)
+    return (int(digits.group(1)) if digits else 0, path.name)
 
 
 def distinct(paths):
@@ -44,8 +53,8 @@ def show(ours, theirs):
 def main():
     if len(sys.argv) != 3:
         sys.exit(__doc__)
-    replay = distinct(sorted(Path(sys.argv[1]).glob("*.pgm")))
-    golden = distinct(sorted(Path(sys.argv[2]).glob("*.pgm")))
+    replay = distinct(sorted(Path(sys.argv[1]).glob("*.pgm"), key=frame_order))
+    golden = distinct(sorted(Path(sys.argv[2]).glob("*.pgm"), key=frame_order))
     if not golden:
         print(f"no golden frames in {sys.argv[2]}; skipped")
         return

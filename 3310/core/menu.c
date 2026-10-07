@@ -185,11 +185,12 @@ static uint8_t native_tiled;   /* the platform showed that menu from its tiles *
 static uint8_t view_mode;      /* which of the views below the LCD is set up for */
 
 /* Columns of the phone's LCD a platform with LCD_GAME_ZOOM shows; what
-   does not fit is left off evenly on both sides, except while Snake II or
-   Space Impact is played, where it is all left off on the right. That
-   costs Space Impact nothing it needs: its score ends at column 75, and
-   what is cut is where enemies come on and the last columns the ship can
-   fly into. The game is drawn with its first shown column on a whole cell
+   does not fit is left off evenly on both sides, except while a game other
+   than Bantumi is played, where it is all left off on the right. Bantumi
+   draws across the whole LCD; Pairs II draws in columns 1 to 60 only, and
+   Snake II and Space Impact lose nothing they need: Space Impact's score
+   ends at column 75, and what is cut is where enemies come on and the last
+   columns the ship can fly into. The game is drawn with its first shown column on a whole cell
    of the framebuffer, GAME_ZOOM_X, which is what a platform can magnify. */
 #define GAME_ZOOM_WIDTH (LCD_FB_WIDTH / LCD_GAME_ZOOM < LCD_WIDTH ? LCD_FB_WIDTH / LCD_GAME_ZOOM : LCD_WIDTH)
 #define GAME_ZOOM_CUT_CENTRED ((LCD_WIDTH - GAME_ZOOM_WIDTH) / 2)
@@ -1696,9 +1697,7 @@ void menu_draw(void)
         if (LCD_GAME_ZOOM > LCD_ZOOM && full_screen && screen != SCREEN_MAIN) {
             /* The game in the full-screen variant: as much of the LCD as
                fits across the screen. */
-            /* Snake II and Space Impact, the first two games. */
-            uint8_t cut = screen == SCREEN_PLAY && games_playing <= GAME_SPACE_IMPACT
-                          ? 0 : GAME_ZOOM_CUT_CENTRED;
+            uint8_t cut = screen == SCREEN_PLAY && games_playing != GAME_BANTUMI ? 0 : GAME_ZOOM_CUT_CENTRED;
 
             lcd_view_set(GAME_ZOOM_X - cut, LCD_PHONE_Y, LCD_WIDTH, LCD_HEIGHT);
             lcd_zoom_set(GAME_ZOOM_X, LCD_PHONE_Y, GAME_ZOOM_WIDTH, LCD_HEIGHT, LCD_GAME_ZOOM);

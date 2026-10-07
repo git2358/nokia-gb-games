@@ -10,7 +10,8 @@
       is copied to cartridge RAM at power-on, and the games' titles;
    4  Snake II and its data, and the games at 2x (strip.c);
    5  Pairs II and its pictures;
-   6  Bantumi and its pictures, and the fireworks;
+   6  Bantumi and its pictures, the fireworks and the Top score page's
+      animation;
    7  the full-screen menus made at build time and what shows them;
    8  their tiles.
 

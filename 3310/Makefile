@@ -331,10 +331,10 @@ GB_MAIN_FAR := -Dstrip_present=far_strip_present -Dzoom_present=far_zoom_present
 $(BUILD)/gb/0/games.rel: GB_EXTRA := -Dsi_handler=far_si_handler -Dsnake2_handler=far_snake2_handler -Dsnake2_redraw=far_snake2_redraw \
 	-Dpairs2_handler=far_pairs2_handler -Dpairs2_render=far_pairs2_render \
 	-Dbantumi_handler=far_bantumi_handler -Dbantumi_render=far_bantumi_render
-# menu.c reaches the titles in bank 3 and the fireworks in bank 6 through
-# far.c.
+# menu.c reaches the titles in bank 3, and the fireworks and the Top score
+# page's animation in bank 6, through far.c.
 $(BUILD)/gb/1/menu.rel: GB_EXTRA := -Dtitle_start=far_title_start -Dtitle_elapse=far_title_elapse -Dtitle_draw=far_title_draw \
-	-Dfireworks_draw=far_fireworks_draw
+	-Dfireworks_draw=far_fireworks_draw -Dsparkle_draw=far_sparkle_draw
 
 $(BUILD)/gb/0/%.rel: %.c $(CORE_HDR) $(ASSET_SRC)
 	@mkdir -p $(BUILD)/gb/0

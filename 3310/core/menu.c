@@ -119,13 +119,8 @@ enum {
 
 /* The Top score page's animation in its top right corner: stars gather
    into a cup, which then flashes. A new picture every 25 phone ticks; the
-   last one stays. */
-#define SPARKLE_X 63
-#define SPARKLE_WIDTH 21
-#define SPARKLE_HEIGHT 24
-#define SPARKLE_FRAME_BYTES 84
+   last one stays. Its pictures are with the fireworks (sparkle_draw). */
 #define SPARKLE_TICKS 25
-static const uint8_t sparkle_frames[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 10, 10, 9, 9, 10, 10, 9, 10 };
 
 /* The games' menus. Continue is there only while a game is paused. */
 enum {
@@ -855,8 +850,7 @@ static void native_note(const char *title, const char *text, uint16_t number)
 
 static void draw_sparkle(void)
 {
-    lcd_blit_strips(SPARKLE_X, 0, SPARKLE_WIDTH, SPARKLE_HEIGHT,
-                    top_score_sparkle + sparkle_frames[sparkle_step] * SPARKLE_FRAME_BYTES);
+    sparkle_draw(sparkle_step);
 }
 
 /* A note in the large font, one line every 15 rows; %N is the number. */
@@ -1590,7 +1584,7 @@ uint8_t menu_tick(void)
             play_us -= PHONE_TICK_US;
             if (++sparkle_ticks == SPARKLE_TICKS) {
                 sparkle_ticks = 0;
-                if (!full_screen && sparkle_step < sizeof sparkle_frames - 1) {
+                if (!full_screen && sparkle_step < SPARKLE_STEPS - 1) {
                     sparkle_step++;
                     sparkle_only = 1;
                     changed = 1;
@@ -1705,8 +1699,9 @@ void menu_draw(void)
         if (LCD_GAME_ZOOM > LCD_ZOOM && full_screen && screen != SCREEN_MAIN) {
             /* The game in the full-screen variant: as much of the LCD as
                fits across the screen. */
-            uint8_t cut = screen == SCREEN_PLAY && (games_playing == GAME_SNAKE || games_playing == GAME_SPACE_IMPACT)
-                              ? 0 : GAME_ZOOM_CUT_CENTRED;
+            /* Snake II and Space Impact, the first two games. */
+            uint8_t cut = screen == SCREEN_PLAY && games_playing <= GAME_SPACE_IMPACT
+                          ? 0 : GAME_ZOOM_CUT_CENTRED;
 
             lcd_view_set(GAME_ZOOM_X - cut, LCD_PHONE_Y, LCD_WIDTH, LCD_HEIGHT);
             lcd_zoom_set(GAME_ZOOM_X, LCD_PHONE_Y, GAME_ZOOM_WIDTH, LCD_HEIGHT, LCD_GAME_ZOOM);

@@ -138,6 +138,14 @@ void far_fireworks_draw(uint8_t picture)
     far_bank(was);
 }
 
+void far_sparkle_draw(uint8_t step)
+{
+    uint8_t was = far_bank(BANK_BANTUMI);
+
+    sparkle_draw(step);
+    far_bank(was);
+}
+
 void far_strip_present(uint8_t all)
 {
     uint8_t was = far_bank(BANK_SNAKE);

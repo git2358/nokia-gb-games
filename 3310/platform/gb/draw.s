@@ -9,7 +9,7 @@
 	.globl	_sprite_band, _sprite_band_dst, _sprite_band_src, _sprite_draw_bitmap
 	.globl	_sprite_band_n, _sprite_band_up, _sprite_band_valid, _sprite_band_mode
 	.globl	_gb_present_zoom, _gb_present_plain, _gb_present_all, _gb_clear_tiles
-	.globl	_gb_zoom_band, _gb_zoom_bands, _gb_columns, _gb_tile_low, _gb_tile_high, _gb_vram_put
+	.globl	_gb_zoom_band, _gb_zoom_bands, _gb_zoom_cut, _gb_columns, _gb_tile_low, _gb_tile_high, _gb_vram_put
 	.globl	_sprites, _si_player_side_types
 	.globl	_strip_scan, _strip_cell, _strip_own, _strip_place, _strip_fine
 	.globl	_strip_invert, _strip_picture, _strip_terrain
@@ -29,6 +29,10 @@ _gb_present_all::
 _gb_zoom_band::
 	.ds	1
 _gb_zoom_bands::
+	.ds	1
+;; The columns of the picture left off on the left of what is shown; the
+;; rest of the four that do not fit are left off on the right.
+_gb_zoom_cut::
 	.ds	1
 band:
 	.ds	1
@@ -476,9 +480,17 @@ _gb_present_zoom::
 	ld	(#band), a
 	ld	a, (#_gb_zoom_bands)
 	ld	(#bands_left), a
-	;; 84 bytes on in the picture and in the copy for each band skipped.
+	;; gb_zoom_cut bytes on in the picture and in the copy, and 84 more
+	;; for each band skipped.
+	ld	a, (#_gb_zoom_cut)
+	ld	c, a
+	ld	b, #0
+	ld	hl, #shown
+	add	hl, bc
+	ld	d, h
+	ld	e, l
 	ld	hl, #_sprite_screen
-	ld	de, #shown
+	add	hl, bc
 	ld	a, (#_gb_zoom_band)
 	or	a, a
 	jr	z, zoom_band
@@ -549,7 +561,8 @@ zoom_scan:
 zoom_scanned:
 	dec	b
 	jr	nz, zoom_scan
-	;; The band's last four columns are not shown.
+	;; Four columns are not shown: the rest of this band's and the first
+	;; of the next one's.
 	inc	hl
 	inc	hl
 	inc	hl

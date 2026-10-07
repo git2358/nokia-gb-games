@@ -190,7 +190,7 @@ enum {
     DIRECT_ZOOM
 };
 static uint8_t direct;
-extern uint8_t gb_present_all;
+extern uint8_t gb_present_all, gb_zoom_cut;
 void gb_present_plain(void);
 void gb_clear_tiles(void);
 
@@ -248,6 +248,14 @@ void sprite_present(uint8_t all)
     if (direct != mode)
         all = 1;
     if (mode == DIRECT_ZOOM) {
+        /* The magnified picture starts as many columns into the phone's LCD
+           as menu_draw put the LCD left of the magnified rectangle. */
+        uint8_t cut = (uint8_t)(lcd_zoom_x - lcd_view_x);
+
+        if (cut != gb_zoom_cut) {
+            gb_zoom_cut = cut;
+            all = 1;
+        }
         if (games_strip)
             strip_present(all);
         else

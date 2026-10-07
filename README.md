@@ -28,6 +28,17 @@ The maps of the firmware, the tracing tools and the evidence are in a fork
 of the Nokia DCT3 MAME project, <https://github.com/lukesau/nokia-dct3-re>
 (branch `games/re-3310` and its `docs/games_*.md`).
 
+## Why a re-implementation
+
+The project started with the 3210, and the original plan was to run the
+firmware's own game code directly on the GBA behind a thin wrapper, since
+the 3210 and the GBA share the same ARM7TDMI core. Endianness foiled it: the
+3210 runs its ARM7TDMI big-endian and the game code depends on that (it
+packs bytes into words and pulls fields out by shifting, and reads 16-bit
+values from byte records), while the GBA is little-endian. Re-implementing
+the games in C was the way out, and it also made a Game Boy build possible.
+The 3310 and 3410 followed the same way.
+
 ## Layout
 
 - `3210/`, `3310/`, `3410/`: one port per phone, each a project of its own

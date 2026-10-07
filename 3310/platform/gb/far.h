@@ -33,7 +33,7 @@ enum {
     BANK_NATIVE_TILES
 };
 
-void far_bank(uint8_t bank);
+uint8_t far_bank(uint8_t bank);
 
 /* Space Impact's data copied into cartridge RAM again. */
 void far_si_data_restore(void);

@@ -18,18 +18,20 @@
 
 static uint8_t mapped = BANK_MENU;
 
-void far_bank(uint8_t bank)
+uint8_t far_bank(uint8_t bank)
 {
+    uint8_t was = mapped;
+
     mapped = bank;
     MBC_ROM_BANK = bank;
+    return was;
 }
 
 int far_si_handler(int event, struct game_context *ctx)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_PLAY);
     int result;
 
-    far_bank(BANK_PLAY);
     result = si_handler(event, ctx);
     far_bank(was);
     return result;
@@ -37,28 +39,25 @@ int far_si_handler(int event, struct game_context *ctx)
 
 void far_si_level_load(si_ref header)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_SETUP);
 
-    far_bank(BANK_SETUP);
     si_level_load(header);
     far_bank(was);
 }
 
 void far_si_ship_spawn(struct game_context *ctx, int how)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_SETUP);
 
-    far_bank(BANK_SETUP);
     si_ship_spawn(ctx, how);
     far_bank(was);
 }
 
 int far_si_new_game(struct game_context *ctx)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_SETUP);
     int result;
 
-    far_bank(BANK_SETUP);
     result = si_new_game(ctx);
     far_bank(was);
     return result;
@@ -66,10 +65,9 @@ int far_si_new_game(struct game_context *ctx)
 
 int far_si_continue_key(int event, struct game_context *ctx)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_SETUP);
     int result;
 
-    far_bank(BANK_SETUP);
     result = si_continue_key(event, ctx);
     far_bank(was);
     return result;
@@ -77,19 +75,17 @@ int far_si_continue_key(int event, struct game_context *ctx)
 
 void far_si_continue_enter(struct game_context *ctx)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_SETUP);
 
-    far_bank(BANK_SETUP);
     si_continue_enter(ctx);
     far_bank(was);
 }
 
 int far_snake2_handler(int event, struct game_context *ctx)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_SNAKE);
     int result;
 
-    far_bank(BANK_SNAKE);
     result = snake2_handler(event, ctx);
     far_bank(was);
     return result;
@@ -97,10 +93,9 @@ int far_snake2_handler(int event, struct game_context *ctx)
 
 int far_pairs2_handler(int event, struct game_context *ctx)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_PAIRS);
     int result;
 
-    far_bank(BANK_PAIRS);
     result = pairs2_handler(event, ctx);
     far_bank(was);
     return result;
@@ -109,19 +104,17 @@ int far_pairs2_handler(int event, struct game_context *ctx)
 /* The sprites' pictures are Pairs II's, in its bank. */
 void far_pairs2_render(void)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_PAIRS);
 
-    far_bank(BANK_PAIRS);
     pairs2_render();
     far_bank(was);
 }
 
 int far_bantumi_handler(int event, struct game_context *ctx)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_BANTUMI);
     int result;
 
-    far_bank(BANK_BANTUMI);
     result = bantumi_handler(event, ctx);
     far_bank(was);
     return result;
@@ -130,9 +123,8 @@ int far_bantumi_handler(int event, struct game_context *ctx)
 /* The sprites' pictures are Bantumi's, in its bank. */
 void far_bantumi_render(void)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_BANTUMI);
 
-    far_bank(BANK_BANTUMI);
     bantumi_render();
     far_bank(was);
 }
@@ -140,54 +132,48 @@ void far_bantumi_render(void)
 /* The fireworks' pictures are with Bantumi's. */
 void far_fireworks_draw(uint8_t picture)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_BANTUMI);
 
-    far_bank(BANK_BANTUMI);
     fireworks_draw(picture);
     far_bank(was);
 }
 
 void far_strip_present(uint8_t all)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_SNAKE);
 
-    far_bank(BANK_SNAKE);
     strip_present(all);
     far_bank(was);
 }
 
 void far_zoom_present(uint8_t all)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_SNAKE);
 
-    far_bank(BANK_SNAKE);
     zoom_present(all);
     far_bank(was);
 }
 
 void far_strip_leave(uint8_t scx, uint8_t write_map)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_SNAKE);
 
-    far_bank(BANK_SNAKE);
     strip_leave(scx, write_map);
     far_bank(was);
 }
 
 void far_title_start(uint8_t game, uint8_t reseed, uint16_t seed)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_SETUP);
 
-    far_bank(BANK_SETUP);
     title_start(game, reseed, seed);
     far_bank(was);
 }
 
 uint8_t far_title_elapse(uint16_t us)
 {
-    uint8_t was = mapped, what;
+    uint8_t was = far_bank(BANK_SETUP), what;
 
-    far_bank(BANK_SETUP);
     what = title_elapse(us);
     far_bank(was);
     return what;
@@ -195,9 +181,8 @@ uint8_t far_title_elapse(uint16_t us)
 
 void far_title_draw(void)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_SETUP);
 
-    far_bank(BANK_SETUP);
     title_draw();
     far_bank(was);
 }
@@ -205,9 +190,8 @@ void far_title_draw(void)
 /* Space Impact's data in cartridge RAM, from its image in bank 3. */
 void far_si_data_restore(void)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_SETUP);
 
-    far_bank(BANK_SETUP);
     memcpy((uint8_t *)SI_DATA_AT, si_data, SI_DATA_SIZE);
     far_bank(was);
 }
@@ -227,9 +211,8 @@ void platform_game_starts(uint8_t game)
 
 void far_snake2_redraw(void)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_SNAKE);
 
-    far_bank(BANK_SNAKE);
     snake2_redraw();
     far_bank(was);
 }
@@ -240,9 +223,8 @@ const uint8_t native_bank = BANK_NATIVE, native_tile_bank = BANK_NATIVE_TILES;
 
 uint8_t far_native_show(uint16_t id)
 {
-    uint8_t was = mapped, result;
+    uint8_t was = far_bank(BANK_NATIVE), result;
 
-    far_bank(BANK_NATIVE);
     result = native_show(id);
     far_bank(was);
     return result;
@@ -250,18 +232,16 @@ uint8_t far_native_show(uint16_t id)
 
 void far_native_cursor(uint8_t row, uint8_t on)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_NATIVE);
 
-    far_bank(BANK_NATIVE);
     native_cursor(row, on);
     far_bank(was);
 }
 
 uint8_t far_native_leave(void)
 {
-    uint8_t was = mapped, result;
+    uint8_t was = far_bank(BANK_NATIVE), result;
 
-    far_bank(BANK_NATIVE);
     result = native_leave();
     far_bank(was);
     return result;
@@ -271,9 +251,8 @@ uint8_t far_native_leave(void)
    first call (native_gb.h). */
 void far_native_palette(uint8_t shades)
 {
-    uint8_t was = mapped;
+    uint8_t was = far_bank(BANK_NATIVE);
 
-    far_bank(BANK_NATIVE);
     native_palette(shades);
     far_bank(was);
 }

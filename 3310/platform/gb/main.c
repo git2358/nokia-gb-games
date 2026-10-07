@@ -74,10 +74,8 @@
 #define PAD_UP 0x40
 #define PAD_DOWN 0x80
 
-/* Keys pressed at power-on, for scripted screenshots; see menu_script. */
-#ifndef START_KEYS
-#define START_KEYS ""
-#endif
+/* Keys pressed at power-on, for scripted screenshots (start_keys.c). */
+extern const char start_keys[];
 
 /* Cartridge RAM (MBC5, 8 KiB, battery-backed), which stays enabled. Its
    layout is in save.c; from SI_DATA_AT on it holds Space Impact's data,
@@ -412,7 +410,7 @@ void main(void)
     far_bank(BANK_MENU);
 
     menu_init();
-    menu_script(START_KEYS);
+    menu_script(start_keys);
     menu_draw();
     show();
     LCDC = LCDC_ON;

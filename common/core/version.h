@@ -4,6 +4,6 @@
 #ifndef CORE_VERSION_H
 #define CORE_VERSION_H
 
-#define GAME_VERSION "v1.1"
+#define GAME_VERSION "v1.2"
 
 #endif

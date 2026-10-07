@@ -193,12 +193,14 @@ static uint8_t native_tiled;   /* the platform showed that menu from its tiles *
 static uint8_t view_mode;      /* which of the views below the LCD is set up for */
 
 /* Columns of the phone's LCD a platform with LCD_GAME_ZOOM shows; what
-   does not fit is left off on the right. That costs Space Impact nothing
-   it needs: its score ends at column 75, and what is cut is where enemies
-   come on and the last columns the ship can fly into. The game is drawn
-   with its first column on a whole cell of the framebuffer, GAME_ZOOM_X,
-   which is what a platform can magnify. */
+   does not fit is left off evenly on both sides, except while Snake II or
+   Space Impact is played, where it is all left off on the right. That
+   costs Space Impact nothing it needs: its score ends at column 75, and
+   what is cut is where enemies come on and the last columns the ship can
+   fly into. The game is drawn with its first shown column on a whole cell
+   of the framebuffer, GAME_ZOOM_X, which is what a platform can magnify. */
 #define GAME_ZOOM_WIDTH (LCD_FB_WIDTH / LCD_GAME_ZOOM < LCD_WIDTH ? LCD_FB_WIDTH / LCD_GAME_ZOOM : LCD_WIDTH)
+#define GAME_ZOOM_CUT_CENTRED ((LCD_WIDTH - GAME_ZOOM_WIDTH) / 2)
 #define GAME_ZOOM_X ((LCD_FB_WIDTH - GAME_ZOOM_WIDTH) / 2 / 8 * 8)
 
 /* The phone's LCD; the full-screen variant's own menus; its Snake II
@@ -1703,7 +1705,10 @@ void menu_draw(void)
         if (LCD_GAME_ZOOM > LCD_ZOOM && full_screen && screen != SCREEN_MAIN) {
             /* The game in the full-screen variant: as much of the LCD as
                fits across the screen. */
-            lcd_view_set(GAME_ZOOM_X, LCD_PHONE_Y, LCD_WIDTH, LCD_HEIGHT);
+            uint8_t cut = screen == SCREEN_PLAY && (games_playing == GAME_SNAKE || games_playing == GAME_SPACE_IMPACT)
+                              ? 0 : GAME_ZOOM_CUT_CENTRED;
+
+            lcd_view_set(GAME_ZOOM_X - cut, LCD_PHONE_Y, LCD_WIDTH, LCD_HEIGHT);
             lcd_zoom_set(GAME_ZOOM_X, LCD_PHONE_Y, GAME_ZOOM_WIDTH, LCD_HEIGHT, LCD_GAME_ZOOM);
         } else if (LCD_ZOOM > 1) {
             lcd_zoom_set(LCD_PHONE_X, LCD_PHONE_Y, LCD_WIDTH, LCD_HEIGHT, LCD_ZOOM);

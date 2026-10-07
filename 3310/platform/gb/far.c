@@ -146,6 +146,14 @@ void far_sparkle_draw(uint8_t step)
     far_bank(was);
 }
 
+void far_done_tick_draw(uint8_t picture)
+{
+    uint8_t was = far_bank(BANK_BANTUMI);
+
+    done_tick_draw(picture);
+    far_bank(was);
+}
+
 void far_strip_present(uint8_t all)
 {
     uint8_t was = far_bank(BANK_SNAKE);

@@ -104,11 +104,8 @@ enum {
 /* The Done note: a box in its top right corner is ticked in three
    pictures, the second and third shown after DONE_STEP_1 and DONE_STEP_2
    phone ticks, and the note closes after DONE_TICKS. Measured in MAME:
-   0.70 s, 0.92 s and 1.47 s. */
-#define DONE_X 62
-#define DONE_WIDTH 22
-#define DONE_HEIGHT 32
-#define DONE_FRAME_BYTES 88
+   0.70 s, 0.92 s and 1.47 s. Its pictures are with the fireworks
+   (done_tick_draw). */
 #define DONE_STEP_1 90
 #define DONE_STEP_2 118
 #define DONE_TICKS ((uint16_t)(190ul * PHONE_TICK_US / MENU_FRAME_US))
@@ -664,7 +661,7 @@ static void draw_maze_done(void)
 
 static void draw_done_tick(void)
 {
-    lcd_blit_strips(DONE_X, 0, DONE_WIDTH, DONE_HEIGHT, done_tick + done_step * DONE_FRAME_BYTES);
+    done_tick_draw(done_step);
 }
 
 static void native_title(const char *title)

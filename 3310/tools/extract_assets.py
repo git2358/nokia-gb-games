@@ -9,7 +9,7 @@ Writes OUT_DIR/game_assets.h and six sources: si_data.c (Space Impact's
 data region), si_tables.c (its small tables and the games' sounds),
 snake2_data.c (Snake II's data region), pairs2_data.c (Pairs II's data and
 board tables), bantumi_data.c (Bantumi's pictures, the fireworks and the
-Top score page's animation), title_data.c (the games' title animations) and
+Top score and Done pages' animations), title_data.c (the games' title animations) and
 game_assets.c (the menus' fonts, text and pictures), apart
 so that a platform can place them apart.
 The output is derived from the firmware and must stay in an ignored
@@ -52,9 +52,10 @@ BANTUMI_START, BANTUMI_END = 0x31C768, 0x31D28C
 # The fireworks the games framework shows after a new top score and a won
 # Bantumi: six 84x48 pictures in the LCD's layout, the last all black.
 FIREWORKS = (0x2FE6A8, 6 * 504)
-# The Top score page's animation: 11 pictures, 21x32, 21 bytes per 8 rows.
-# With the fireworks, apart from the menus' pictures, for room in their bank.
-SPARKLE = (0x2FAA40, 11 * 84)
+# The Top score and Done pages' animations, with the fireworks and apart
+# from the menus' pictures, for room in their bank.
+SPARKLE = (0x2FAA40, 11 * 84)  # 11 pictures, 21x32, 21 bytes per 8 rows
+DONE_TICK = (0x2F9E50, 3 * 88)  # 3 pictures, 22x32, 22 bytes per 8 rows
 # Initialised-data images of tables the firmware keeps in RAM.
 DIGIT_GLYPHS = (0x2F2320, 40)  # ten 4x5 digits, 4 bytes each
 LEVEL_TABLE = (0x2F30D4, 8)  # pointers to the level headers
@@ -74,7 +75,6 @@ SOUND_REST = 0xFE  # core/sound.h
 # Pictures the phone's menus use, as strips of 8 rows with a byte per column.
 PICTURES = [
     ("menu_games_icon", 0x2F6C68, 4 * 128, "4 pictures of the main menu's Games animation, 64x14 in 64x16, 64 bytes per 8 rows"),
-    ("done_tick", 0x2F9E50, 3 * 88, "3 pictures of the Done page's animation, 22x32, 22 bytes per 8 rows"),
 ]
 
 # The language pack ("PPM") holds the fonts and the text. Each chunk is
@@ -340,6 +340,8 @@ extern const uint8_t bantumi_data[BANTUMI_DATA_SIZE];
 extern const uint8_t fireworks[{FIREWORKS[1]}];
 /* 0x{SPARKLE[0]:06x}: 11 pictures of the Top score page's animation, 21x32, 21 bytes per 8 rows. */
 extern const uint8_t top_score_sparkle[{SPARKLE[1]}];
+/* 0x{DONE_TICK[0]:06x}: 3 pictures of the Done page's animation, 22x32, 22 bytes per 8 rows. */
+extern const uint8_t done_tick[{DONE_TICK[1]}];
 
 #define TITLE_DATA_BASE 0x{TITLE_START:06x}ul
 #define TITLE_DATA_SIZE {len(titles)}
@@ -370,7 +372,8 @@ extern const uint8_t si_sound_places[{len(sound_places)}];
     (out / "pairs2_data.c").write_text("\n\n".join([banner, c_bytes("pairs2_data", pairs2), c_bytes("pairs2_boards", pairs2_boards)]) + "\n")
     (out / "bantumi_data.c").write_text("\n\n".join([banner, c_bytes("bantumi_data", bantumi),
                                                      c_bytes("fireworks", at(*FIREWORKS)),
-                                                     c_bytes("top_score_sparkle", at(*SPARKLE))]) + "\n")
+                                                     c_bytes("top_score_sparkle", at(*SPARKLE)),
+                                                     c_bytes("done_tick", at(*DONE_TICK))]) + "\n")
     (out / "title_data.c").write_text("\n\n".join([banner, c_bytes("title_data", titles)]) + "\n")
     (out / "snake2_data.c").write_text("\n\n".join([banner, c_bytes("snake2_data", snake2)]) + "\n")
     (out / "si_tables.c").write_text("\n\n".join([
